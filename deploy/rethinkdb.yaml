@@ -3,54 +3,48 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   labels:
-    app: postgres
-  name: postgres
+    app: rethinkdb
+  name: rethinkdb
 spec:
-  serviceName: postgres
+  serviceName: rethinkdb
   replicas: 1
   selector:
     matchLabels:
-      app: postgres
+      app: rethinkdb
   template:
     metadata:
       labels:
-        app: postgres
+        app: rethinkdb
     spec:
       containers:
-      - image: postgres:12-alpine
-        imagePullPolicy: IfNotPresent
-        name: postgres
+      - image: rethinkdb:2.4.0
+        name: rethinkdb
         command:
         - tini
         - --
         args:
         - sh
         - -c
-        - backup-restore-sidecar wait && docker-entrypoint.sh postgres
-        ports:
-        - containerPort: 5432
+        - backup-restore-sidecar wait && rethinkdb --bind all --directory /data/db --initial-password ${RETHINKDB_PASSWORD}
         env:
-        - name: POSTGRES_DB
+        - name: RETHINKDB_PASSWORD
           valueFrom:
-            configMapKeyRef:
-              key: POSTGRES_DB
-              name: postgres-env
-        - name: PGDATA
-          valueFrom:
-            configMapKeyRef:
-              key: POSTGRES_DATA
-              name: postgres-env
+            secretKeyRef:
+              name: rethinkdb
+              key: rethinkdb-password
+        ports:
+        - containerPort: 8080
+        - containerPort: 28015
         volumeMounts:
-        - name: postgres
-          mountPath: /var/lib/postgresql/data/pgdata
+        - mountPath: /data
+          name: rethinkdb
         - name: bin-provision
           subPath: backup-restore-sidecar
           mountPath: /usr/local/bin/backup-restore-sidecar
         - name: bin-provision
           subPath: tini
           mountPath: /usr/local/bin/tini
-      - image: postgres:12-alpine
-        imagePullPolicy: IfNotPresent
+      - image: rethinkdb:2.4.0
         name: backup-restore-sidecar
         command:
         - tini
@@ -61,13 +55,15 @@ spec:
         - backup-restore-sidecar start --log-level debug
         env:
         - name: BACKUP_RESTORE_SIDECAR_DB
-          value: postgres
+          value: rethinkdb
+        - name: BACKUP_RESTORE_SIDECAR_RETHINKDB_PASSWORDFILE
+          value: /rethinkdb-secret/rethinkdb-password.txt
         - name: BACKUP_RESTORE_SIDECAR_BACKUP_INTERVAL
           value: 60s
         - name: BACKUP_RESTORE_SIDECAR_OBJECT_PREFIX
           value: test
         - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_NAME
-          value: postgres-backup-sidecar-test 
+          value: rethinkdb-backup-sidecar-test 
         - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_LOCATION
           value: europe-west3
         - name: BACKUP_RESTORE_SIDECAR_GCP_PROJECT
@@ -78,14 +74,22 @@ spec:
         - name: GOOGLE_APPLICATION_CREDENTIALS
           value: /gcp/credentials/serviceaccount.json
         volumeMounts:
-        - name: postgres
+        - name: rethinkdb
           mountPath: /data
+        - name: rethinkdb-credentials
+          mountPath: /rethinkdb-secret
         - name: bin-provision
           subPath: backup-restore-sidecar
           mountPath: /usr/local/bin/backup-restore-sidecar
         - name: bin-provision
           subPath: tini
           mountPath: /usr/local/bin/tini
+        - name: bin-provision
+          subPath: rethinkdb-dump
+          mountPath: /usr/local/bin/rethinkdb-dump
+        - name: bin-provision
+          subPath: rethinkdb-restore
+          mountPath: /usr/local/bin/rethinkdb-restore
         - name: gcp-credentials
           mountPath: /gcp/credentials
           readOnly: true
@@ -96,15 +100,23 @@ spec:
         command:
         - cp
         - /backup-restore-sidecar
-        - /sbin/tini
+        - /ubuntu/tini
+        - /rethinkdb/rethinkdb-dump
+        - /rethinkdb/rethinkdb-restore
         - /bin-provision
         volumeMounts:
         - name: bin-provision
           mountPath: /bin-provision
       volumes:
-      - name: postgres
+      - name: rethinkdb
         persistentVolumeClaim:
-          claimName: postgres
+          claimName: rethinkdb
+      - name: rethinkdb-credentials
+        secret:
+          secretName: rethinkdb
+          items:
+          - key: rethinkdb-password
+            path: rethinkdb-password.txt
       - name: bin-provision
         emptyDir: {}
       - name: gcp-credentials
@@ -115,7 +127,7 @@ spec:
             path: serviceaccount.json
   volumeClaimTemplates:
   - metadata:
-      name: postgres
+      name: rethinkdb
     spec:
       accessModes:
       - ReadWriteOnce
@@ -124,23 +136,28 @@ spec:
           storage: 1Gi
 ---
 apiVersion: v1
+kind: Secret
+metadata:
+  name: rethinkdb
+  labels:
+    app: rethinkdb
+type: Opaque
+stringData:
+  rethinkdb-password: "test123!"
+---
+apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app: postgres
-  name: postgres
+    app: rethinkdb
+  name: rethinkdb
 spec:
   ports:
-  - name: "5432"
-    port: 5432
-    targetPort: 5432
+  - name: "10080"
+    port: 10080
+    targetPort: 8080
+  - name: "28015"
+    port: 28015
+    targetPort: 28015
   selector:
-    app: postgres
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: postgres-env
-data:
-  POSTGRES_DB: postgres
-  POSTGRES_DATA: /var/lib/postgresql/data/pgdata
+    app: rethinkdb

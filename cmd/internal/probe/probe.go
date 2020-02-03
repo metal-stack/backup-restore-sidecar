@@ -3,7 +3,6 @@ package probe
 import (
 	"time"
 
-	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/database"
 	"go.uber.org/zap"
 )
@@ -13,7 +12,7 @@ var (
 )
 
 // Start starts the database prober
-func Start(log *zap.SugaredLogger, db database.DatabaseProber, bp providers.BackupProvider, stop <-chan struct{}) {
+func Start(log *zap.SugaredLogger, db database.DatabaseProber, stop <-chan struct{}) {
 	log.Info("start probing database")
 
 	for {
@@ -26,7 +25,7 @@ func Start(log *zap.SugaredLogger, db database.DatabaseProber, bp providers.Back
 			if err == nil {
 				return
 			}
-			log.Errorw("database can not yet be started, waiting and retrying...", "error", err)
+			log.Errorw("database has not yet started, waiting and retrying...", "error", err)
 		}
 	}
 }

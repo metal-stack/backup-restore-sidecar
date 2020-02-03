@@ -11,6 +11,7 @@ import (
 	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/database"
 	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/database/postgres"
+	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/database/rethinkdb"
 	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/initializer"
 	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/probe"
 	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/signals"
@@ -35,11 +36,15 @@ const (
 	portFlg     = "port"
 	basePathFlg = "base-path"
 
-	databaseFlg         = "db"
-	databaseUserFlg     = "db-user"
-	databaseHostFlg     = "db-host"
-	databasePasswordFlg = "db-password"
-	databasePortFlg     = "db-port"
+	databaseFlg = "db"
+
+	postgresUserFlg     = "postgres-user"
+	postgresHostFlg     = "postgres-host"
+	postgresPasswordFlg = "postgres-password"
+	postgresPortFlg     = "postgres-port"
+
+	rethinkDBPasswordFileFlg = "rethinkdb-passwordfile"
+	rethinkDBURLFlg          = "rethinkdb-url"
 
 	backupIntervalFlg = "backup-interval"
 
@@ -81,7 +86,7 @@ var startCmd = &cobra.Command{
 		addr := fmt.Sprintf("%s:%d", viper.GetString(bindAddrFlg), viper.GetInt(portFlg))
 		backupInterval := utils.MustParseTimeInterval(viper.GetString(backupIntervalFlg))
 		initializer.New(logger.Named("initializer"), addr, db, bp).Start(stop)
-		probe.Start(logger.Named("probe"), db, bp, stop)
+		probe.Start(logger.Named("probe"), db, stop)
 		backup.Start(logger.Named("backup"), backupInterval, db, bp, stop)
 	},
 }
@@ -93,7 +98,7 @@ var restoreCmd = &cobra.Command{
 		version := &providers.BackupVersion{
 			Version: args[0],
 		}
-		initializer.New(logger.Named("initializer"), "", db, bp).Restore(version)
+		initializer.New(logger.Named("initializer"), "", db, bp).Restore(version, stop)
 	},
 }
 
@@ -108,9 +113,12 @@ var restoreListCmd = &cobra.Command{
 		}
 		backups := versions.List()
 		versions.Sort(backups, false)
+		var data [][]string
 		for _, b := range backups {
-			fmt.Printf("%s\t%s\n%s\n", b.Date, b.Name, b.Version)
+			data = append(data, []string{b.Date.String(), b.Name, b.Version})
 		}
+		p := utils.NewTablePrinter()
+		p.Print([]string{"Data", "Name", "Version"}, data)
 		return nil
 	},
 }
@@ -140,14 +148,17 @@ func init() {
 	}
 
 	startCmd.Flags().StringP(bindAddrFlg, "", "127.0.0.1", "the bind addr of the api server")
-	startCmd.Flags().IntP(portFlg, "", 8080, "the port to serve on")
+	startCmd.Flags().IntP(portFlg, "", 8000, "the port to serve on")
 
-	startCmd.Flags().StringP(databaseFlg, "", "postgres", "the kind of the database [postgres|rethinkdb]")
+	startCmd.Flags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb]")
 
-	startCmd.Flags().StringP(databaseUserFlg, "", "", "the database user (defaults to database specific defaults)")
-	startCmd.Flags().StringP(databaseHostFlg, "", "localhost", "the database address")
-	startCmd.Flags().IntP(databasePortFlg, "", 0, "the database port (defaults to database specific defaults)")
-	startCmd.Flags().StringP(databasePasswordFlg, "", "", "the database password")
+	startCmd.Flags().StringP(postgresUserFlg, "", "postgres", "the postgres database user (will be used when db is postgres)")
+	startCmd.Flags().StringP(postgresHostFlg, "", "localhost", "the postgres database address (will be used when db is postgres)")
+	startCmd.Flags().IntP(postgresPortFlg, "", 5432, "the postgres database port (will be used when db is postgres)")
+	startCmd.Flags().StringP(postgresPasswordFlg, "", "", "the postgres database password (will be used when db is postgres)")
+
+	startCmd.Flags().StringP(rethinkDBURLFlg, "", "localhost:28015", "the rethinkdb database url (will be used when db is rethinkdb)")
+	startCmd.Flags().StringP(rethinkDBPasswordFileFlg, "", "", "the rethinkdb database password file path (will be used when db is rethinkdb)")
 
 	startCmd.Flags().StringP(backupProviderFlg, "", "gcp", "the name of the backup provider [gcp]")
 	startCmd.Flags().StringP(backupIntervalFlg, "", "3m", "the timed interval in which to take backups integer and optional time quantity (s|m|h)")
@@ -164,7 +175,7 @@ func init() {
 		logger.Error("unable to construct initializer command:%v", err)
 	}
 
-	waitCmd.Flags().StringP(serverAddrFlg, "", "http://127.0.0.1:8080/", "the url of the initializer server")
+	waitCmd.Flags().StringP(serverAddrFlg, "", "http://127.0.0.1:8000/", "the url of the initializer server")
 
 	err = viper.BindPFlags(waitCmd.Flags())
 	if err != nil {
@@ -212,10 +223,16 @@ func initDatabase() error {
 	case "postgres":
 		db = postgres.New(
 			logger.Named("postgres"),
-			viper.GetString(databaseHostFlg),
-			viper.GetInt(databasePortFlg),
-			viper.GetString(databaseUserFlg),
-			viper.GetString(databasePasswordFlg),
+			viper.GetString(postgresHostFlg),
+			viper.GetInt(postgresPortFlg),
+			viper.GetString(postgresUserFlg),
+			viper.GetString(postgresPasswordFlg),
+		)
+	case "rethinkdb":
+		db = rethinkdb.New(
+			logger.Named("rethinkdb"),
+			viper.GetString(rethinkDBURLFlg),
+			viper.GetString(rethinkDBPasswordFileFlg),
 		)
 	default:
 		return fmt.Errorf("unsupported database type: %s", dbString)

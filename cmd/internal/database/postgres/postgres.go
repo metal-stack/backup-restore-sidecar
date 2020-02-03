@@ -16,10 +16,6 @@ import (
 
 const (
 	connectionTimeout = 1 * time.Second
-	defaultPort       = 5432
-	defaultHost       = "localhost"
-	defaultUser       = "postgres"
-	defaultPassword   = ""
 
 	postgresBackupCmd = "pg_basebackup"
 	postgresBaseTar   = "base.tar.gz"
@@ -38,29 +34,12 @@ type Postgres struct {
 
 // New instantiates a new postgres database
 func New(log *zap.SugaredLogger, host string, port int, user string, password string) *Postgres {
-	h := defaultHost
-	if host != "" {
-		h = host
-	}
-	p := defaultPort
-	if port != 0 {
-		p = port
-	}
-	u := defaultUser
-	if user != "" {
-		u = user
-	}
-	pa := defaultPassword
-	if password != "" {
-		pa = password
-	}
-
 	return &Postgres{
 		log:      log,
-		host:     h,
-		port:     p,
-		user:     u,
-		password: pa,
+		host:     host,
+		port:     port,
+		user:     user,
+		password: password,
 		executor: utils.NewExecutor(log),
 	}
 }
@@ -165,4 +144,9 @@ func (db *Postgres) Probe() error {
 	}
 	defer conn.Close()
 	return nil
+}
+
+// StartForRestore indicates if the database needs to be started in order to restore it
+func (db *Postgres) StartForRestore() bool {
+	return false
 }

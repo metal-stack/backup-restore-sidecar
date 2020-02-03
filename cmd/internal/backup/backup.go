@@ -17,6 +17,7 @@ const (
 	backupArchiveName = "db.tar.gz"
 )
 
+// Start starts the backup component, which is periodically taking backups of the database
 func Start(log *zap.SugaredLogger, backupInterval time.Duration, db database.DatabaseProber, bp backuproviders.BackupProvider, stop <-chan struct{}) {
 	log.Info("database is now available, starting periodic backups")
 	log.Infow("scheduling next backup", "in", time.Now().Add(backupInterval).String(), "interval", backupInterval.String())
@@ -60,7 +61,7 @@ func Start(log *zap.SugaredLogger, backupInterval time.Duration, db database.Dat
 				log.Infow("cleaned up backups")
 			}
 
-			log.Infow("scheduling next backup", "in", time.Now().Add(backupInterval).String())
+			log.Infow("scheduling next backup", "in", time.Now().Add(backupInterval).String(), "interval", backupInterval.String())
 		}
 	}
 }

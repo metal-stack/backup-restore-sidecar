@@ -11,6 +11,7 @@ import (
 	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/database"
+	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/probe"
 	"github.com/mholt/archiver"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -84,7 +85,7 @@ func (i *Initializer) Start(stop <-chan struct{}) {
 		}
 	}()
 
-	err = i.initialize()
+	err = i.initialize(stop)
 	if err != nil {
 		i.log.Fatal(errors.Wrap(err, "error initializing database, shutting down"))
 	}
@@ -95,7 +96,7 @@ func (i *Initializer) Start(stop <-chan struct{}) {
 
 }
 
-func (i *Initializer) initialize() error {
+func (i *Initializer) initialize(stop <-chan struct{}) error {
 	i.log.Info("start running initializer")
 
 	i.log.Info("ensuring backup bucket")
@@ -132,7 +133,7 @@ func (i *Initializer) initialize() error {
 		return nil
 	}
 
-	err = i.Restore(latestBackup)
+	err = i.Restore(latestBackup, stop)
 	if err != nil {
 		return errors.Wrap(err, "unable to restore database")
 	}
@@ -141,8 +142,8 @@ func (i *Initializer) initialize() error {
 }
 
 // Restore restores the database with the given backup version
-func (i *Initializer) Restore(version *providers.BackupVersion) error {
-	i.log.Infow("restoring backup", "version", version.Version, "date", version.Date)
+func (i *Initializer) Restore(version *providers.BackupVersion, stop <-chan struct{}) error {
+	i.log.Infow("restoring backup", "version", version.Version, "date", version.Date.String())
 
 	i.currentStatus.Status = v1.StatusResponse_RESTORING
 	i.currentStatus.Message = "prepare restore"
@@ -175,6 +176,13 @@ func (i *Initializer) Restore(version *providers.BackupVersion) error {
 	err = uncompressBackup(backupFilePath)
 	if err != nil {
 		return errors.Wrap(err, "unable to uncompress backup")
+	}
+
+	if i.db.StartForRestore() {
+		i.currentStatus.Status = v1.StatusResponse_DONE
+		i.currentStatus.Message = "letting database start before restore"
+
+		probe.Start(i.log, i.db, stop)
 	}
 
 	i.currentStatus.Message = "restoring backup"

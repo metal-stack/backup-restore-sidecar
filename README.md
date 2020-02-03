@@ -17,4 +17,8 @@ Probably, it does not make sense to use this project with large databases. Howev
 
 - GCS Buckets
 
-## Deployment
+## Limitations
+
+- The database is deployed unclustered / standalone
+- The database is deployed as a statefulset and the data is backed by a PVC
+- No "Point in Time Recovery" (PITR)
