@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	v1 "github.com/metal-pod/backup-restore-sidecar/api/v1"
-	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/initializer"
+	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/initializer"
 	"go.uber.org/zap"
 )
 

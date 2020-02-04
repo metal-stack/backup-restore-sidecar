@@ -1,4 +1,4 @@
-module github.com/metal-pod/backup-restore-sidecar
+module github.com/metal-stack/backup-restore-sidecar
 
 go 1.13
 

@@ -11,8 +11,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/backup/providers"
-	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/constants"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 
 	"go.uber.org/zap"
 	"google.golang.org/api/iterator"

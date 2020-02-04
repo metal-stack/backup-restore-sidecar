@@ -6,7 +6,7 @@ DOCKER_TAG := $(or ${GITHUB_TAG_NAME}, latest)
 .PHONY: all
 all:
 	go mod tidy
-	go build -tags netgo -ldflags "$(LINKMODE)" -o bin/backup-restore-sidecar github.com/metal-pod/backup-restore-sidecar/cmd
+	go build -tags netgo -ldflags "$(LINKMODE)" -o bin/backup-restore-sidecar github.com/metal-stack/backup-restore-sidecar/cmd
 	strip bin/backup-restore-sidecar
 
 .PHONY: proto

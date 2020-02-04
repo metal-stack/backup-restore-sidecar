@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/constants"
-	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/utils"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )

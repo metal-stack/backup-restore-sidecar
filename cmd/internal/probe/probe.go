@@ -3,7 +3,7 @@ package probe
 import (
 	"time"
 
-	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/database"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 	"go.uber.org/zap"
 )
 

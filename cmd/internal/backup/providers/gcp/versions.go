@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"cloud.google.com/go/storage"
-	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/backup/providers"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 )
 
 type BackupVersionsGCP struct {

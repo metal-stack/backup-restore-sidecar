@@ -2,7 +2,7 @@ package initializer
 
 import (
 	"context"
-	v1 "github.com/metal-pod/backup-restore-sidecar/api/v1"
+	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 )
 
 type service struct {

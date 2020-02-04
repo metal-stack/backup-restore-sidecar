@@ -5,9 +5,9 @@ import (
 	"path"
 	"time"
 
-	backuproviders "github.com/metal-pod/backup-restore-sidecar/cmd/internal/backup/providers"
-	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/constants"
-	"github.com/metal-pod/backup-restore-sidecar/cmd/internal/database"
+	backuproviders "github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 	"github.com/mholt/archiver"
 
 	"go.uber.org/zap"
