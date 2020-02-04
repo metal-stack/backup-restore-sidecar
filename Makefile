@@ -11,7 +11,7 @@ all:
 
 .PHONY: proto
 proto:
-	docker run -it --rm -v ${PWD}/api:/work/api registry.fi-ts.io/cloud-native/go-builder protoc -I api/ api/v1/*.proto --go_out=plugins=grpc:api
+	docker run -it --rm -v ${PWD}/api:/work/api metalstack/builder protoc -I api/ api/v1/*.proto --go_out=plugins=grpc:api
 
 .PHONY: dockerimage
 dockerimage:
