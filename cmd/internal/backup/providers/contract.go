@@ -21,8 +21,3 @@ type BackupVersion struct {
 	Version string
 	Date    time.Time
 }
-
-type BackupConfig struct {
-	ObjectPrefix  string
-	ObjectsToKeep int
-}
