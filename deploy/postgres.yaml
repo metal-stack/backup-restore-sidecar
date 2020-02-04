@@ -18,7 +18,6 @@ spec:
     spec:
       containers:
       - image: postgres:12-alpine
-        imagePullPolicy: IfNotPresent
         name: postgres
         command:
         - tini
@@ -46,11 +45,12 @@ spec:
         - name: bin-provision
           subPath: backup-restore-sidecar
           mountPath: /usr/local/bin/backup-restore-sidecar
+        - name: backup-restore-sidecar-config
+          mountPath: /etc/backup-restore-sidecar
         - name: bin-provision
           subPath: tini
           mountPath: /usr/local/bin/tini
       - image: postgres:12-alpine
-        imagePullPolicy: IfNotPresent
         name: backup-restore-sidecar
         command:
         - tini
@@ -60,21 +60,21 @@ spec:
         - -c
         - backup-restore-sidecar start --log-level debug
         env:
-        - name: BACKUP_RESTORE_SIDECAR_DB
-          value: postgres
-        - name: BACKUP_RESTORE_SIDECAR_BACKUP_INTERVAL
-          value: 60s
-        - name: BACKUP_RESTORE_SIDECAR_OBJECT_PREFIX
-          value: test
-        - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_NAME
-          value: postgres-backup-sidecar-test 
-        - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_LOCATION
-          value: europe-west3
         - name: BACKUP_RESTORE_SIDECAR_GCP_PROJECT
           valueFrom:
             secretKeyRef:
               key: projectID
-              name: backup-restore-sidecar
+              name: backup-restore-sidecar-backup-provider-config
+        - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_NAME
+          valueFrom:
+            secretKeyRef:
+              key: bucketName
+              name: backup-restore-sidecar-backup-provider-config
+        - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_LOCATION
+          valueFrom:
+            secretKeyRef:
+              key: bucketLocation
+              name: backup-restore-sidecar-backup-provider-config
         - name: GOOGLE_APPLICATION_CREDENTIALS
           value: /gcp/credentials/serviceaccount.json
         volumeMounts:
@@ -83,6 +83,8 @@ spec:
         - name: bin-provision
           subPath: backup-restore-sidecar
           mountPath: /usr/local/bin/backup-restore-sidecar
+        - name: backup-restore-sidecar-config
+          mountPath: /etc/backup-restore-sidecar
         - name: bin-provision
           subPath: tini
           mountPath: /usr/local/bin/tini
@@ -91,7 +93,7 @@ spec:
           readOnly: true
       initContainers:
       - name: backup-restore-sidecar-provider
-        image: metalpod/backup-restore-sidecar:latest
+        image: metalstack/backup-restore-sidecar:latest
         imagePullPolicy: IfNotPresent
         command:
         - cp
@@ -105,14 +107,17 @@ spec:
       - name: postgres
         persistentVolumeClaim:
           claimName: postgres
-      - name: bin-provision
-        emptyDir: {}
+      - name: backup-restore-sidecar-config
+        configMap: 
+          name: backup-restore-sidecar-config-postgres
       - name: gcp-credentials
         secret:
-          secretName: backup-restore-sidecar
+          secretName: backup-restore-sidecar-backup-provider-config
           items:
           - key: serviceaccount.json
             path: serviceaccount.json
+      - name: bin-provision
+        emptyDir: {}
   volumeClaimTemplates:
   - metadata:
       name: postgres
@@ -122,6 +127,25 @@ spec:
       resources:
         requests:
           storage: 1Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-restore-sidecar-config-postgres
+data:
+  config.yaml: |
+    db: postgres
+    backup-provider: gcp
+    backup-interval: 60s
+    object-prefix: postgres-test
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-env
+data:
+  POSTGRES_DB: postgres
+  POSTGRES_DATA: /var/lib/postgresql/data/pgdata
 ---
 apiVersion: v1
 kind: Service
@@ -136,11 +160,3 @@ spec:
     targetPort: 5432
   selector:
     app: postgres
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: postgres-env
-data:
-  POSTGRES_DB: postgres
-  POSTGRES_DATA: /var/lib/postgresql/data/pgdata

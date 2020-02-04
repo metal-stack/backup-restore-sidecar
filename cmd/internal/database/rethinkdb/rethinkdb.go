@@ -4,19 +4,25 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/probe"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
 const (
-	connectionTimeout = 1 * time.Second
+	connectionTimeout              = 1 * time.Second
+	restoreDatabaseStartupTimeout  = 10 * time.Second
+	restoreDatabaseShutdownTimeout = 10 * time.Second
 
+	rethinkDBCmd        = "rethinkdb"
 	rethinkDBDumpCmd    = "rethinkdb-dump"
 	rethinkDBRestoreCmd = "rethinkdb-restore"
 )
@@ -100,12 +106,38 @@ func (db *RethinkDB) Recover() error {
 		return fmt.Errorf("restore file not present: %s", rethinkDBRestoreFilePath)
 	}
 
-	args := []string{}
-	if db.passwordFile != "" {
-		args = append(args, "--password-file="+db.passwordFile)
+	// rethinkdb requires to be running when restoring a backup.
+	// however, if we let the real database container start, we cannot interrupt it anymore in case
+	// an issue occurs during the restoration. therefore, we spin up an own instance of rethinkdb
+	// inside the sidecar against which we can restore.
+
+	db.log.Infow("starting rethinkdb database within sidecar for restore")
+	cmd := exec.Command(rethinkDBCmd, "--bind", "all", "--driver-port", "1", "--directory", constants.DataDir)
+	if err := cmd.Start(); err != nil {
+		errors.Wrap(err, "unable to start database within sidecar for restore")
 	}
+	defer cmd.Process.Kill()
+
+	db.log.Infow("waiting for rethinkdb database to come up")
+	restoreDB := New(db.log, "localhost:1", "")
+	stop := make(chan struct{})
+	done := make(chan bool)
+	defer close(done)
+	go func() {
+		probe.Start(restoreDB.log, restoreDB, stop)
+		done <- true
+	}()
+	select {
+	case <-done:
+		db.log.Infow("rethinkdb in sidecar is now available, now triggering restore commands...")
+	case <-time.After(restoreDatabaseStartupTimeout):
+		close(stop)
+		return errors.New("rethinkdb database did not come up in time")
+	}
+
+	args := []string{}
 	if db.url != "" {
-		args = append(args, "--connect="+db.url)
+		args = append(args, "--connect="+restoreDB.url)
 	}
 	args = append(args, rethinkDBRestoreFilePath)
 
@@ -114,7 +146,21 @@ func (db *RethinkDB) Recover() error {
 		return errors.Wrap(err, fmt.Sprintf("error running restore command: %s", out))
 	}
 
-	db.log.Infow("successfully restored rethinkdb database")
+	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		return errors.Wrap(err, "failed to send sigterm signal to rethinkdb")
+	}
+
+	wait := make(chan error)
+	go func() { wait <- cmd.Wait() }()
+	select {
+	case err := <-wait:
+		if err != nil {
+			return errors.Wrap(err, "rethinkdb did not shutdown cleanly")
+		}
+		db.log.Infow("successfully restored rethinkdb database", "output", out)
+	case <-time.After(restoreDatabaseShutdownTimeout):
+		return fmt.Errorf("rethinkdb did not shutdown cleanly after %s", restoreDatabaseShutdownTimeout)
+	}
 
 	return nil
 }
@@ -127,9 +173,4 @@ func (db *RethinkDB) Probe() error {
 	}
 	defer conn.Close()
 	return nil
-}
-
-// StartForRestore indicates if the database needs to be started in order to restore it
-func (db *RethinkDB) StartForRestore() bool {
-	return true
 }

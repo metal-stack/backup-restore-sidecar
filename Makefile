@@ -15,8 +15,33 @@ proto:
 
 .PHONY: dockerimage
 dockerimage:
-	docker build -t metalpod/backup-restore-sidecar:${DOCKER_TAG} .
+	docker build -t metalstack/backup-restore-sidecar:${DOCKER_TAG} .
 
 .PHONY: dockerpush
 dockerpush:
-	docker push metalpod/backup-restore-sidecar:${DOCKER_TAG}
+	docker push metalstack/backup-restore-sidecar:${DOCKER_TAG}
+
+# # #
+# the following tasks can be used to set up a development environment
+# # #
+
+.PHONY: start-postgres
+start-postgres:
+	$(MAKE)	start	DB=postgres
+
+.PHONY: start-rethinkdb
+start-rethinkdb:
+	$(MAKE)	start	DB=rethinkdb
+
+.PHONY: start
+start: kind-cluster-create
+	# kubectl apply -f deploy/provider-secret.yaml # make sure to fill in your credentials and backup config!
+	kubectl delete -f "deploy/$(DB).yaml" || true # for idempotence
+	kubectl apply -f "deploy/$(DB).yaml"
+	# tailing
+	stern '.*'
+
+.PHONY: kind-cluster-create
+kind-cluster-create: dockerimage
+	kind create cluster || true
+	kind load docker-image metalstack/backup-restore-sidecar:latest

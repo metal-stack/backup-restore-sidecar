@@ -11,7 +11,6 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/probe"
 	"github.com/mholt/archiver"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -176,13 +175,6 @@ func (i *Initializer) Restore(version *providers.BackupVersion, stop <-chan stru
 	err = uncompressBackup(backupFilePath)
 	if err != nil {
 		return errors.Wrap(err, "unable to uncompress backup")
-	}
-
-	if i.db.StartForRestore() {
-		i.currentStatus.Status = v1.StatusResponse_DONE
-		i.currentStatus.Message = "letting database start before restore"
-
-		probe.Start(i.log, i.db, stop)
 	}
 
 	i.currentStatus.Message = "restoring backup"

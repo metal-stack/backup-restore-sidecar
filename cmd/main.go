@@ -1,10 +1,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strings"
 
+	"github.com/metal-pod/v"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/gcp"
@@ -17,18 +19,17 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/signals"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/wait"
-	"github.com/metal-pod/v"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
 const (
-	moduleName = "backup-restore-sidecar"
+	moduleName  = "backup-restore-sidecar"
+	cfgFileType = "yaml"
 
+	// Flags
 	logLevelFlg = "log-level"
-
-	backupProviderFlg = "backup-provider"
 
 	serverAddrFlg = "initializer-endpoint"
 
@@ -46,6 +47,7 @@ const (
 	rethinkDBPasswordFileFlg = "rethinkdb-passwordfile"
 	rethinkDBURLFlg          = "rethinkdb-url"
 
+	backupProviderFlg = "backup-provider"
 	backupIntervalFlg = "backup-interval"
 
 	objectsToKeepFlg = "object-max-keep"
@@ -57,10 +59,11 @@ const (
 )
 
 var (
-	logger *zap.SugaredLogger
-	db     database.Database
-	bp     providers.BackupProvider
-	stop   <-chan struct{}
+	cfgFile string
+	logger  *zap.SugaredLogger
+	db      database.Database
+	bp      providers.BackupProvider
+	stop    <-chan struct{}
 )
 
 var rootCmd = &cobra.Command{
@@ -71,8 +74,9 @@ var rootCmd = &cobra.Command{
 		initLogging()
 		initConfig()
 		initSignalHandlers()
-		initDatabase()
-		initBackupProvider()
+		if err := initDatabase(); err != nil {
+			return err
+		}
 		return nil
 	},
 }
@@ -81,7 +85,9 @@ var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "starts the sidecar",
 	Long:  "the initializer will prepare starting the database. if there is no data or corrupt data, it checks whether there is a backup available and restore it prior to running allow running the database. The sidecar will then wait until the database is available and then take backups periodically",
-
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		return initBackupProvider()
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		addr := fmt.Sprintf("%s:%d", viper.GetString(bindAddrFlg), viper.GetInt(portFlg))
 		backupInterval := utils.MustParseTimeInterval(viper.GetString(backupIntervalFlg))
@@ -94,11 +100,17 @@ var startCmd = &cobra.Command{
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
 	Short: "restores a specific backup manually",
-	Run: func(cmd *cobra.Command, args []string) {
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		return initBackupProvider()
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return errors.New("no version argument given")
+		}
 		version := &providers.BackupVersion{
 			Version: args[0],
 		}
-		initializer.New(logger.Named("initializer"), "", db, bp).Restore(version, stop)
+		return initializer.New(logger.Named("initializer"), "", db, bp).Restore(version, stop)
 	},
 }
 
@@ -126,14 +138,14 @@ var restoreListCmd = &cobra.Command{
 var waitCmd = &cobra.Command{
 	Use:   "wait",
 	Short: "waits for the initializer to be done",
-	Run: func(cmd *cobra.Command, args []string) {
-		wait.Start(logger.Named("wait"), viper.GetString(serverAddrFlg), stop)
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return wait.Start(logger.Named("wait"), viper.GetString(serverAddrFlg), stop)
 	},
 }
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		logger.Error("failed executing root command", "error", err)
+		logger.Fatalw("failed executing root command", "error", err)
 	}
 }
 
@@ -141,16 +153,15 @@ func init() {
 	rootCmd.AddCommand(startCmd, waitCmd, restoreCmd)
 
 	rootCmd.PersistentFlags().StringP(logLevelFlg, "", "info", "sets the application log level")
+	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb]")
 
 	err := viper.BindPFlags(rootCmd.PersistentFlags())
 	if err != nil {
-		logger.Fatal("unable to construct root command:%v", err)
+		logger.Fatal("unable to construct root command: %v", err)
 	}
 
 	startCmd.Flags().StringP(bindAddrFlg, "", "127.0.0.1", "the bind addr of the api server")
 	startCmd.Flags().IntP(portFlg, "", 8000, "the port to serve on")
-
-	startCmd.Flags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb]")
 
 	startCmd.Flags().StringP(postgresUserFlg, "", "postgres", "the postgres database user (will be used when db is postgres)")
 	startCmd.Flags().StringP(postgresHostFlg, "", "localhost", "the postgres database address (will be used when db is postgres)")
@@ -160,7 +171,7 @@ func init() {
 	startCmd.Flags().StringP(rethinkDBURLFlg, "", "localhost:28015", "the rethinkdb database url (will be used when db is rethinkdb)")
 	startCmd.Flags().StringP(rethinkDBPasswordFileFlg, "", "", "the rethinkdb database password file path (will be used when db is rethinkdb)")
 
-	startCmd.Flags().StringP(backupProviderFlg, "", "gcp", "the name of the backup provider [gcp]")
+	startCmd.Flags().StringP(backupProviderFlg, "", "", "the name of the backup provider [gcp]")
 	startCmd.Flags().StringP(backupIntervalFlg, "", "3m", "the timed interval in which to take backups integer and optional time quantity (s|m|h)")
 
 	startCmd.Flags().IntP(objectsToKeepFlg, "", constants.DefaultObjectsToKeep, "the number of objects to keep at the cloud provider bucket")
@@ -189,6 +200,31 @@ func initConfig() {
 	viper.SetEnvPrefix("BACKUP_RESTORE_SIDECAR")
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	viper.AutomaticEnv()
+
+	viper.SetConfigType(cfgFileType)
+
+	if cfgFile != "" {
+		viper.SetConfigFile(cfgFile)
+		if err := viper.ReadInConfig(); err != nil {
+			logger.Errorw("config file path set explicitly, but unreadable", "error", err)
+		}
+	} else {
+		viper.SetConfigName("config")
+		viper.AddConfigPath("/etc/" + moduleName)
+		viper.AddConfigPath("$HOME/." + moduleName)
+		viper.AddConfigPath(".")
+		if err := viper.ReadInConfig(); err != nil {
+			usedCfg := viper.ConfigFileUsed()
+			if usedCfg != "" {
+				logger.Errorw("config file unreadable", "config-file", usedCfg, "error", err)
+			}
+		}
+	}
+
+	usedCfg := viper.ConfigFileUsed()
+	if usedCfg != "" {
+		logger.Infow("read config file", "config-file", usedCfg)
+	}
 }
 
 func initLogging() {

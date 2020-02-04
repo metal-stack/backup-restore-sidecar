@@ -25,7 +25,8 @@ spec:
         args:
         - sh
         - -c
-        - backup-restore-sidecar wait && rethinkdb --bind all --directory /data/db --initial-password ${RETHINKDB_PASSWORD}
+        # IMPORTANT: the --directory needs to point to the exact sidecar data dir, otherwise the database will be restored to the wrong location
+        - backup-restore-sidecar wait && rethinkdb --bind all --directory /data --initial-password ${RETHINKDB_PASSWORD}
         env:
         - name: RETHINKDB_PASSWORD
           valueFrom:
@@ -41,6 +42,8 @@ spec:
         - name: bin-provision
           subPath: backup-restore-sidecar
           mountPath: /usr/local/bin/backup-restore-sidecar
+        - name: backup-restore-sidecar-config
+          mountPath: /etc/backup-restore-sidecar
         - name: bin-provision
           subPath: tini
           mountPath: /usr/local/bin/tini
@@ -54,23 +57,21 @@ spec:
         - -c
         - backup-restore-sidecar start --log-level debug
         env:
-        - name: BACKUP_RESTORE_SIDECAR_DB
-          value: rethinkdb
-        - name: BACKUP_RESTORE_SIDECAR_RETHINKDB_PASSWORDFILE
-          value: /rethinkdb-secret/rethinkdb-password.txt
-        - name: BACKUP_RESTORE_SIDECAR_BACKUP_INTERVAL
-          value: 60s
-        - name: BACKUP_RESTORE_SIDECAR_OBJECT_PREFIX
-          value: test
-        - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_NAME
-          value: rethinkdb-backup-sidecar-test 
-        - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_LOCATION
-          value: europe-west3
         - name: BACKUP_RESTORE_SIDECAR_GCP_PROJECT
           valueFrom:
             secretKeyRef:
               key: projectID
-              name: backup-restore-sidecar
+              name: backup-restore-sidecar-backup-provider-config
+        - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_NAME
+          valueFrom:
+            secretKeyRef:
+              key: bucketName
+              name: backup-restore-sidecar-backup-provider-config
+        - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_LOCATION
+          valueFrom:
+            secretKeyRef:
+              key: bucketLocation
+              name: backup-restore-sidecar-backup-provider-config
         - name: GOOGLE_APPLICATION_CREDENTIALS
           value: /gcp/credentials/serviceaccount.json
         volumeMounts:
@@ -78,6 +79,8 @@ spec:
           mountPath: /data
         - name: rethinkdb-credentials
           mountPath: /rethinkdb-secret
+        - name: backup-restore-sidecar-config
+          mountPath: /etc/backup-restore-sidecar
         - name: bin-provision
           subPath: backup-restore-sidecar
           mountPath: /usr/local/bin/backup-restore-sidecar
@@ -95,7 +98,7 @@ spec:
           readOnly: true
       initContainers:
       - name: backup-restore-sidecar-provider
-        image: metalpod/backup-restore-sidecar:latest
+        image: metalstack/backup-restore-sidecar:latest
         imagePullPolicy: IfNotPresent
         command:
         - cp
@@ -117,14 +120,17 @@ spec:
           items:
           - key: rethinkdb-password
             path: rethinkdb-password.txt
-      - name: bin-provision
-        emptyDir: {}
+      - name: backup-restore-sidecar-config
+        configMap: 
+          name: backup-restore-sidecar-config-rethinkdb
       - name: gcp-credentials
         secret:
-          secretName: backup-restore-sidecar
+          secretName: backup-restore-sidecar-backup-provider-config
           items:
           - key: serviceaccount.json
             path: serviceaccount.json
+      - name: bin-provision
+        emptyDir: {}
   volumeClaimTemplates:
   - metadata:
       name: rethinkdb
@@ -134,6 +140,18 @@ spec:
       resources:
         requests:
           storage: 1Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-restore-sidecar-config-rethinkdb
+data:
+  config.yaml: |
+    db: rethinkdb
+    backup-provider: gcp
+    rethinkdb-passwordfile: /rethinkdb-secret/rethinkdb-password.txt
+    backup-interval: 60s
+    object-prefix: rethinkdb-test
 ---
 apiVersion: v1
 kind: Secret

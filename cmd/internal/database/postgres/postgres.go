@@ -145,8 +145,3 @@ func (db *Postgres) Probe() error {
 	defer conn.Close()
 	return nil
 }
-
-// StartForRestore indicates if the database needs to be started in order to restore it
-func (db *Postgres) StartForRestore() bool {
-	return false
-}
