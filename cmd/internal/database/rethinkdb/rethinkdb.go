@@ -123,12 +123,16 @@ func (db *RethinkDB) Recover() error {
 	stop := make(chan struct{})
 	done := make(chan bool)
 	defer close(done)
+	var err error
 	go func() {
-		probe.Start(restoreDB.log, restoreDB, stop)
+		err = probe.Start(restoreDB.log, restoreDB, stop)
 		done <- true
 	}()
 	select {
 	case <-done:
+		if err != nil {
+			return errors.Wrap(err, "error while probing")
+		}
 		db.log.Infow("rethinkdb in sidecar is now available, now triggering restore commands...")
 	case <-time.After(restoreDatabaseStartupTimeout):
 		close(stop)

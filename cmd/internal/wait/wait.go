@@ -13,8 +13,9 @@ const (
 	waitInterval = 3 * time.Second
 )
 
+// Start starts a wait component that will return when the initializer server has done its job
 func Start(log *zap.SugaredLogger, addr string, stop <-chan struct{}) error {
-	client, err := initializer.NewInitializerClientWithRetry(addr, log)
+	client, err := initializer.NewInitializerClientWithRetry(addr, log, stop)
 	if err != nil {
 		return err
 	}
@@ -27,8 +28,6 @@ func Start(log *zap.SugaredLogger, addr string, stop <-chan struct{}) error {
 			log.Info("received stop signal, shutting down")
 			return nil
 		case <-time.After(waitInterval):
-			log.Infow("waiting until initializer completes", "interval", waitInterval.String())
-
 			resp, err := client.Status(context.Background(), &v1.Empty{})
 			if err != nil {
 				log.Errorw("error retrieving initializer server response", "error", err)

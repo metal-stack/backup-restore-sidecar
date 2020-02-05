@@ -84,7 +84,7 @@ func (i *Initializer) Start(stop <-chan struct{}) {
 		}
 	}()
 
-	err = i.initialize(stop)
+	err = i.initialize()
 	if err != nil {
 		i.log.Fatal(errors.Wrap(err, "error initializing database, shutting down"))
 	}
@@ -92,10 +92,9 @@ func (i *Initializer) Start(stop <-chan struct{}) {
 	i.log.Info("initializer done")
 	i.currentStatus.Status = v1.StatusResponse_DONE
 	i.currentStatus.Message = "done"
-
 }
 
-func (i *Initializer) initialize(stop <-chan struct{}) error {
+func (i *Initializer) initialize() error {
 	i.log.Info("start running initializer")
 
 	i.log.Info("ensuring backup bucket")
@@ -132,7 +131,7 @@ func (i *Initializer) initialize(stop <-chan struct{}) error {
 		return nil
 	}
 
-	err = i.Restore(latestBackup, stop)
+	err = i.Restore(latestBackup)
 	if err != nil {
 		return errors.Wrap(err, "unable to restore database")
 	}
@@ -141,7 +140,7 @@ func (i *Initializer) initialize(stop <-chan struct{}) error {
 }
 
 // Restore restores the database with the given backup version
-func (i *Initializer) Restore(version *providers.BackupVersion, stop <-chan struct{}) error {
+func (i *Initializer) Restore(version *providers.BackupVersion) error {
 	i.log.Infow("restoring backup", "version", version.Version, "date", version.Date.String())
 
 	i.currentStatus.Status = v1.StatusResponse_RESTORING

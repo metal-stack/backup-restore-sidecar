@@ -85,22 +85,24 @@ var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "starts the sidecar",
 	Long:  "the initializer will prepare starting the database. if there is no data or corrupt data, it checks whether there is a backup available and restore it prior to running allow running the database. The sidecar will then wait until the database is available and then take backups periodically",
-	PreRunE: func(cmd *cobra.Command, args []string) error {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return initBackupProvider()
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		addr := fmt.Sprintf("%s:%d", viper.GetString(bindAddrFlg), viper.GetInt(portFlg))
 		backupInterval := utils.MustParseTimeInterval(viper.GetString(backupIntervalFlg))
 		initializer.New(logger.Named("initializer"), addr, db, bp).Start(stop)
-		probe.Start(logger.Named("probe"), db, stop)
-		backup.Start(logger.Named("backup"), backupInterval, db, bp, stop)
+		if err := probe.Start(logger.Named("probe"), db, stop); err != nil {
+			return err
+		}
+		return backup.Start(logger.Named("backup"), backupInterval, db, bp, stop)
 	},
 }
 
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
 	Short: "restores a specific backup manually",
-	PreRunE: func(cmd *cobra.Command, args []string) error {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return initBackupProvider()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -110,7 +112,7 @@ var restoreCmd = &cobra.Command{
 		version := &providers.BackupVersion{
 			Version: args[0],
 		}
-		return initializer.New(logger.Named("initializer"), "", db, bp).Restore(version, stop)
+		return initializer.New(logger.Named("initializer"), "", db, bp).Restore(version)
 	},
 }
 
@@ -157,7 +159,7 @@ func init() {
 
 	err := viper.BindPFlags(rootCmd.PersistentFlags())
 	if err != nil {
-		logger.Fatal("unable to construct root command: %v", err)
+		logger.Fatalw("unable to construct root command", "error", err)
 	}
 
 	startCmd.Flags().StringP(bindAddrFlg, "", "127.0.0.1", "the bind addr of the api server")
@@ -183,14 +185,14 @@ func init() {
 
 	err = viper.BindPFlags(startCmd.Flags())
 	if err != nil {
-		logger.Error("unable to construct initializer command:%v", err)
+		logger.Fatalw("unable to construct initializer command", "error", err)
 	}
 
 	waitCmd.Flags().StringP(serverAddrFlg, "", "http://127.0.0.1:8000/", "the url of the initializer server")
 
 	err = viper.BindPFlags(waitCmd.Flags())
 	if err != nil {
-		logger.Fatal("unable to construct wait command:%v", err)
+		logger.Fatalw("unable to construct wait command", "error", err)
 	}
 
 	restoreCmd.AddCommand(restoreListCmd)
@@ -206,7 +208,7 @@ func initConfig() {
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)
 		if err := viper.ReadInConfig(); err != nil {
-			logger.Errorw("config file path set explicitly, but unreadable", "error", err)
+			logger.Fatalw("config file path set explicitly, but unreadable", "error", err)
 		}
 	} else {
 		viper.SetConfigName("config")
@@ -216,7 +218,7 @@ func initConfig() {
 		if err := viper.ReadInConfig(); err != nil {
 			usedCfg := viper.ConfigFileUsed()
 			if usedCfg != "" {
-				logger.Errorw("config file unreadable", "config-file", usedCfg, "error", err)
+				logger.Fatalw("config file unreadable", "config-file", usedCfg, "error", err)
 			}
 		}
 	}

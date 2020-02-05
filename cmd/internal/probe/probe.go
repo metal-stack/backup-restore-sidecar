@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"errors"
 	"time"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
@@ -12,18 +13,17 @@ var (
 )
 
 // Start starts the database prober
-func Start(log *zap.SugaredLogger, db database.DatabaseProber, stop <-chan struct{}) {
+func Start(log *zap.SugaredLogger, db database.DatabaseProber, stop <-chan struct{}) error {
 	log.Info("start probing database")
 
 	for {
 		select {
 		case <-stop:
-			log.Info("received stop signal, shutting down")
-			return
+			return errors.New("received stop signal, stop probing")
 		case <-time.After(probeInterval):
 			err := db.Probe()
 			if err == nil {
-				return
+				return nil
 			}
 			log.Errorw("database has not yet started, waiting and retrying...", "error", err)
 		}

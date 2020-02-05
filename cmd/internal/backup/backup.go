@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"errors"
 	"os"
 	"path"
 	"time"
@@ -18,15 +19,14 @@ const (
 )
 
 // Start starts the backup component, which is periodically taking backups of the database
-func Start(log *zap.SugaredLogger, backupInterval time.Duration, db database.DatabaseProber, bp backuproviders.BackupProvider, stop <-chan struct{}) {
+func Start(log *zap.SugaredLogger, backupInterval time.Duration, db database.DatabaseProber, bp backuproviders.BackupProvider, stop <-chan struct{}) error {
 	log.Info("database is now available, starting periodic backups")
 	log.Infow("scheduling next backup", "in", time.Now().Add(backupInterval).String(), "interval", backupInterval.String())
 
 	for {
 		select {
 		case <-stop:
-			log.Info("received stop signal, shutting down")
-			return
+			return errors.New("received stop signal, stop taking backups")
 		case <-time.After(backupInterval):
 			err := db.Backup()
 			if err != nil {
