@@ -20,6 +20,10 @@ import (
 	"cloud.google.com/go/storage"
 )
 
+const (
+	defaultBackupName = "db"
+)
+
 // BackupProviderGCP implements the backup provider interface for GCP
 type BackupProviderGCP struct {
 	log    *zap.SugaredLogger
@@ -31,6 +35,7 @@ type BackupProviderGCP struct {
 type BackupProviderConfigGCP struct {
 	BucketName     string
 	BucketLocation string
+	BackupName     string
 	ObjectPrefix   string
 	ObjectsToKeep  int64
 	ProjectID      string
@@ -51,8 +56,15 @@ func (c *BackupProviderConfigGCP) validate() error {
 func New(log *zap.SugaredLogger, config *BackupProviderConfigGCP) (*BackupProviderGCP, error) {
 	ctx := context.Background()
 
+	if config == nil {
+		return nil, errors.New("gcp backup provider requires a provider config")
+	}
+
 	if config.ObjectsToKeep == 0 {
 		config.ObjectsToKeep = constants.DefaultObjectsToKeep
+	}
+	if config.BackupName == "" {
+		config.BackupName = defaultBackupName
 	}
 
 	err := config.validate()
@@ -180,6 +192,12 @@ func (b *BackupProviderGCP) UploadBackup(sourcePath string) error {
 	defer w.Close()
 
 	return nil
+}
+
+// GetNextBackupName returns a name for the next backup archive that is going to be uploaded
+func (b *BackupProviderGCP) GetNextBackupName() string {
+	// name is constant because we use lifecycle rule to cleanup
+	return b.config.BackupName
 }
 
 // ListBackups lists the available backups of the backup provider

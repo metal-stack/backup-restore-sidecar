@@ -1,6 +1,7 @@
 package gcp
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 
@@ -47,4 +48,13 @@ func (b BackupVersionsGCP) Sort(versions []*providers.BackupVersion, asc bool) {
 		}
 		return versions[i].Date.After(versions[j].Date)
 	})
+}
+
+func (b BackupVersionsGCP) Get(version string) (*providers.BackupVersion, error) {
+	for _, backup := range b.List() {
+		if version == backup.Version {
+			return backup, nil
+		}
+	}
+	return nil, fmt.Errorf("version %q not found", version)
 }

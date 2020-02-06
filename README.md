@@ -16,6 +16,7 @@ Probably, it does not make sense to use this project with large databases. Howev
 ## Supported Storage Providers
 
 - GCS Buckets
+- Local
 
 ## Limitations
 

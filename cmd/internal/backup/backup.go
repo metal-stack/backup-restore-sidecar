@@ -14,10 +14,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	backupArchiveName = "db.tar.gz"
-)
-
 // Start starts the backup component, which is periodically taking backups of the database
 func Start(log *zap.SugaredLogger, backupInterval time.Duration, db database.DatabaseProber, bp backuproviders.BackupProvider, stop <-chan struct{}) error {
 	log.Info("database is now available, starting periodic backups")
@@ -34,6 +30,8 @@ func Start(log *zap.SugaredLogger, backupInterval time.Duration, db database.Dat
 				continue
 			}
 			log.Infow("successfully backed up database")
+
+			backupArchiveName := bp.GetNextBackupName() + ".tar.gz"
 
 			backupFilePath := path.Join(constants.BackupDir, backupArchiveName)
 			if err := os.RemoveAll(backupFilePath); err != nil {

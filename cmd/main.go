@@ -10,6 +10,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/gcp"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/local"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/postgres"
@@ -53,6 +54,8 @@ const (
 	objectsToKeepFlg = "object-max-keep"
 	objectPrefixFlg  = "object-prefix"
 
+	localBackupPathFlg = "local-provider-backup-path"
+
 	gcpBucketNameFlg     = "gcp-bucket-name"
 	gcpBucketLocationFlg = "gcp-bucket-location"
 	gcpProjectFlg        = "gcp-project"
@@ -85,7 +88,7 @@ var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "starts the sidecar",
 	Long:  "the initializer will prepare starting the database. if there is no data or corrupt data, it checks whether there is a backup available and restore it prior to running allow running the database. The sidecar will then wait until the database is available and then take backups periodically",
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+	PreRunE: func(cmd *cobra.Command, args []string) error {
 		return initBackupProvider()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -102,16 +105,22 @@ var startCmd = &cobra.Command{
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
 	Short: "restores a specific backup manually",
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+	PreRunE: func(cmd *cobra.Command, args []string) error {
 		return initBackupProvider()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
 			return errors.New("no version argument given")
 		}
-		version := &providers.BackupVersion{
-			Version: args[0],
+		versions, err := bp.ListBackups()
+		if err != nil {
+			return err
 		}
+		version, err := versions.Get(args[0])
+		if err != nil {
+			return err
+		}
+
 		return initializer.New(logger.Named("initializer"), "", db, bp).Restore(version)
 	},
 }
@@ -120,6 +129,9 @@ var restoreListCmd = &cobra.Command{
 	Use:     "list-versions",
 	Aliases: []string{"ls"},
 	Short:   "lists available backups",
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		return initBackupProvider()
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		versions, err := bp.ListBackups()
 		if err != nil {
@@ -173,7 +185,7 @@ func init() {
 	startCmd.Flags().StringP(rethinkDBURLFlg, "", "localhost:28015", "the rethinkdb database url (will be used when db is rethinkdb)")
 	startCmd.Flags().StringP(rethinkDBPasswordFileFlg, "", "", "the rethinkdb database password file path (will be used when db is rethinkdb)")
 
-	startCmd.Flags().StringP(backupProviderFlg, "", "", "the name of the backup provider [gcp]")
+	startCmd.Flags().StringP(backupProviderFlg, "", "", "the name of the backup provider [gcp|local]")
 	startCmd.Flags().StringP(backupIntervalFlg, "", "3m", "the timed interval in which to take backups integer and optional time quantity (s|m|h)")
 
 	startCmd.Flags().IntP(objectsToKeepFlg, "", constants.DefaultObjectsToKeep, "the number of objects to keep at the cloud provider bucket")
@@ -297,6 +309,14 @@ func initBackupProvider() error {
 		if err != nil {
 			return fmt.Errorf("error initializing backup provider: %s", err)
 		}
+	case "local":
+		bp, err = local.New(
+			logger.Named("backup"),
+			&local.BackupProviderConfigLocal{
+				LocalBackupPath: viper.GetString(localBackupPathFlg),
+				ObjectsToKeep:   viper.GetInt64(objectsToKeepFlg),
+			},
+		)
 	default:
 		return fmt.Errorf("unsupported backup provider type: %s", bpString)
 	}
