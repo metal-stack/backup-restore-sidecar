@@ -82,7 +82,7 @@ func (db *RethinkDB) Backup() error {
 		args = append(args, "--connect="+db.url)
 	}
 
-	out, err := db.executor.ExecuteCommandWithOutput(rethinkDBDumpCmd, args...)
+	out, err := db.executor.ExecuteCommandWithOutput(rethinkDBDumpCmd, nil, args...)
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("error running backup command: %s", out))
 	}
@@ -145,7 +145,7 @@ func (db *RethinkDB) Recover() error {
 	}
 	args = append(args, rethinkDBRestoreFilePath)
 
-	out, err := db.executor.ExecuteCommandWithOutput(rethinkDBRestoreCmd, args...)
+	out, err := db.executor.ExecuteCommandWithOutput(rethinkDBRestoreCmd, nil, args...)
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("error running restore command: %s", out))
 	}

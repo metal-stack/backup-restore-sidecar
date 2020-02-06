@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"os"
 	"os/exec"
 	"strings"
 
@@ -17,9 +18,11 @@ func NewExecutor(log *zap.SugaredLogger) *CmdExecutor {
 	}
 }
 
-func (c *CmdExecutor) ExecuteCommandWithOutput(command string, arg ...string) (string, error) {
+func (c *CmdExecutor) ExecuteCommandWithOutput(command string, env []string, arg ...string) (string, error) {
 	c.log.Infow("running command", "command", command, "args", strings.Join(arg, " "))
 	cmd := exec.Command(command, arg...)
+	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, env...)
 	return runCommandWithOutput(cmd, true)
 }
 

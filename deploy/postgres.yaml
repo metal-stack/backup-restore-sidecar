@@ -31,14 +31,24 @@ spec:
         env:
         - name: POSTGRES_DB
           valueFrom:
-            configMapKeyRef:
+            secretKeyRef:
               key: POSTGRES_DB
-              name: postgres-env
+              name: postgres
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_USER
+              name: postgres
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: postgres
         - name: PGDATA
           valueFrom:
-            configMapKeyRef:
+            secretKeyRef:
               key: POSTGRES_DATA
-              name: postgres-env
+              name: postgres
         volumeMounts:
         - name: postgres
           mountPath: /var/lib/postgresql/data/pgdata
@@ -75,6 +85,16 @@ spec:
             secretKeyRef:
               key: bucketLocation
               name: backup-restore-sidecar-backup-provider-config
+        - name: BACKUP_RESTORE_SIDECAR_POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: postgres
+        - name: BACKUP_RESTORE_SIDECAR_POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_USER
+              name: postgres
         - name: GOOGLE_APPLICATION_CREDENTIALS
           value: /gcp/credentials/serviceaccount.json
         volumeMounts:
@@ -140,11 +160,13 @@ data:
     object-prefix: postgres-test
 ---
 apiVersion: v1
-kind: ConfigMap
+kind: Secret
 metadata:
-  name: postgres-env
-data:
+  name: postgres
+stringData:
   POSTGRES_DB: postgres
+  POSTGRES_USER: test
+  POSTGRES_PASSWORD: test123!
   POSTGRES_DATA: /var/lib/postgresql/data/pgdata
 ---
 apiVersion: v1

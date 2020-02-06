@@ -79,7 +79,12 @@ func (db *Postgres) Backup() error {
 		args = append(args, "--username="+db.user)
 	}
 
-	out, err := db.executor.ExecuteCommandWithOutput(postgresBackupCmd, args...)
+	var env []string
+	if db.password != "" {
+		env = append(env, "PGPASSWORD="+db.password)
+	}
+
+	out, err := db.executor.ExecuteCommandWithOutput(postgresBackupCmd, env, args...)
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("error running backup command: %s", out))
 	}
@@ -109,7 +114,7 @@ func (db *Postgres) Recover() error {
 		return errors.Wrap(err, "could not clean database data directory")
 	}
 
-	out, err := db.executor.ExecuteCommandWithOutput("tar", "-xzvf", path.Join(constants.RestoreDir, postgresBaseTar), "-C", constants.DataDir)
+	out, err := db.executor.ExecuteCommandWithOutput("tar", nil, "-xzvf", path.Join(constants.RestoreDir, postgresBaseTar), "-C", constants.DataDir)
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("error untaring base backup: %s", out))
 	}
@@ -124,7 +129,7 @@ func (db *Postgres) Recover() error {
 		return errors.Wrap(err, "could not create pg_wal directory")
 	}
 
-	out, err = db.executor.ExecuteCommandWithOutput("tar", "-xzvf", path.Join(constants.RestoreDir, postgresWalTar), "-C", path.Join(constants.DataDir, "pg_wal"))
+	out, err = db.executor.ExecuteCommandWithOutput("tar", nil, "-xzvf", path.Join(constants.RestoreDir, postgresWalTar), "-C", path.Join(constants.DataDir, "pg_wal"))
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("error untaring wal backup: %s", out))
 	}
