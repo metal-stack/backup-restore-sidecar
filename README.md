@@ -6,6 +6,10 @@ The idea is taken from the [etcd-backup-restore](https://github.com/gardener/etc
 
 Probably, it does not make sense to use this project with large databases. However, if it is certain that a database will never grow large, the auto-recovery mechanism can come in very handy.
 
+## How it works
+
+![Sequence Diagram](docs/sequence.png)
+
 ## Supported Databases
 
 | Database  | Image     | Status |
