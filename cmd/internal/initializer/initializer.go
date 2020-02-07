@@ -162,7 +162,7 @@ func (i *Initializer) Restore(version *providers.BackupVersion) error {
 	}
 	backupFilePath := path.Join(constants.DownloadDir, downloadFileName)
 	if err := os.RemoveAll(backupFilePath); err != nil {
-		return errors.Wrap(err, "could delete priorly downloaded file")
+		return errors.Wrap(err, "could not delete priorly downloaded file")
 	}
 
 	err := i.bp.DownloadBackup(version)
