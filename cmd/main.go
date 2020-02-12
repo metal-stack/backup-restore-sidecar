@@ -6,7 +6,6 @@ import (
 	"log"
 	"strings"
 
-	"github.com/metal-pod/v"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/gcp"
@@ -20,6 +19,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/signals"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/wait"
+	"github.com/metal-stack/v"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -48,8 +48,8 @@ const (
 	rethinkDBPasswordFileFlg = "rethinkdb-passwordfile"
 	rethinkDBURLFlg          = "rethinkdb-url"
 
-	backupProviderFlg = "backup-provider"
-	backupIntervalFlg = "backup-interval"
+	backupProviderFlg     = "backup-provider"
+	backupCronScheduleFlg = "backup-cron-schedule"
 
 	objectsToKeepFlg = "object-max-keep"
 	objectPrefixFlg  = "object-prefix"
@@ -93,12 +93,11 @@ var startCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		addr := fmt.Sprintf("%s:%d", viper.GetString(bindAddrFlg), viper.GetInt(portFlg))
-		backupInterval := utils.MustParseTimeInterval(viper.GetString(backupIntervalFlg))
 		initializer.New(logger.Named("initializer"), addr, db, bp).Start(stop)
 		if err := probe.Start(logger.Named("probe"), db, stop); err != nil {
 			return err
 		}
-		return backup.Start(logger.Named("backup"), backupInterval, db, bp, stop)
+		return backup.Start(logger.Named("backup"), viper.GetString(backupCronScheduleFlg), db, bp, stop)
 	},
 }
 
@@ -186,7 +185,7 @@ func init() {
 	startCmd.Flags().StringP(rethinkDBPasswordFileFlg, "", "", "the rethinkdb database password file path (will be used when db is rethinkdb)")
 
 	startCmd.Flags().StringP(backupProviderFlg, "", "", "the name of the backup provider [gcp|local]")
-	startCmd.Flags().StringP(backupIntervalFlg, "", "3m", "the timed interval in which to take backups integer and optional time quantity (s|m|h)")
+	startCmd.Flags().StringP(backupCronScheduleFlg, "", "*/3 * * * *", "cron schedule for taking backups periodically")
 
 	startCmd.Flags().IntP(objectsToKeepFlg, "", constants.DefaultObjectsToKeep, "the number of objects to keep at the cloud provider bucket")
 	startCmd.Flags().StringP(objectPrefixFlg, "", "", "the prefix to store the object in the cloud provider bucket")
