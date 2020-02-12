@@ -150,7 +150,7 @@ data:
     db: rethinkdb
     backup-provider: gcp
     rethinkdb-passwordfile: /rethinkdb-secret/rethinkdb-password.txt
-    backup-interval: 60s
+    backup-cron-schedule: "*/1 * * * *"
     object-prefix: rethinkdb-test
 ---
 apiVersion: v1

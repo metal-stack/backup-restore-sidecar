@@ -156,7 +156,7 @@ data:
   config.yaml: |
     db: postgres
     backup-provider: gcp
-    backup-interval: 60s
+    backup-cron-schedule: "*/1 * * * *"
     object-prefix: postgres-test
 ---
 apiVersion: v1
