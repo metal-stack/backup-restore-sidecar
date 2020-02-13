@@ -19,7 +19,7 @@ import (
 
 const (
 	connectionTimeout              = 1 * time.Second
-	restoreDatabaseStartupTimeout  = 10 * time.Second
+	restoreDatabaseStartupTimeout  = 30 * time.Second
 	restoreDatabaseShutdownTimeout = 10 * time.Second
 
 	rethinkDBCmd        = "rethinkdb"

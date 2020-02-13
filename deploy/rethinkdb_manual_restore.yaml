@@ -1,0 +1,112 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app: rethinkdb
+  name: rethinkdb
+spec:
+  serviceName: rethinkdb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rethinkdb
+  template:
+    metadata:
+      labels:
+        app: rethinkdb
+    spec:
+      containers:
+      - image: rethinkdb:2.4.0
+        name: backup-restore-sidecar
+        command:
+        - tini
+        - --
+        args:
+        - tail
+        - -f
+        - /etc/os-release
+        env:
+        - name: BACKUP_RESTORE_SIDECAR_GCP_PROJECT
+          valueFrom:
+            secretKeyRef:
+              key: projectID
+              name: backup-restore-sidecar-backup-provider-config
+        - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_NAME
+          valueFrom:
+            secretKeyRef:
+              key: bucketName
+              name: backup-restore-sidecar-backup-provider-config
+        - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_LOCATION
+          valueFrom:
+            secretKeyRef:
+              key: bucketLocation
+              name: backup-restore-sidecar-backup-provider-config
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: /gcp/credentials/serviceaccount.json
+        volumeMounts:
+        - name: rethinkdb
+          mountPath: /data
+        - name: rethinkdb-credentials
+          mountPath: /rethinkdb-secret
+        - name: backup-restore-sidecar-config
+          mountPath: /etc/backup-restore-sidecar
+        - name: bin-provision
+          subPath: backup-restore-sidecar
+          mountPath: /usr/local/bin/backup-restore-sidecar
+        - name: bin-provision
+          subPath: tini
+          mountPath: /usr/local/bin/tini
+        - name: bin-provision
+          subPath: rethinkdb-dump
+          mountPath: /usr/local/bin/rethinkdb-dump
+        - name: bin-provision
+          subPath: rethinkdb-restore
+          mountPath: /usr/local/bin/rethinkdb-restore
+        - name: gcp-credentials
+          mountPath: /gcp/credentials
+          readOnly: true
+      initContainers:
+      - name: backup-restore-sidecar-provider
+        image: metalstack/backup-restore-sidecar:latest
+        imagePullPolicy: IfNotPresent
+        command:
+        - cp
+        - /backup-restore-sidecar
+        - /ubuntu/tini
+        - /rethinkdb/rethinkdb-dump
+        - /rethinkdb/rethinkdb-restore
+        - /bin-provision
+        volumeMounts:
+        - name: bin-provision
+          mountPath: /bin-provision
+      volumes:
+      - name: rethinkdb
+        persistentVolumeClaim:
+          claimName: rethinkdb
+      - name: rethinkdb-credentials
+        secret:
+          secretName: rethinkdb
+          items:
+          - key: rethinkdb-password
+            path: rethinkdb-password.txt
+      - name: backup-restore-sidecar-config
+        configMap:
+          name: backup-restore-sidecar-config-rethinkdb
+      - name: gcp-credentials
+        secret:
+          secretName: backup-restore-sidecar-backup-provider-config
+          items:
+          - key: serviceaccount.json
+            path: serviceaccount.json
+      - name: bin-provision
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: rethinkdb
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi

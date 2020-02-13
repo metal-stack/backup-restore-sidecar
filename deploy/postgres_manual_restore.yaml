@@ -1,0 +1,106 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app: postgres
+  name: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - image: postgres:12-alpine
+        name: backup-restore-sidecar
+        command:
+        - tini
+        - --
+        args:
+        - tail
+        - -f
+        - /etc/os-release
+        env:
+        - name: BACKUP_RESTORE_SIDECAR_GCP_PROJECT
+          valueFrom:
+            secretKeyRef:
+              key: projectID
+              name: backup-restore-sidecar-backup-provider-config
+        - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_NAME
+          valueFrom:
+            secretKeyRef:
+              key: bucketName
+              name: backup-restore-sidecar-backup-provider-config
+        - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_LOCATION
+          valueFrom:
+            secretKeyRef:
+              key: bucketLocation
+              name: backup-restore-sidecar-backup-provider-config
+        - name: BACKUP_RESTORE_SIDECAR_POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: postgres
+        - name: BACKUP_RESTORE_SIDECAR_POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_USER
+              name: postgres
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: /gcp/credentials/serviceaccount.json
+        volumeMounts:
+        - name: postgres
+          mountPath: /data
+        - name: bin-provision
+          subPath: backup-restore-sidecar
+          mountPath: /usr/local/bin/backup-restore-sidecar
+        - name: backup-restore-sidecar-config
+          mountPath: /etc/backup-restore-sidecar
+        - name: bin-provision
+          subPath: tini
+          mountPath: /usr/local/bin/tini
+        - name: gcp-credentials
+          mountPath: /gcp/credentials
+          readOnly: true
+      initContainers:
+      - name: backup-restore-sidecar-provider
+        image: metalstack/backup-restore-sidecar:latest
+        imagePullPolicy: IfNotPresent
+        command:
+        - cp
+        - /backup-restore-sidecar
+        - /sbin/tini
+        - /bin-provision
+        volumeMounts:
+        - name: bin-provision
+          mountPath: /bin-provision
+      volumes:
+      - name: postgres
+        persistentVolumeClaim:
+          claimName: postgres
+      - name: backup-restore-sidecar-config
+        configMap:
+          name: backup-restore-sidecar-config-postgres
+      - name: gcp-credentials
+        secret:
+          secretName: backup-restore-sidecar-backup-provider-config
+          items:
+          - key: serviceaccount.json
+            path: serviceaccount.json
+      - name: bin-provision
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi

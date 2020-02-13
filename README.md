@@ -40,3 +40,7 @@ Requires:
 1. Configure your backup provider configuration in `deploy/provider-secret.yaml`
 2. Enable deployment of the provider secret by commenting in the `kubectl` command in the Makefile's `start` target
 3. Run `make start-postgres` or `start-rethinkdb`
+
+## Manual restoration
+
+Follow the documentation [here](docs/manual_restore.md) in order to manually restore a specific version of your database.
