@@ -24,6 +24,7 @@ const (
 
 // Postgres implements the database interface
 type Postgres struct {
+	datadir  string
 	host     string
 	port     int
 	user     string
@@ -33,9 +34,10 @@ type Postgres struct {
 }
 
 // New instantiates a new postgres database
-func New(log *zap.SugaredLogger, host string, port int, user string, password string) *Postgres {
+func New(log *zap.SugaredLogger, datadir string, host string, port int, user string, password string) *Postgres {
 	return &Postgres{
 		log:      log,
+		datadir:  datadir,
 		host:     host,
 		port:     port,
 		user:     user,
@@ -46,7 +48,7 @@ func New(log *zap.SugaredLogger, host string, port int, user string, password st
 
 // Check checks whether a backup needs to be restored or not, returns true if it needs a backup
 func (db *Postgres) Check() (bool, error) {
-	empty, err := utils.IsEmpty(constants.DataDir)
+	empty, err := utils.IsEmpty(db.datadir)
 	if err != nil {
 		return false, err
 	}
@@ -110,26 +112,26 @@ func (db *Postgres) Recover() error {
 		}
 	}
 
-	if err := utils.RemoveContents(constants.DataDir); err != nil {
+	if err := utils.RemoveContents(db.datadir); err != nil {
 		return errors.Wrap(err, "could not clean database data directory")
 	}
 
-	out, err := db.executor.ExecuteCommandWithOutput("tar", nil, "-xzvf", path.Join(constants.RestoreDir, postgresBaseTar), "-C", constants.DataDir)
+	out, err := db.executor.ExecuteCommandWithOutput("tar", nil, "-xzvf", path.Join(constants.RestoreDir, postgresBaseTar), "-C", db.datadir)
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("error untaring base backup: %s", out))
 	}
 
 	db.log.Debugw("restored postgres base backup", "output", out)
 
-	if err := os.RemoveAll(path.Join(constants.DataDir, "pg_wal")); err != nil {
+	if err := os.RemoveAll(path.Join(db.datadir, "pg_wal")); err != nil {
 		return errors.Wrap(err, "could not clean pg_wal directory")
 	}
 
-	if err := os.MkdirAll(path.Join(constants.DataDir, "pg_wal"), 0777); err != nil {
+	if err := os.MkdirAll(path.Join(db.datadir, "pg_wal"), 0777); err != nil {
 		return errors.Wrap(err, "could not create pg_wal directory")
 	}
 
-	out, err = db.executor.ExecuteCommandWithOutput("tar", nil, "-xzvf", path.Join(constants.RestoreDir, postgresWalTar), "-C", path.Join(constants.DataDir, "pg_wal"))
+	out, err = db.executor.ExecuteCommandWithOutput("tar", nil, "-xzvf", path.Join(constants.RestoreDir, postgresWalTar), "-C", path.Join(db.datadir, "pg_wal"))
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("error untaring wal backup: %s", out))
 	}

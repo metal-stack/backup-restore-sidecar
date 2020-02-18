@@ -34,6 +34,7 @@ var (
 
 // RethinkDB implements the database interface
 type RethinkDB struct {
+	datadir      string
 	url          string
 	passwordFile string
 	log          *zap.SugaredLogger
@@ -41,9 +42,10 @@ type RethinkDB struct {
 }
 
 // New instantiates a new rethinkdb database
-func New(log *zap.SugaredLogger, url string, passwordFile string) *RethinkDB {
+func New(log *zap.SugaredLogger, datadir string, url string, passwordFile string) *RethinkDB {
 	return &RethinkDB{
 		log:          log,
+		datadir:      datadir,
 		url:          url,
 		passwordFile: passwordFile,
 		executor:     utils.NewExecutor(log),
@@ -52,7 +54,7 @@ func New(log *zap.SugaredLogger, url string, passwordFile string) *RethinkDB {
 
 // Check checks whether a backup needs to be restored or not, returns true if it needs a backup
 func (db *RethinkDB) Check() (bool, error) {
-	empty, err := utils.IsEmpty(constants.DataDir)
+	empty, err := utils.IsEmpty(db.datadir)
 	if err != nil {
 		return false, err
 	}
@@ -112,14 +114,16 @@ func (db *RethinkDB) Recover() error {
 	// inside the sidecar against which we can restore.
 
 	db.log.Infow("starting rethinkdb database within sidecar for restore")
-	cmd := exec.Command(rethinkDBCmd, "--bind", "all", "--driver-port", "1", "--directory", constants.DataDir)
+	cmd := exec.Command(rethinkDBCmd, "--bind", "all", "--driver-port", "1", "--directory", db.datadir)
 	if err := cmd.Start(); err != nil {
-		errors.Wrap(err, "unable to start database within sidecar for restore")
+		return errors.Wrap(err, "unable to start database within sidecar for restore")
 	}
-	defer cmd.Process.Kill()
+	defer func() {
+		_ = cmd.Process.Kill()
+	}()
 
 	db.log.Infow("waiting for rethinkdb database to come up")
-	restoreDB := New(db.log, "localhost:1", "")
+	restoreDB := New(db.log, db.datadir, "localhost:1", "")
 	stop := make(chan struct{})
 	done := make(chan bool)
 	defer close(done)

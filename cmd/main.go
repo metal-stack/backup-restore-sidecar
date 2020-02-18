@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup"
@@ -36,9 +37,9 @@ const (
 
 	bindAddrFlg = "bind-addr"
 	portFlg     = "port"
-	basePathFlg = "base-path"
 
-	databaseFlg = "db"
+	databaseFlg        = "db"
+	databaseDatadirFlg = "db-data-directory"
 
 	postgresUserFlg     = "postgres-user"
 	postgresHostFlg     = "postgres-host"
@@ -167,10 +168,12 @@ func init() {
 
 	rootCmd.PersistentFlags().StringP(logLevelFlg, "", "info", "sets the application log level")
 	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb]")
+	rootCmd.PersistentFlags().StringP(databaseDatadirFlg, "", "", "the directory where the database stores its data in")
 
 	err := viper.BindPFlags(rootCmd.PersistentFlags())
 	if err != nil {
-		logger.Fatalw("unable to construct root command", "error", err)
+		fmt.Printf("unable to construct root command: %v", err)
+		os.Exit(1)
 	}
 
 	startCmd.Flags().StringP(bindAddrFlg, "", "127.0.0.1", "the bind addr of the api server")
@@ -196,14 +199,16 @@ func init() {
 
 	err = viper.BindPFlags(startCmd.Flags())
 	if err != nil {
-		logger.Fatalw("unable to construct initializer command", "error", err)
+		fmt.Printf("unable to construct initializer command: %v", err)
+		os.Exit(1)
 	}
 
 	waitCmd.Flags().StringP(serverAddrFlg, "", "http://127.0.0.1:8000/", "the url of the initializer server")
 
 	err = viper.BindPFlags(waitCmd.Flags())
 	if err != nil {
-		logger.Fatalw("unable to construct wait command", "error", err)
+		fmt.Printf("unable to construct wait command: %v", err)
+		os.Exit(1)
 	}
 
 	restoreCmd.AddCommand(restoreListCmd)
@@ -257,7 +262,12 @@ func initLogging() {
 	if err != nil {
 		log.Fatalf("can't initialize zap logger: %v", err)
 	}
-	defer l.Sync()
+	defer func() {
+		err := l.Sync()
+		if err != nil {
+			l.Sugar().Fatalw("could not sync logger", "error", err)
+		}
+	}()
 
 	logger = l.Sugar()
 }
@@ -267,11 +277,17 @@ func initSignalHandlers() {
 }
 
 func initDatabase() error {
+	datadir := viper.GetString(databaseDatadirFlg)
+	if datadir == "" {
+		return fmt.Errorf("database data directory (%s) must be set", databaseDatadirFlg)
+	}
+
 	dbString := viper.GetString(databaseFlg)
 	switch dbString {
 	case "postgres":
 		db = postgres.New(
 			logger.Named("postgres"),
+			datadir,
 			viper.GetString(postgresHostFlg),
 			viper.GetInt(postgresPortFlg),
 			viper.GetString(postgresUserFlg),
@@ -280,6 +296,7 @@ func initDatabase() error {
 	case "rethinkdb":
 		db = rethinkdb.New(
 			logger.Named("rethinkdb"),
+			datadir,
 			viper.GetString(rethinkDBURLFlg),
 			viper.GetString(rethinkDBPasswordFileFlg),
 		)
@@ -305,9 +322,6 @@ func initBackupProvider() error {
 				BucketLocation: viper.GetString(gcpBucketLocationFlg),
 			},
 		)
-		if err != nil {
-			return fmt.Errorf("error initializing backup provider: %s", err)
-		}
 	case "local":
 		bp, err = local.New(
 			logger.Named("backup"),
@@ -318,6 +332,9 @@ func initBackupProvider() error {
 		)
 	default:
 		return fmt.Errorf("unsupported backup provider type: %s", bpString)
+	}
+	if err != nil {
+		return fmt.Errorf("error initializing backup provider: %s", err)
 	}
 	logger.Infow("initialized backup provider", "type", bpString)
 	return nil

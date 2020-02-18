@@ -23,9 +23,9 @@ spec:
         - tini
         - --
         args:
-        - tail
-        - -f
-        - /etc/os-release
+        - sh
+        - -c
+        - mkdir -p /data/rethinkdb && tail -f /etc/os-release
         env:
         - name: BACKUP_RESTORE_SIDECAR_GCP_PROJECT
           valueFrom:

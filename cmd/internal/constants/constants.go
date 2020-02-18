@@ -12,6 +12,4 @@ const (
 	RestoreDir = "/tmp/backup-restore-sidecar/restore/files"
 	// DownloadDir is the path where the backup archive will be downloaded to before it is being unarchived to the restore dir
 	DownloadDir = "/tmp/backup-restore-sidecar/restore"
-	// DataDir is the directory in the sidecar where the database stores its data and where the backup can be restored in
-	DataDir = "/data"
 )

@@ -51,7 +51,7 @@ spec:
               name: postgres
         volumeMounts:
         - name: postgres
-          mountPath: /var/lib/postgresql/data/pgdata
+          mountPath: /data
         - name: bin-provision
           subPath: backup-restore-sidecar
           mountPath: /usr/local/bin/backup-restore-sidecar
@@ -68,7 +68,7 @@ spec:
         args:
         - sh
         - -c
-        - backup-restore-sidecar start --log-level debug
+        - mkdir -p /data/postgres && backup-restore-sidecar start --log-level debug
         env:
         - name: BACKUP_RESTORE_SIDECAR_GCP_PROJECT
           valueFrom:
@@ -155,6 +155,7 @@ metadata:
 data:
   config.yaml: |
     db: postgres
+    db-data-directory: /data/postgres/
     backup-provider: gcp
     backup-cron-schedule: "*/1 * * * *"
     object-prefix: postgres-test
@@ -167,7 +168,7 @@ stringData:
   POSTGRES_DB: postgres
   POSTGRES_USER: test
   POSTGRES_PASSWORD: test123!
-  POSTGRES_DATA: /var/lib/postgresql/data/pgdata
+  POSTGRES_DATA: /data/postgres/
 ---
 apiVersion: v1
 kind: Service
