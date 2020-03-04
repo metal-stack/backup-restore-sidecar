@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"time"
 
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	"go.uber.org/zap"
@@ -37,6 +38,7 @@ func NewInitializerClientWithRetry(ctx context.Context, rawurl string, log *zap.
 				return v1.NewInitializerServiceClient(conn), nil
 			}
 			log.Errorw("client did not connect, retrying...", "error", err)
+			time.Sleep(3 * time.Second)
 		}
 	}
 }
