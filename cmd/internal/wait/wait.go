@@ -15,7 +15,9 @@ const (
 
 // Start starts a wait component that will return when the initializer server has done its job
 func Start(log *zap.SugaredLogger, addr string, stop <-chan struct{}) error {
-	client, err := initializer.NewInitializerClientWithRetry(addr, log, stop)
+	ctx, cancel := context.WithTimeout(context.TODO(), 3*time.Second)
+	defer cancel()
+	client, err := initializer.NewInitializerClientWithRetry(ctx, addr, log, stop)
 	if err != nil {
 		return err
 	}
