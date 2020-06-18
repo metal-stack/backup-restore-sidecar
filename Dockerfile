@@ -20,7 +20,7 @@ COPY build/rethinkdb-restore.spec rethinkdb-restore.spec
 RUN pyinstaller rethinkdb-dump.spec \
     && pyinstaller rethinkdb-restore.spec
 
-FROM alpine:3.11
+FROM alpine:3.12
 RUN apk add --no-cache tini ca-certificates
 COPY --from=builder /work/bin/backup-restore-sidecar /backup-restore-sidecar
 COPY --from=ubuntu-tini /usr/local/bin/tini /ubuntu/tini
