@@ -68,7 +68,9 @@ spec:
         args:
         - sh
         - -c
-        - mkdir -p /data/postgres && backup-restore-sidecar start --log-level debug
+        - |
+          apk add /pkg-provision/*
+          mkdir -p /data/postgres && backup-restore-sidecar start --log-level debug
         env:
         - name: BACKUP_RESTORE_SIDECAR_GCP_PROJECT
           valueFrom:
@@ -103,6 +105,8 @@ spec:
         - name: bin-provision
           subPath: backup-restore-sidecar
           mountPath: /usr/local/bin/backup-restore-sidecar
+        - name: pkg-provision
+          mountPath: /pkg-provision
         - name: backup-restore-sidecar-config
           mountPath: /etc/backup-restore-sidecar
         - name: bin-provision
@@ -116,19 +120,22 @@ spec:
         image: metalstack/backup-restore-sidecar:latest
         imagePullPolicy: IfNotPresent
         command:
-        - cp
-        - /backup-restore-sidecar
-        - /sbin/tini
-        - /bin-provision
+        - sh
+        - -c
+        - |
+          cp /backup-restore-sidecar /sbin/tini /bin-provision
+          cp /pkgs/* /pkg-provision
         volumeMounts:
         - name: bin-provision
           mountPath: /bin-provision
+        - name: pkg-provision
+          mountPath: /pkg-provision
       volumes:
       - name: postgres
         persistentVolumeClaim:
           claimName: postgres
       - name: backup-restore-sidecar-config
-        configMap: 
+        configMap:
           name: backup-restore-sidecar-config-postgres
       - name: gcp-credentials
         secret:
@@ -137,6 +144,8 @@ spec:
           - key: serviceaccount.json
             path: serviceaccount.json
       - name: bin-provision
+        emptyDir: {}
+      - name: pkg-provision
         emptyDir: {}
   volumeClaimTemplates:
   - metadata:

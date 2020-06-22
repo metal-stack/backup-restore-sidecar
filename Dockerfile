@@ -20,9 +20,15 @@ COPY build/rethinkdb-restore.spec rethinkdb-restore.spec
 RUN pyinstaller rethinkdb-dump.spec \
     && pyinstaller rethinkdb-restore.spec
 
+FROM alpine:3.12 as ca-certificates
+RUN apk update \
+  && apk fetch ca-certificates \
+  && mv ca-certificates* ca-certificates.apk
+
 FROM alpine:3.12
-RUN apk add --no-cache tini ca-certificates
+RUN apk add --no-cache tini
 COPY --from=builder /work/bin/backup-restore-sidecar /backup-restore-sidecar
 COPY --from=ubuntu-tini /usr/local/bin/tini /ubuntu/tini
+COPY --from=ca-certificates ca-certificates.apk /pkgs/ca-certificates.apk
 COPY --from=rethinkdb-python-client-builder /work/dist/rethinkdb-dump /work/dist/rethinkdb-restore /rethinkdb/
 CMD ["/backup-restore-sidecar"]
