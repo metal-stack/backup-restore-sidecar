@@ -25,6 +25,8 @@ dockerpush:
 # the following tasks can be used to set up a development environment
 # # #
 
+KUBECONFIG := $(shell pwd)/.kubeconfig
+
 .PHONY: start-postgres
 start-postgres:
 	$(MAKE)	start	DB=postgres
@@ -35,13 +37,26 @@ start-rethinkdb:
 
 .PHONY: start
 start: kind-cluster-create
-	# kubectl apply -f deploy/provider-secret.yaml # make sure to fill in your credentials and backup config!
-	kubectl delete -f "deploy/$(DB).yaml" || true # for idempotence
-	kubectl apply -f "deploy/$(DB).yaml"
+	kind --name backup-restore-sidecar load docker-image metalstack/backup-restore-sidecar:latest
+	# kubectl --kubeconfig $(KUBECONFIG) apply -f deploy/provider-secret.yaml # make sure to fill in your credentials and backup config!
+	kubectl --kubeconfig $(KUBECONFIG) delete -f "deploy/$(DB).yaml" || true # for idempotence
+	kubectl --kubeconfig $(KUBECONFIG) apply -f "deploy/$(DB).yaml"
 	# tailing
-	stern '.*'
+	stern --kubeconfig $(KUBECONFIG) '.*'
 
 .PHONY: kind-cluster-create
 kind-cluster-create: dockerimage
-	kind create cluster || true
-	kind load docker-image metalstack/backup-restore-sidecar:latest
+	@if ! which kind > /dev/null; then echo "kind needs to be installed"; exit 1; fi
+	@if ! kind get clusters | grep backup-restore-sidecar > /dev/null; then \
+		kind create cluster \
+		--name backup-restore-sidecar \
+		--kubeconfig $(KUBECONFIG); fi
+
+.PHONY: cleanup
+cleanup:
+	kind delete cluster --name backup-restore-sidecar
+	rm -f $(KUBECONFIG)
+
+.PHONY: dev-env
+dev-env:
+	@echo "export KUBECONFIG=$(KUBECONFIG)"
