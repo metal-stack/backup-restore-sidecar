@@ -120,6 +120,8 @@ spec:
         - /backup-restore-sidecar
         - /sbin/tini
         - /bin-provision
+        ports:
+        - containerPort: 2112
         volumeMounts:
         - name: bin-provision
           mountPath: /bin-provision
@@ -181,5 +183,8 @@ spec:
   - name: "5432"
     port: 5432
     targetPort: 5432
+  - name: "metrics"
+    port: 2112
+    targetPort: 2112
   selector:
     app: postgres
