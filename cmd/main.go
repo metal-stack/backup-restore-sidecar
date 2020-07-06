@@ -16,6 +16,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/postgres"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/rethinkdb"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/initializer"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/probe"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/signals"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
@@ -98,7 +99,9 @@ var startCmd = &cobra.Command{
 		if err := probe.Start(logger.Named("probe"), db, stop); err != nil {
 			return err
 		}
-		return backup.Start(logger.Named("backup"), viper.GetString(backupCronScheduleFlg), db, bp, stop)
+		metrics := metrics.New()
+		metrics.Start(logger.Named("metrics"))
+		return backup.Start(logger.Named("backup"), viper.GetString(backupCronScheduleFlg), db, bp, metrics, stop)
 	},
 }
 

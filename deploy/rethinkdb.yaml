@@ -107,6 +107,8 @@ spec:
         - /rethinkdb/rethinkdb-dump
         - /rethinkdb/rethinkdb-restore
         - /bin-provision
+        ports:
+        - containerPort: 2112
         volumeMounts:
         - name: bin-provision
           mountPath: /bin-provision
@@ -178,5 +180,8 @@ spec:
   - name: "28015"
     port: 28015
     targetPort: 28015
+  - name: "metrics"
+    port: 2112
+    targetPort: 2112
   selector:
     app: rethinkdb
