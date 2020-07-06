@@ -21,13 +21,13 @@ type Metrics struct {
 func New() *Metrics {
 	backupSuccess := prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "backup_success",
-		Help: "return code of last backup",
+		Help: "is 0 when the last backup was successful, otherwise 1",
 	},
 	)
 
 	totalBackups := prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "backup_total_backups",
-		Help: "total number of successfull backups",
+		Help: "total number of successful backups",
 	},
 	)
 
