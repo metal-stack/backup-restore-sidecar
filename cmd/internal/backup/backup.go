@@ -8,7 +8,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
-	"github.com/mholt/archiver"
+	"github.com/mholt/archiver/v3"
 	cron "github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 )
