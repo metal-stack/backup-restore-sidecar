@@ -1,4 +1,4 @@
-FROM golang:1.14 as builder
+FROM golang:1.15 as builder
 WORKDIR /work
 COPY api api
 COPY cmd cmd
@@ -11,7 +11,7 @@ FROM krallin/ubuntu-tini as ubuntu-tini
 
 # rethinkdb backup/restore requires the python client library
 # let's make small binaries of these commands in order not to blow up the image size
-FROM rethinkdb:2.4.0 as rethinkdb-python-client-builder
+FROM rethinkdb:2.4.1 as rethinkdb-python-client-builder
 WORKDIR /work
 RUN apt update && apt install -y python3-pip
 RUN pip3 install https://github.com/pyinstaller/pyinstaller/archive/develop.zip rethinkdb==2.4.4.post1
