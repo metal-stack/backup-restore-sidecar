@@ -11,7 +11,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
-	"github.com/mholt/archiver"
+	"github.com/mholt/archiver/v3"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
