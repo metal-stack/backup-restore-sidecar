@@ -5,6 +5,7 @@ go 1.14
 require (
 	cloud.google.com/go v0.58.0 // indirect
 	cloud.google.com/go/storage v1.10.0
+	github.com/aws/aws-sdk-go v1.34.8
 	github.com/frankban/quicktest v1.10.0 // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/gogo/protobuf v1.3.1 // indirect
