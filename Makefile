@@ -1,6 +1,6 @@
 GO111MODULE := on
 CGO_ENABLED := 1
-LINKMODE := -linkmode external -extldflags '-static -s -w'
+LINKMODE := -extldflags '-static -s -w'
 DOCKER_TAG := $(or ${GITHUB_TAG_NAME}, latest)
 
 .PHONY: all
