@@ -1,12 +1,12 @@
 GO111MODULE := on
 CGO_ENABLED := 1
-LINKMODE := -linkmode external -extldflags '-static-libgcc -static-libstdc++ -s -w'
+LINKMODE := -linkmode external -extldflags '-static -s -w'
 DOCKER_TAG := $(or ${GITHUB_TAG_NAME}, latest)
 
 .PHONY: all
 all:
 	go mod tidy
-	go build -tags netgo -ldflags "$(LINKMODE)" -o bin/backup-restore-sidecar github.com/metal-stack/backup-restore-sidecar/cmd
+	go build -ldflags "$(LINKMODE)" -tags 'osusergo netgo static_build' -o bin/backup-restore-sidecar github.com/metal-stack/backup-restore-sidecar/cmd
 	strip bin/backup-restore-sidecar
 
 .PHONY: proto
