@@ -11,6 +11,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/gcp"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/local"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/s3"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/postgres"
@@ -61,6 +62,12 @@ const (
 	gcpBucketNameFlg     = "gcp-bucket-name"
 	gcpBucketLocationFlg = "gcp-bucket-location"
 	gcpProjectFlg        = "gcp-project"
+
+	s3BucketNameFlg = "s3-bucket-name"
+	s3RegionFlg     = "s3-region"
+	s3EndpointFlg   = "s3-endpoint"
+	s3AccessKeyFlg  = "s3-access-key"
+	s3SecretKeyFlg  = "s3-secret-key"
 )
 
 var (
@@ -183,14 +190,14 @@ func init() {
 	startCmd.Flags().IntP(portFlg, "", 8000, "the port to serve on")
 
 	startCmd.Flags().StringP(postgresUserFlg, "", "postgres", "the postgres database user (will be used when db is postgres)")
-	startCmd.Flags().StringP(postgresHostFlg, "", "localhost", "the postgres database address (will be used when db is postgres)")
+	startCmd.Flags().StringP(postgresHostFlg, "", "127.0.0.1", "the postgres database address (will be used when db is postgres)")
 	startCmd.Flags().IntP(postgresPortFlg, "", 5432, "the postgres database port (will be used when db is postgres)")
 	startCmd.Flags().StringP(postgresPasswordFlg, "", "", "the postgres database password (will be used when db is postgres)")
 
 	startCmd.Flags().StringP(rethinkDBURLFlg, "", "localhost:28015", "the rethinkdb database url (will be used when db is rethinkdb)")
 	startCmd.Flags().StringP(rethinkDBPasswordFileFlg, "", "", "the rethinkdb database password file path (will be used when db is rethinkdb)")
 
-	startCmd.Flags().StringP(backupProviderFlg, "", "", "the name of the backup provider [gcp|local]")
+	startCmd.Flags().StringP(backupProviderFlg, "", "", "the name of the backup provider [gcp|s3|local]")
 	startCmd.Flags().StringP(backupCronScheduleFlg, "", "*/3 * * * *", "cron schedule for taking backups periodically")
 
 	startCmd.Flags().IntP(objectsToKeepFlg, "", constants.DefaultObjectsToKeep, "the number of objects to keep at the cloud provider bucket")
@@ -199,6 +206,12 @@ func init() {
 	startCmd.Flags().StringP(gcpBucketNameFlg, "", "", "the name of the gcp backup bucket")
 	startCmd.Flags().StringP(gcpBucketLocationFlg, "", "", "the location of the gcp backup bucket")
 	startCmd.Flags().StringP(gcpProjectFlg, "", "", "the project id to place the gcp backup bucket in")
+
+	startCmd.Flags().StringP(s3BucketNameFlg, "", "", "the name of the s3 backup bucket")
+	startCmd.Flags().StringP(s3RegionFlg, "", "", "the region of the s3 backup bucket")
+	startCmd.Flags().StringP(s3EndpointFlg, "", "", "the url to the s3 endpoint")
+	startCmd.Flags().StringP(s3AccessKeyFlg, "", "", "the s3 access-key-id")
+	startCmd.Flags().StringP(s3SecretKeyFlg, "", "", "the s3 secret-key-id")
 
 	err = viper.BindPFlags(startCmd.Flags())
 	if err != nil {
@@ -317,6 +330,19 @@ func initBackupProvider() error {
 				ProjectID:      viper.GetString(gcpProjectFlg),
 				BucketName:     viper.GetString(gcpBucketNameFlg),
 				BucketLocation: viper.GetString(gcpBucketLocationFlg),
+			},
+		)
+	case "s3":
+		bp, err = s3.New(
+			logger.Named("backup"),
+			&s3.BackupProviderConfigS3{
+				ObjectPrefix:  viper.GetString(objectPrefixFlg),
+				ObjectsToKeep: viper.GetInt64(objectsToKeepFlg),
+				Region:        viper.GetString(s3RegionFlg),
+				BucketName:    viper.GetString(s3BucketNameFlg),
+				Endpoint:      viper.GetString(s3EndpointFlg),
+				AccessKey:     viper.GetString(s3AccessKeyFlg),
+				SecretKey:     viper.GetString(s3SecretKeyFlg),
 			},
 		)
 	case "local":
