@@ -28,8 +28,8 @@ const (
 )
 
 var (
-	rethinkDBBackupFilePath  = filepath.Join(constants.BackupDir, "rethinkdb.tar.gz")
-	rethinkDBRestoreFilePath = filepath.Join(constants.RestoreDir, "rethinkdb.tar.gz")
+	rethinkDBBackupFilePath  = filepath.Join(constants.BackupDir, "rethinkdb")
+	rethinkDBRestoreFilePath = filepath.Join(constants.RestoreDir, "rethinkdb")
 )
 
 // RethinkDB implements the database interface

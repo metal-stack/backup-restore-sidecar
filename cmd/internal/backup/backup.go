@@ -28,7 +28,7 @@ func Start(log *zap.SugaredLogger, backupSchedule string, db database.DatabasePr
 		}
 		log.Infow("successfully backed up database")
 
-		backupArchiveName := bp.GetNextBackupName() + ".tar.gz"
+		backupArchiveName := bp.GetNextBackupName()
 
 		backupFilePath := path.Join(constants.BackupDir, backupArchiveName)
 		if err := os.RemoveAll(backupFilePath); err != nil {
