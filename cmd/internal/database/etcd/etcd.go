@@ -90,8 +90,8 @@ func (db *Etcd) Recover() error {
 		return fmt.Errorf("restore file is not present: %s", snapshotFileName)
 	}
 
-	if err := utils.RemoveContents(db.datadir); err != nil {
-		return errors.Wrap(err, "could not clean database data directory")
+	if err := utils.RemoveContents(constants.BackupDir); err != nil {
+		return errors.Wrap(err, "could not clean database backup directory")
 	}
 
 	out, err := db.etcdctl("snapshot", "restore", snapshotFileName)
