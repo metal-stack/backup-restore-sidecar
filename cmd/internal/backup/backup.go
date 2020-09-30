@@ -29,10 +29,10 @@ func Start(log *zap.SugaredLogger, backupSchedule string, db database.DatabasePr
 		log.Infow("successfully backed up database")
 
 		comp := compress.New(compressionMethod)
-		backupArchiveName := bp.GetNextBackupName() + comp.Extension()
+		backupArchiveName := bp.GetNextBackupName()
 
 		backupFilePath := path.Join(constants.BackupDir, backupArchiveName)
-		if err := os.RemoveAll(backupFilePath); err != nil {
+		if err := os.RemoveAll(backupFilePath + comp.Extension()); err != nil {
 			metrics.CountError("delete_prior")
 			log.Errorw("could not delete priorly uploaded backup", "error", err)
 			return
