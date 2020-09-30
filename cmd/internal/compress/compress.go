@@ -11,8 +11,8 @@ import (
 type (
 	// Compressor is responsible to compress and decompress backups
 	Compressor interface {
-		// Compress the given backupFile
-		Compress(backupFilePath string) error
+		// Compress the given backupFile and returns the full filename with the extension
+		Compress(backupFilePath string) (string, error)
 		// Decompress the given backupFile
 		Decompress(backupFilePath string) error
 	}
@@ -40,17 +40,33 @@ func New(method Method) *BackupCompressor {
 	}
 }
 
-func (c *BackupCompressor) Compress(backupFilePath string) error {
+func (c *BackupCompressor) Compress(backupFilePath string) (string, error) {
+	filename := backupFilePath + c.method.Extension()
 	switch c.method {
 	case GZIP:
-		return archiver.NewTarGz().Archive([]string{constants.BackupDir}, backupFilePath+".tar.gz")
+		return filename, archiver.NewTarGz().Archive([]string{constants.BackupDir}, filename)
 	case LZ4:
-		return archiver.NewTarLz4().Archive([]string{constants.BackupDir}, backupFilePath+".tar.lz4")
+		return filename, archiver.NewTarLz4().Archive([]string{constants.BackupDir}, filename)
 	default:
-		return fmt.Errorf("unknown compression method:%d", c.method)
+		return filename, fmt.Errorf("unknown compression method:%d", c.method)
 	}
 }
 
 func (c *BackupCompressor) Decompress(backupFilePath string) error {
 	return archiver.Unarchive(backupFilePath, filepath.Dir(constants.RestoreDir))
+}
+
+func (c *BackupCompressor) Extension() string {
+	return c.method.Extension()
+}
+
+func (m Method) Extension() string {
+	switch m {
+	case GZIP:
+		return ".tar.gz"
+	case LZ4:
+		return ".tar.lz4"
+	default:
+		return ".tar.gz"
+	}
 }

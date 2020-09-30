@@ -28,7 +28,8 @@ func Start(log *zap.SugaredLogger, backupSchedule string, db database.DatabasePr
 		}
 		log.Infow("successfully backed up database")
 
-		backupArchiveName := bp.GetNextBackupName()
+		comp := compress.New(compressionMethod)
+		backupArchiveName := bp.GetNextBackupName() + comp.Extension()
 
 		backupFilePath := path.Join(constants.BackupDir, backupArchiveName)
 		if err := os.RemoveAll(backupFilePath); err != nil {
@@ -37,8 +38,7 @@ func Start(log *zap.SugaredLogger, backupSchedule string, db database.DatabasePr
 			return
 		}
 
-		comp := compress.New(compressionMethod)
-		err = comp.Compress(backupFilePath)
+		filename, err := comp.Compress(backupFilePath)
 		if err != nil {
 			metrics.CountError("compress")
 			log.Errorw("unable to compress backup", "error", err)
@@ -46,14 +46,14 @@ func Start(log *zap.SugaredLogger, backupSchedule string, db database.DatabasePr
 		}
 		log.Info("compressed backup")
 
-		err = bp.UploadBackup(backupFilePath)
+		err = bp.UploadBackup(filename)
 		if err != nil {
 			metrics.CountError("upload")
 			log.Errorw("error uploading backup", "error", err)
 			return
 		}
 		log.Info("uploaded backup to backup provider bucket")
-		metrics.CountBackup(backupFilePath)
+		metrics.CountBackup(filename)
 		err = bp.CleanupBackups()
 		if err != nil {
 			metrics.CountError("cleanup")
