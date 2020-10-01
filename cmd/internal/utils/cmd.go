@@ -22,7 +22,7 @@ func NewExecutor(log *zap.SugaredLogger) *CmdExecutor {
 func (c *CmdExecutor) ExecuteCommandWithOutput(command string, env []string, arg ...string) (string, error) {
 	commandWithPath, err := exec.LookPath(command)
 	if err != nil {
-		return fmt.Sprintf("unable to find comannd:%s in path", command), err
+		return fmt.Sprintf("unable to find command:%s in path", command), err
 	}
 	c.log.Infow("running command", "command", commandWithPath, "args", strings.Join(arg, " "))
 	cmd := exec.Command(commandWithPath, arg...)
