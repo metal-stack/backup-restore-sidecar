@@ -74,3 +74,16 @@ func (m Method) Extension() string {
 		return ".tar.gz"
 	}
 }
+
+func MethodFrom(method string) (Method, error) {
+	switch method {
+	case "tar":
+		return TAR, nil
+	case "targz":
+		return TARGZ, nil
+	case "tarlz4":
+		return TARLZ4, nil
+	default:
+		return TARGZ, fmt.Errorf("unknown method %s returning targz", method)
+	}
+}

@@ -371,15 +371,9 @@ func initBackupProvider() error {
 
 func getCompressionMethod() compress.Method {
 	m := viper.GetString(compressionMethod)
-	switch m {
-	case "tar":
-		return compress.TAR
-	case "targz":
-		return compress.TARGZ
-	case "tarlz4":
-		return compress.TARLZ4
-	default:
-		logger.Errorw("unknown compression method, using default targz", "method", m)
-		return compress.TARGZ
+	method, err := compress.MethodFrom(m)
+	if err != nil {
+		logger.Warnw("compression-method unknown", "method", m, "error", err)
 	}
+	return method
 }
