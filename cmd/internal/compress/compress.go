@@ -14,18 +14,6 @@ type (
 		archiver  archiver.Archiver
 		extension string
 	}
-
-	// Method defines possible compression methods
-	Method uint
-)
-
-const (
-	// TAR all files without compression, is suitable if content is already compressed
-	TAR Method = iota
-	// TARGZ compression
-	TARGZ
-	// TARLZ4 is much faster than GZIP with slightly bigger files
-	TARLZ4
 )
 
 // New Returns a new Compressor with this method
