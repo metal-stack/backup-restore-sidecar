@@ -35,6 +35,10 @@ start-postgres:
 start-rethinkdb:
 	$(MAKE)	start	DB=rethinkdb
 
+.PHONY: start-etcd
+start-etcd:
+	$(MAKE)	start	DB=etcd
+
 .PHONY: start
 start: kind-cluster-create
 	kind --name backup-restore-sidecar load docker-image metalstack/backup-restore-sidecar:latest

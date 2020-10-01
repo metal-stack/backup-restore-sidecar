@@ -75,6 +75,9 @@ func (db *Etcd) Backup() error {
 		return errors.Wrap(err, fmt.Sprintf("error running backup command: %s", out))
 	}
 
+	// TODO check snapshot status after it was created
+	// etcdctl snapshot status snapshot.db --write-out json
+	// {"hash":3409373368,"revision":0,"totalKey":3,"totalSize":20480}
 	if _, err := os.Stat(snapshotFileName); os.IsNotExist(err) {
 		return fmt.Errorf("backup file was not created: %s", snapshotFileName)
 	}
