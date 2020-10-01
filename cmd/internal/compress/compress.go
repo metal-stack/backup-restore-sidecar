@@ -44,14 +44,18 @@ func New(method Method) *BackupCompressor {
 
 func (c *BackupCompressor) Compress(backupFilePath string) (string, error) {
 	filename := backupFilePath + c.method.Extension()
+	var arch archiver.Archiver
 	switch c.method {
+	case TAR:
+		arch = archiver.NewTar()
 	case TARGZ:
-		return filename, archiver.NewTarGz().Archive([]string{constants.BackupDir}, filename)
+		arch = archiver.NewTarGz()
 	case TARLZ4:
-		return filename, archiver.NewTarLz4().Archive([]string{constants.BackupDir}, filename)
+		arch = archiver.NewTarLz4()
 	default:
 		return filename, fmt.Errorf("unknown compression method:%d", c.method)
 	}
+	return filename, arch.Archive([]string{constants.BackupDir}, filename)
 }
 
 func (c *BackupCompressor) Decompress(backupFilePath string) error {
