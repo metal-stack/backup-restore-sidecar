@@ -14,7 +14,7 @@ import (
 )
 
 // Start starts the backup component, which is periodically taking backups of the database
-func Start(log *zap.SugaredLogger, backupSchedule string, db database.DatabaseProber, bp backuproviders.BackupProvider, metrics *metrics.Metrics, compressionMethod compress.Method, stop <-chan struct{}) error {
+func Start(log *zap.SugaredLogger, backupSchedule string, db database.DatabaseProber, bp backuproviders.BackupProvider, metrics *metrics.Metrics, comp *compress.Compressor, stop <-chan struct{}) error {
 	log.Info("database is now available, starting periodic backups")
 
 	c := cron.New()
@@ -28,7 +28,6 @@ func Start(log *zap.SugaredLogger, backupSchedule string, db database.DatabasePr
 		}
 		log.Infow("successfully backed up database")
 
-		comp := compress.New(compressionMethod)
 		backupArchiveName := bp.GetNextBackupName()
 
 		backupFilePath := path.Join(constants.BackupDir, backupArchiveName)

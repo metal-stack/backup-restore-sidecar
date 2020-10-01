@@ -106,17 +106,17 @@ var startCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		addr := fmt.Sprintf("%s:%d", viper.GetString(bindAddrFlg), viper.GetInt(portFlg))
 
-		method, err := getCompressionMethod()
+		comp, err := compress.New(viper.GetString(compressionMethod))
 		if err != nil {
 			return err
 		}
-		initializer.New(logger.Named("initializer"), addr, db, bp, method).Start(stop)
+		initializer.New(logger.Named("initializer"), addr, db, bp, comp).Start(stop)
 		if err := probe.Start(logger.Named("probe"), db, stop); err != nil {
 			return err
 		}
 		metrics := metrics.New()
 		metrics.Start(logger.Named("metrics"))
-		return backup.Start(logger.Named("backup"), viper.GetString(backupCronScheduleFlg), db, bp, metrics, method, stop)
+		return backup.Start(logger.Named("backup"), viper.GetString(backupCronScheduleFlg), db, bp, metrics, comp, stop)
 	},
 }
 
@@ -138,11 +138,11 @@ var restoreCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		method, err := getCompressionMethod()
+		comp, err := compress.New(viper.GetString(compressionMethod))
 		if err != nil {
 			return err
 		}
-		return initializer.New(logger.Named("initializer"), "", db, bp, method).Restore(version)
+		return initializer.New(logger.Named("initializer"), "", db, bp, comp).Restore(version)
 	},
 }
 
@@ -374,9 +374,4 @@ func initBackupProvider() error {
 	}
 	logger.Infow("initialized backup provider", "type", bpString)
 	return nil
-}
-
-func getCompressionMethod() (compress.Method, error) {
-	m := viper.GetString(compressionMethod)
-	return compress.MethodFrom(m)
 }
