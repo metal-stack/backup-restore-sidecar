@@ -11,7 +11,7 @@ import (
 )
 
 // NewInitializerClient returns a new initializer client.
-func NewInitializerClient(ctx context.Context, rawurl string, log *zap.SugaredLogger, stop <-chan struct{}) (v1.InitializerServiceClient, error) {
+func NewInitializerClient(ctx context.Context, rawurl string, log *zap.SugaredLogger) (v1.InitializerServiceClient, error) {
 	parsedurl, err := url.Parse(rawurl)
 	if err != nil {
 		return nil, err

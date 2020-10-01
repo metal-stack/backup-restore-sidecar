@@ -17,7 +17,7 @@ const (
 func Start(log *zap.SugaredLogger, addr string, stop <-chan struct{}) error {
 	ctx, cancel := context.WithTimeout(context.TODO(), 3*time.Second)
 	defer cancel()
-	client, err := initializer.NewInitializerClient(ctx, addr, log, stop)
+	client, err := initializer.NewInitializerClient(ctx, addr, log)
 	if err != nil {
 		return err
 	}
