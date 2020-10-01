@@ -38,9 +38,12 @@ Requires:
 - [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 - [stern](https://github.com/wercker/stern)
 
-1. Configure your backup provider configuration in `deploy/provider-secret.yaml`
-2. Enable deployment of the provider secret by commenting in the `kubectl` command in the Makefile's `start` target
-3. Run `make start-postgres` or `start-rethinkdb`
+To start a demo / devel setup, run: `make start-postgres` or `make start-rethinkdb`.
+
+By default, the backup-restore-sidecar will start with the `local` backup provider, which is probably not very useful for most use-cases. If you want to test storing the data at a real backup provider, then:
+
+1. Configure the backup provider secret in `deploy/provider-secret-<backup-provider>.yaml`.
+2. Run `BACKUP_PROVIDER=<backup-provider> make start-postgres` instead.
 
 ## Manual restoration
 
