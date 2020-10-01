@@ -16,7 +16,7 @@ type (
 	}
 )
 
-// New Returns a new Compressor with this method
+// New Returns a new Compressor
 func New(method string) (*Compressor, error) {
 	var c *Compressor
 	switch method {
