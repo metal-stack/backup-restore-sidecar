@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	etctctlCommand = "etcdctl"
+	etcdctlCommand = "etcdctl"
 )
 
 var (
@@ -111,7 +111,7 @@ func (db *Etcd) Recover() error {
 
 // Probe indicates whether the database is running
 func (db *Etcd) Probe() error {
-	out, err := db.etcdctl("cluster-health")
+	out, err := db.etcdctl("get", "foo")
 	if err != nil {
 		return fmt.Errorf("unable to check cluster health:%s %v", out, err)
 	}
@@ -140,8 +140,8 @@ func (db *Etcd) etcdctl(args ...string) (string, error) {
 		etcdctlArgs = append(etcdctlArgs, "--key", db.key)
 	}
 
-	// execute a etcdctl commmand
-	out, err := db.executor.ExecuteCommandWithOutput(etctctlCommand, etcdctlEnvs, etcdctlArgs...)
+	// execute a etcdctl command
+	out, err := db.executor.ExecuteCommandWithOutput(etcdctlCommand, etcdctlEnvs, etcdctlArgs...)
 	if err != nil {
 		return out, errors.Wrap(err, fmt.Sprintf("error running etcdctl command: %s", out))
 	}
