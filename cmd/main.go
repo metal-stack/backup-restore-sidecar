@@ -379,7 +379,7 @@ func getCompressionMethod() compress.Method {
 	case "tarlz4":
 		return compress.TARLZ4
 	default:
-		logger.Errorw("unknown compression method, using default gzip", "method", m)
+		logger.Errorw("unknown compression method, using default targz", "method", m)
 		return compress.TARGZ
 	}
 }
