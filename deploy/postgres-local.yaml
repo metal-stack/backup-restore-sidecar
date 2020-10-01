@@ -1,0 +1,164 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app: postgres
+  name: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - image: postgres:12-alpine
+        name: postgres
+        command:
+        - tini
+        - --
+        args:
+        - sh
+        - -c
+        - backup-restore-sidecar wait && docker-entrypoint.sh postgres
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_DB
+              name: postgres
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_USER
+              name: postgres
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: postgres
+        - name: PGDATA
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_DATA
+              name: postgres
+        volumeMounts:
+        - name: postgres
+          mountPath: /data
+        - name: bin-provision
+          subPath: backup-restore-sidecar
+          mountPath: /usr/local/bin/backup-restore-sidecar
+        - name: backup-restore-sidecar-config
+          mountPath: /etc/backup-restore-sidecar
+        - name: bin-provision
+          subPath: tini
+          mountPath: /usr/local/bin/tini
+      - image: postgres:12-alpine
+        name: backup-restore-sidecar
+        command:
+        - tini
+        - --
+        args:
+        - sh
+        - -c
+        - mkdir -p /data/postgres && backup-restore-sidecar start --log-level debug
+        env:
+        - name: BACKUP_RESTORE_SIDECAR_POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: postgres
+        - name: BACKUP_RESTORE_SIDECAR_POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_USER
+              name: postgres
+        volumeMounts:
+        - name: postgres
+          mountPath: /data
+        - name: bin-provision
+          subPath: backup-restore-sidecar
+          mountPath: /usr/local/bin/backup-restore-sidecar
+        - name: backup-restore-sidecar-config
+          mountPath: /etc/backup-restore-sidecar
+        - name: bin-provision
+          subPath: tini
+          mountPath: /usr/local/bin/tini
+      initContainers:
+      - name: backup-restore-sidecar-provider
+        image: metalstack/backup-restore-sidecar:latest
+        imagePullPolicy: IfNotPresent
+        command:
+        - cp
+        - /backup-restore-sidecar
+        - /sbin/tini
+        - /bin-provision
+        ports:
+        - containerPort: 2112
+        volumeMounts:
+        - name: bin-provision
+          mountPath: /bin-provision
+      volumes:
+      - name: postgres
+        persistentVolumeClaim:
+          claimName: postgres
+      - name: backup-restore-sidecar-config
+        configMap:
+          name: backup-restore-sidecar-config-postgres
+      - name: bin-provision
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-restore-sidecar-config-postgres
+data:
+  config.yaml: |
+    db: postgres
+    db-data-directory: /data/postgres/
+    backup-provider: local
+    backup-cron-schedule: "*/1 * * * *"
+    object-prefix: postgres-test
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres
+stringData:
+  POSTGRES_DB: postgres
+  POSTGRES_USER: test
+  POSTGRES_PASSWORD: test123!
+  POSTGRES_DATA: /data/postgres/
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: postgres
+  name: postgres
+spec:
+  ports:
+  - name: "5432"
+    port: 5432
+    targetPort: 5432
+  - name: "metrics"
+    port: 2112
+    targetPort: 2112
+  selector:
+    app: postgres

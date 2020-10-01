@@ -38,9 +38,11 @@ start-rethinkdb:
 .PHONY: start
 start: kind-cluster-create
 	kind --name backup-restore-sidecar load docker-image metalstack/backup-restore-sidecar:latest
+	# if you want to test other providers, please provide provider secrets:
 	# kubectl --kubeconfig $(KUBECONFIG) apply -f deploy/provider-secret.yaml # make sure to fill in your credentials and backup config!
-	kubectl --kubeconfig $(KUBECONFIG) delete -f "deploy/$(DB).yaml" || true # for idempotence
-	kubectl --kubeconfig $(KUBECONFIG) apply -f "deploy/$(DB).yaml"
+	# and change manifest accordingly:
+	kubectl --kubeconfig $(KUBECONFIG) delete -f "deploy/$(DB)-local.yaml" || true # for idempotence
+	kubectl --kubeconfig $(KUBECONFIG) apply -f "deploy/$(DB)-local.yaml"
 	# tailing
 	stern --kubeconfig $(KUBECONFIG) '.*'
 
