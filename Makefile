@@ -2,6 +2,7 @@ GO111MODULE := on
 CGO_ENABLED := 1
 LINKMODE := -extldflags '-static -s -w'
 DOCKER_TAG := $(or ${GITHUB_TAG_NAME}, latest)
+BACKUP_PROVIDER := $(or ${BACKUP_PROVIDER},local)
 
 .PHONY: all
 all:
@@ -38,9 +39,14 @@ start-rethinkdb:
 .PHONY: start
 start: kind-cluster-create
 	kind --name backup-restore-sidecar load docker-image metalstack/backup-restore-sidecar:latest
-	# kubectl --kubeconfig $(KUBECONFIG) apply -f deploy/provider-secret.yaml # make sure to fill in your credentials and backup config!
-	kubectl --kubeconfig $(KUBECONFIG) delete -f "deploy/$(DB).yaml" || true # for idempotence
-	kubectl --kubeconfig $(KUBECONFIG) apply -f "deploy/$(DB).yaml"
+ifneq ($(BACKUP_PROVIDER),local)
+	# if you want to use other providers, please fill in your credentials and backup config!
+	# for this, you need to edit deploy/provider-secret-$(BACKUP_PROVIDER)
+	# take care not to push your provider secrets to origin
+	kubectl --kubeconfig $(KUBECONFIG) apply -f deploy/provider-secret-$(BACKUP_PROVIDER).yaml
+endif
+	kubectl --kubeconfig $(KUBECONFIG) delete -f "deploy/$(DB)-$(BACKUP_PROVIDER).yaml" || true # for idempotence
+	kubectl --kubeconfig $(KUBECONFIG) apply -f "deploy/$(DB)-$(BACKUP_PROVIDER).yaml"
 	# tailing
 	stern --kubeconfig $(KUBECONFIG) '.*'
 
