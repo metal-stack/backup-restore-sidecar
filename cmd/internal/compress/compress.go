@@ -9,16 +9,8 @@ import (
 )
 
 type (
-	// Compressor is responsible to compress and decompress backups
-	Compressor interface {
-		// Compress the given backupFile and returns the full filename with the extension
-		Compress(backupFilePath string) (string, error)
-		// Decompress the given backupFile
-		Decompress(backupFilePath string) error
-	}
-
-	// BackupCompressor is the compressor instance
-	BackupCompressor struct {
+	// Compressor compress/decompress backup data before/after sending/receiving from storage
+	Compressor struct {
 		method Method
 	}
 
@@ -27,7 +19,7 @@ type (
 )
 
 const (
-	// TAR all files without compression, is suitable if content is alread compressed like postgres
+	// TAR all files without compression, is suitable if content is already compressed
 	TAR Method = iota
 	// TARGZ compression
 	TARGZ
@@ -36,13 +28,14 @@ const (
 )
 
 // New Returns a new Compressor with this method
-func New(method Method) *BackupCompressor {
-	return &BackupCompressor{
+func New(method Method) *Compressor {
+	return &Compressor{
 		method: method,
 	}
 }
 
-func (c *BackupCompressor) Compress(backupFilePath string) (string, error) {
+// Compress the given backupFile and returns the full filename with the extension
+func (c *Compressor) Compress(backupFilePath string) (string, error) {
 	filename := backupFilePath + c.method.Extension()
 	var arch archiver.Archiver
 	switch c.method {
@@ -58,14 +51,17 @@ func (c *BackupCompressor) Compress(backupFilePath string) (string, error) {
 	return filename, arch.Archive([]string{constants.BackupDir}, filename)
 }
 
-func (c *BackupCompressor) Decompress(backupFilePath string) error {
+// Decompress the given backupFile
+func (c *Compressor) Decompress(backupFilePath string) error {
 	return archiver.Unarchive(backupFilePath, filepath.Dir(constants.RestoreDir))
 }
 
-func (c *BackupCompressor) Extension() string {
+// Extension returns the file extension of the configured compressor, depending on the method
+func (c *Compressor) Extension() string {
 	return c.method.Extension()
 }
 
+// Extension returns the file extension of the configured method
 func (m Method) Extension() string {
 	switch m {
 	case TAR:
@@ -79,6 +75,7 @@ func (m Method) Extension() string {
 	}
 }
 
+// MethodFrom will choose the Method from a string representation
 func MethodFrom(method string) (Method, error) {
 	switch method {
 	case "tar":
@@ -88,6 +85,6 @@ func MethodFrom(method string) (Method, error) {
 	case "tarlz4":
 		return TARLZ4, nil
 	default:
-		return TARGZ, fmt.Errorf("unknown method %s returning targz", method)
+		return TARGZ, fmt.Errorf("unknown method %q, returning targz", method)
 	}
 }

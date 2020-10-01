@@ -29,7 +29,7 @@ type Initializer struct {
 	addr          string
 	db            database.Database
 	bp            providers.BackupProvider
-	comp          compress.Compressor
+	comp          *compress.Compressor
 }
 
 func New(log *zap.SugaredLogger, addr string, db database.Database, bp providers.BackupProvider, compressionMethod compress.Method) *Initializer {
