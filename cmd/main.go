@@ -217,7 +217,7 @@ func init() {
 	startCmd.Flags().StringP(s3AccessKeyFlg, "", "", "the s3 access-key-id")
 	startCmd.Flags().StringP(s3SecretKeyFlg, "", "", "the s3 secret-key-id")
 
-	startCmd.Flags().StringP(compressionMethod, "", "gzip", "the compression method to use to compress the backups (gzip|lz4)")
+	startCmd.Flags().StringP(compressionMethod, "", "targz", "the compression method to use to compress the backups (tar|targz|tarlz4)")
 
 	err = viper.BindPFlags(startCmd.Flags())
 	if err != nil {
@@ -372,12 +372,14 @@ func initBackupProvider() error {
 func getCompressionMethod() compress.Method {
 	m := viper.GetString(compressionMethod)
 	switch m {
-	case "gzip":
-		return compress.GZIP
-	case "lz4":
-		return compress.LZ4
+	case "tar":
+		return compress.TAR
+	case "targz":
+		return compress.TARGZ
+	case "tarlz4":
+		return compress.TARLZ4
 	default:
 		logger.Errorw("unknown compression method, using default gzip", "method", m)
-		return compress.GZIP
+		return compress.TARGZ
 	}
 }

@@ -27,10 +27,12 @@ type (
 )
 
 const (
-	// GZIP compression
-	GZIP Method = iota
-	// LZ4 is much faster than GZIP with slightly bigger files
-	LZ4
+	// TAR all files without compression, is suitable if content is alread compressed like postgres
+	TAR Method = iota
+	// TARGZ compression
+	TARGZ
+	// TARLZ4 is much faster than GZIP with slightly bigger files
+	TARLZ4
 )
 
 // New Returns a new Compressor with this method
@@ -43,9 +45,9 @@ func New(method Method) *BackupCompressor {
 func (c *BackupCompressor) Compress(backupFilePath string) (string, error) {
 	filename := backupFilePath + c.method.Extension()
 	switch c.method {
-	case GZIP:
+	case TARGZ:
 		return filename, archiver.NewTarGz().Archive([]string{constants.BackupDir}, filename)
-	case LZ4:
+	case TARLZ4:
 		return filename, archiver.NewTarLz4().Archive([]string{constants.BackupDir}, filename)
 	default:
 		return filename, fmt.Errorf("unknown compression method:%d", c.method)
@@ -62,9 +64,11 @@ func (c *BackupCompressor) Extension() string {
 
 func (m Method) Extension() string {
 	switch m {
-	case GZIP:
+	case TAR:
+		return ".tar"
+	case TARGZ:
 		return ".tar.gz"
-	case LZ4:
+	case TARLZ4:
 		return ".tar.lz4"
 	default:
 		return ".tar.gz"
