@@ -15,7 +15,7 @@ Probably, it does not make sense to use this project with large databases. Howev
 
 ## Supported Compression Methods
 
-with --compression-method you can define with which method the generated backups are compressed before stored at the storage provider, available methods are:
+With `--compression-method` you can define how generated backups are compressed before stored at the storage provider. Available compression methods are:
 
 | compression-method | suffix   | comments |
 | ------------------ | -------- | -------- |
