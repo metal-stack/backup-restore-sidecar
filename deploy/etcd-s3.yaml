@@ -34,32 +34,6 @@ spec:
         - sh
         - -c
         - backup-restore-sidecar wait && etcd
-        env:
-        - name: BACKUP_RESTORE_SIDECAR_S3_BUCKET_NAME
-          valueFrom:
-            secretKeyRef:
-              key: bucketName
-              name: backup-restore-sidecar-backup-provider-config
-        - name: BACKUP_RESTORE_SIDECAR_S3_ENDPOINT
-          valueFrom:
-            secretKeyRef:
-              key: endpoint
-              name: backup-restore-sidecar-backup-provider-config
-        - name: BACKUP_RESTORE_SIDECAR_S3_REGION
-          valueFrom:
-            secretKeyRef:
-              key: region
-              name: backup-restore-sidecar-backup-provider-config
-        - name: BACKUP_RESTORE_SIDECAR_S3_ACCESS_KEY
-          valueFrom:
-            secretKeyRef:
-              key: access-key
-              name: backup-restore-sidecar-backup-provider-config
-        - name: BACKUP_RESTORE_SIDECAR_S3_SECRET_KEY
-          valueFrom:
-            secretKeyRef:
-              key: secret-key
-              name: backup-restore-sidecar-backup-provider-config
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
@@ -115,6 +89,32 @@ spec:
           mountPath: /usr/local/bin/tini
       - image:  quay.io/coreos/etcd:v3.3.25
         name: backup-restore-sidecar
+        env:
+          - name: BACKUP_RESTORE_SIDECAR_S3_BUCKET_NAME
+            valueFrom:
+              secretKeyRef:
+                key: bucketName
+                name: backup-restore-sidecar-backup-provider-config
+          - name: BACKUP_RESTORE_SIDECAR_S3_ENDPOINT
+            valueFrom:
+              secretKeyRef:
+                key: endpoint
+                name: backup-restore-sidecar-backup-provider-config
+          - name: BACKUP_RESTORE_SIDECAR_S3_REGION
+            valueFrom:
+              secretKeyRef:
+                key: region
+                name: backup-restore-sidecar-backup-provider-config
+          - name: BACKUP_RESTORE_SIDECAR_S3_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                key: access-key
+                name: backup-restore-sidecar-backup-provider-config
+          - name: BACKUP_RESTORE_SIDECAR_S3_SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                key: secret-key
+                name: backup-restore-sidecar-backup-provider-config
         command:
         - tini
         - --
@@ -122,7 +122,6 @@ spec:
         - sh
         - -c
         - mkdir -p /data/etcd/ && backup-restore-sidecar start --log-level debug
-        env: []
         volumeMounts:
         - name: etcd
           mountPath: /data
