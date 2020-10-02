@@ -13,6 +13,16 @@ Probably, it does not make sense to use this project with large databases. Howev
 | postgres  | 12-alpine | alpha  |
 | rethinkdb | 2.4.0     | alpha  |
 
+## Supported Compression Methods
+
+With `--compression-method` you can define how generated backups are compressed before stored at the storage provider. Available compression methods are:
+
+| compression-method | suffix   | comments |
+| ------------------ | -------- | -------- |
+| tar                | .tar     | no compression, best suited for already compressed content |
+| targz              | .tar.gz  | tar and gzip, most commonly used, best compression ratio, average performance |
+| tarlz4             | .tar.lz4 | tar and lz4, very fast compression/decompression speed compared to gz, slightly bigger files |
+
 ## Supported Storage Providers
 
 - GCS Buckets

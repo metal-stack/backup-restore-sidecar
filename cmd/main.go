@@ -12,6 +12,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/gcp"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/local"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/s3"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/postgres"
@@ -68,6 +69,8 @@ const (
 	s3EndpointFlg   = "s3-endpoint"
 	s3AccessKeyFlg  = "s3-access-key"
 	s3SecretKeyFlg  = "s3-secret-key"
+
+	compressionMethod = "compression-method"
 )
 
 var (
@@ -102,13 +105,18 @@ var startCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		addr := fmt.Sprintf("%s:%d", viper.GetString(bindAddrFlg), viper.GetInt(portFlg))
-		initializer.New(logger.Named("initializer"), addr, db, bp).Start(stop)
+
+		comp, err := compress.New(viper.GetString(compressionMethod))
+		if err != nil {
+			return err
+		}
+		initializer.New(logger.Named("initializer"), addr, db, bp, comp).Start(stop)
 		if err := probe.Start(logger.Named("probe"), db, stop); err != nil {
 			return err
 		}
 		metrics := metrics.New()
 		metrics.Start(logger.Named("metrics"))
-		return backup.Start(logger.Named("backup"), viper.GetString(backupCronScheduleFlg), db, bp, metrics, stop)
+		return backup.Start(logger.Named("backup"), viper.GetString(backupCronScheduleFlg), db, bp, metrics, comp, stop)
 	},
 }
 
@@ -130,8 +138,11 @@ var restoreCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-
-		return initializer.New(logger.Named("initializer"), "", db, bp).Restore(version)
+		comp, err := compress.New(viper.GetString(compressionMethod))
+		if err != nil {
+			return err
+		}
+		return initializer.New(logger.Named("initializer"), "", db, bp, comp).Restore(version)
 	},
 }
 
@@ -212,6 +223,8 @@ func init() {
 	startCmd.Flags().StringP(s3EndpointFlg, "", "", "the url to the s3 endpoint")
 	startCmd.Flags().StringP(s3AccessKeyFlg, "", "", "the s3 access-key-id")
 	startCmd.Flags().StringP(s3SecretKeyFlg, "", "", "the s3 secret-key-id")
+
+	startCmd.Flags().StringP(compressionMethod, "", "targz", "the compression method to use to compress the backups (tar|targz|tarlz4)")
 
 	err = viper.BindPFlags(startCmd.Flags())
 	if err != nil {

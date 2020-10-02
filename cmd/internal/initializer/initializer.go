@@ -9,9 +9,9 @@ import (
 
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
-	"github.com/mholt/archiver/v3"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
@@ -29,9 +29,10 @@ type Initializer struct {
 	addr          string
 	db            database.Database
 	bp            providers.BackupProvider
+	comp          *compress.Compressor
 }
 
-func New(log *zap.SugaredLogger, addr string, db database.Database, bp providers.BackupProvider) *Initializer {
+func New(log *zap.SugaredLogger, addr string, db database.Database, bp providers.BackupProvider, comp *compress.Compressor) *Initializer {
 	return &Initializer{
 		currentStatus: &v1.StatusResponse{
 			Status:  v1.StatusResponse_CHECKING,
@@ -41,6 +42,7 @@ func New(log *zap.SugaredLogger, addr string, db database.Database, bp providers
 		addr: addr,
 		db:   db,
 		bp:   bp,
+		comp: comp,
 	}
 }
 
@@ -171,7 +173,7 @@ func (i *Initializer) Restore(version *providers.BackupVersion) error {
 	}
 
 	i.currentStatus.Message = "uncompressing backup"
-	err = uncompressBackup(backupFilePath)
+	err = i.comp.Decompress(backupFilePath)
 	if err != nil {
 		return errors.Wrap(err, "unable to uncompress backup")
 	}
@@ -183,8 +185,4 @@ func (i *Initializer) Restore(version *providers.BackupVersion) error {
 	}
 
 	return nil
-}
-
-func uncompressBackup(backupFilePath string) error {
-	return archiver.Unarchive(backupFilePath, filepath.Dir(constants.RestoreDir))
 }
