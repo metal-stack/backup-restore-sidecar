@@ -32,7 +32,7 @@ type Initializer struct {
 	comp          *compress.Compressor
 }
 
-func New(log *zap.SugaredLogger, addr string, db database.Database, bp providers.BackupProvider, compressionMethod compress.Method) *Initializer {
+func New(log *zap.SugaredLogger, addr string, db database.Database, bp providers.BackupProvider, comp *compress.Compressor) *Initializer {
 	return &Initializer{
 		currentStatus: &v1.StatusResponse{
 			Status:  v1.StatusResponse_CHECKING,
@@ -42,7 +42,7 @@ func New(log *zap.SugaredLogger, addr string, db database.Database, bp providers
 		addr: addr,
 		db:   db,
 		bp:   bp,
-		comp: compress.New(compressionMethod),
+		comp: comp,
 	}
 }
 
