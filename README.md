@@ -13,6 +13,16 @@ Probably, it does not make sense to use this project with large databases. Howev
 | postgres  | 12-alpine | alpha  |
 | rethinkdb | 2.4.0     | alpha  |
 
+## Supported Compression Methods
+
+With `--compression-method` you can define how generated backups are compressed before stored at the storage provider. Available compression methods are:
+
+| compression-method | suffix   | comments |
+| ------------------ | -------- | -------- |
+| tar                | .tar     | no compression, best suited for already compressed content |
+| targz              | .tar.gz  | tar and gzip, most commonly used, best compression ratio, average performance |
+| tarlz4             | .tar.lz4 | tar and lz4, very fast compression/decompression speed compared to gz, slightly bigger files |
+
 ## Supported Storage Providers
 
 - GCS Buckets
@@ -38,9 +48,12 @@ Requires:
 - [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 - [stern](https://github.com/wercker/stern)
 
-1. Configure your backup provider configuration in `deploy/provider-secret.yaml`
-2. Enable deployment of the provider secret by commenting in the `kubectl` command in the Makefile's `start` target
-3. Run `make start-postgres` or `start-rethinkdb`
+To start a demo / devel setup, run: `make start-postgres` or `make start-rethinkdb`.
+
+By default, the backup-restore-sidecar will start with the `local` backup provider, which is probably not very useful for most use-cases. If you want to test storing the data at a real backup provider, then:
+
+1. Configure the backup provider secret in `deploy/provider-secret-<backup-provider>.yaml`.
+2. Run `BACKUP_PROVIDER=<backup-provider> make start-postgres` instead.
 
 ## Manual restoration
 

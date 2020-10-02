@@ -1,0 +1,160 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app: rethinkdb
+  name: rethinkdb
+spec:
+  serviceName: rethinkdb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rethinkdb
+  template:
+    metadata:
+      labels:
+        app: rethinkdb
+    spec:
+      containers:
+      - image: rethinkdb:2.4.0
+        name: rethinkdb
+        command:
+        - tini
+        - --
+        args:
+        - sh
+        - -c
+        # IMPORTANT: the --directory needs to point to the exact sidecar data dir, otherwise the database will be restored to the wrong location
+        - backup-restore-sidecar wait && rethinkdb --bind all --directory /data/rethinkdb --initial-password ${RETHINKDB_PASSWORD}
+        env:
+        - name: RETHINKDB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: rethinkdb
+              key: rethinkdb-password
+        ports:
+        - containerPort: 8080
+        - containerPort: 28015
+        volumeMounts:
+        - mountPath: /data
+          name: rethinkdb
+        - name: bin-provision
+          subPath: backup-restore-sidecar
+          mountPath: /usr/local/bin/backup-restore-sidecar
+        - name: backup-restore-sidecar-config
+          mountPath: /etc/backup-restore-sidecar
+        - name: bin-provision
+          subPath: tini
+          mountPath: /usr/local/bin/tini
+      - image: rethinkdb:2.4.0
+        name: backup-restore-sidecar
+        command:
+        - tini
+        - --
+        args:
+        - sh
+        - -c
+        - mkdir -p /data/rethinkdb && backup-restore-sidecar start --log-level debug
+        volumeMounts:
+        - name: rethinkdb
+          mountPath: /data
+        - name: rethinkdb-credentials
+          mountPath: /rethinkdb-secret
+        - name: backup-restore-sidecar-config
+          mountPath: /etc/backup-restore-sidecar
+        - name: bin-provision
+          subPath: backup-restore-sidecar
+          mountPath: /usr/local/bin/backup-restore-sidecar
+        - name: bin-provision
+          subPath: tini
+          mountPath: /usr/local/bin/tini
+        - name: bin-provision
+          subPath: rethinkdb-dump
+          mountPath: /usr/local/bin/rethinkdb-dump
+        - name: bin-provision
+          subPath: rethinkdb-restore
+          mountPath: /usr/local/bin/rethinkdb-restore
+      initContainers:
+      - name: backup-restore-sidecar-provider
+        image: metalstack/backup-restore-sidecar:latest
+        imagePullPolicy: IfNotPresent
+        command:
+        - cp
+        - /backup-restore-sidecar
+        - /ubuntu/tini
+        - /rethinkdb/rethinkdb-dump
+        - /rethinkdb/rethinkdb-restore
+        - /bin-provision
+        ports:
+        - containerPort: 2112
+        volumeMounts:
+        - name: bin-provision
+          mountPath: /bin-provision
+      volumes:
+      - name: rethinkdb
+        persistentVolumeClaim:
+          claimName: rethinkdb
+      - name: rethinkdb-credentials
+        secret:
+          secretName: rethinkdb
+          items:
+          - key: rethinkdb-password
+            path: rethinkdb-password.txt
+      - name: backup-restore-sidecar-config
+        configMap:
+          name: backup-restore-sidecar-config-rethinkdb
+      - name: bin-provision
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: rethinkdb
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-restore-sidecar-config-rethinkdb
+data:
+  config.yaml: |
+    db: rethinkdb
+    db-data-directory: /data/rethinkdb/
+    backup-provider: local
+    rethinkdb-passwordfile: /rethinkdb-secret/rethinkdb-password.txt
+    backup-cron-schedule: "*/1 * * * *"
+    object-prefix: rethinkdb-test
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rethinkdb
+  labels:
+    app: rethinkdb
+type: Opaque
+stringData:
+  rethinkdb-password: "test123!"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: rethinkdb
+  name: rethinkdb
+spec:
+  ports:
+  - name: "10080"
+    port: 10080
+    targetPort: 8080
+  - name: "28015"
+    port: 28015
+    targetPort: 28015
+  - name: "metrics"
+    port: 2112
+    targetPort: 2112
+  selector:
+    app: rethinkdb
