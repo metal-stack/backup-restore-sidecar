@@ -11,23 +11,19 @@ import (
 type (
 	// Compressor compress/decompress backup data before/after sending/receiving from storage
 	Compressor struct {
-		archiver  archiver.Archiver
 		extension string
 	}
 )
 
 // New Returns a new Compressor
 func New(method string) (*Compressor, error) {
-	var c *Compressor
+	c := &Compressor{}
 	switch method {
 	case "tar":
-		c.archiver = archiver.NewTar()
 		c.extension = ".tar"
 	case "targz":
-		c.archiver = archiver.NewTarGz()
 		c.extension = ".tar.gz"
 	case "tarlz4":
-		c.archiver = archiver.NewTarLz4()
 		c.extension = ".tar.lz4"
 	default:
 		return nil, fmt.Errorf("unsupported compression method: %s", method)
@@ -38,7 +34,7 @@ func New(method string) (*Compressor, error) {
 // Compress the given backupFile and returns the full filename with the extension
 func (c *Compressor) Compress(backupFilePath string) (string, error) {
 	filename := backupFilePath + c.extension
-	return filename, c.archiver.Archive([]string{constants.BackupDir}, filename)
+	return filename, archiver.Archive([]string{constants.BackupDir}, filename)
 }
 
 // Decompress the given backupFile
