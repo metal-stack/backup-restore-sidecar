@@ -113,7 +113,7 @@ func (db *Etcd) Recover() error {
 		return errors.Wrap(err, "could not move restored snapshot to datadir")
 	}
 
-	out, err = db.etcdctl("snapshot", "restore", "--name", db.name, snapshotFileName)
+	out, err = db.etcdctl("snapshot", "restore", "--data-dir", db.datadir, "--initial-cluster-token", db.name, snapshotFileName)
 	if err != nil {
 		return fmt.Errorf("unable to restore:%v", err)
 	}

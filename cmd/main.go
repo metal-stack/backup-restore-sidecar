@@ -195,7 +195,7 @@ func init() {
 	rootCmd.AddCommand(startCmd, waitCmd, restoreCmd)
 
 	rootCmd.PersistentFlags().StringP(logLevelFlg, "", "info", "sets the application log level")
-	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb]")
+	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb|etcd]")
 	rootCmd.PersistentFlags().StringP(databaseDatadirFlg, "", "", "the directory where the database stores its data in")
 
 	err := viper.BindPFlags(rootCmd.PersistentFlags())
