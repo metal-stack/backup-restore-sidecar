@@ -33,7 +33,7 @@ spec:
         args:
         - sh
         - -c
-        - backup-restore-sidecar wait && etcd
+        - backup-restore-sidecar wait && etcd --name etcd-main-0
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
@@ -179,3 +179,4 @@ data:
     backup-provider: s3
     backup-cron-schedule: "*/1 * * * *"
     object-prefix: etcd-test
+    etcd-name: etcd-main-0

@@ -16,10 +16,6 @@ const (
 	etcdctlCommand = "etcdctl"
 )
 
-var (
-	snapshotFileName = path.Join(constants.BackupDir, "snapshot.db")
-)
-
 // Etcd Backup
 type Etcd struct {
 	caCert    string
@@ -27,16 +23,18 @@ type Etcd struct {
 	endpoints string
 	log       *zap.SugaredLogger
 	key       string
+	name      string
 
 	datadir  string
 	executor *utils.CmdExecutor
 }
 
 // New instantiates a new etcd database
-func New(log *zap.SugaredLogger, datadir, caCert, cert, key, endpoints string) *Etcd {
+func New(log *zap.SugaredLogger, datadir, caCert, cert, key, endpoints, name string) *Etcd {
 	return &Etcd{
 		log:       log,
 		datadir:   datadir,
+		name:      name,
 		executor:  utils.NewExecutor(log),
 		caCert:    caCert,
 		cert:      cert,
@@ -61,6 +59,7 @@ func (db *Etcd) Check() (bool, error) {
 
 // Backup takes a full Backup of etcd with etcdctl.
 func (db *Etcd) Backup() error {
+	snapshotFileName := path.Join(constants.BackupDir, "snapshot.db")
 	if err := os.RemoveAll(constants.BackupDir); err != nil {
 		return errors.Wrap(err, "could not clean backup directory")
 	}
@@ -74,7 +73,7 @@ func (db *Etcd) Backup() error {
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("error running backup command: %s", out))
 	}
-	db.log.Debugw("took backup of etcd database", "output", out)
+	db.log.Infow("took backup of etcd database", "output", out)
 
 	// TODO check snapshot status after it was created
 	// etcdctl snapshot status snapshot.db --write-out json
@@ -86,27 +85,40 @@ func (db *Etcd) Backup() error {
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("backup was not created correct: %s", out))
 	}
-	db.log.Debugw("successfully took backup of etcd database, snapshot status is", "status", out)
+	db.log.Infow("successfully took backup of etcd database, snapshot status is", "status", out)
 
 	return nil
 }
 
 // Recover restores a database backup
 func (db *Etcd) Recover() error {
+	snapshotFileName := path.Join(constants.RestoreDir, "snapshot.db")
+	targetSnapshotFileName := path.Join(db.datadir, "snapshot.db")
 	if _, err := os.Stat(snapshotFileName); os.IsNotExist(err) {
 		return fmt.Errorf("restore file is not present: %s", snapshotFileName)
 	}
+	out, err := db.etcdctl("snapshot", "status", "--write-out", "json", snapshotFileName)
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("restored backup file was not created correct: %s", out))
+	}
+	db.log.Infow("successfully pulled backup of etcd database, snapshot status is", "status", out)
 
-	if err := utils.RemoveContents(constants.BackupDir); err != nil {
-		return errors.Wrap(err, "could not clean database backup directory")
+	if err := utils.RemoveContents(db.datadir); err != nil {
+		return errors.Wrap(err, "could not clean database data directory")
 	}
 
-	out, err := db.etcdctl("snapshot", "restore", snapshotFileName)
+	// move to datadir
+	err = utils.Copy(snapshotFileName, targetSnapshotFileName)
+	if err != nil {
+		return errors.Wrap(err, "could not move restored snapshot to datadir")
+	}
+
+	out, err = db.etcdctl("snapshot", "restore", "--name", db.name, snapshotFileName)
 	if err != nil {
 		return fmt.Errorf("unable to restore:%v", err)
 	}
 
-	db.log.Debugw("restored etcd base backup", "output", out)
+	db.log.Infow("restored etcd base backup", "output", out)
 
 	if err := os.RemoveAll(snapshotFileName); err != nil {
 		return errors.Wrap(err, "could not remove snapshot")
@@ -127,10 +139,7 @@ func (db *Etcd) Probe() error {
 
 func (db *Etcd) etcdctl(args ...string) (string, error) {
 	etcdctlEnvs := []string{"ETCDCTL_API=3"}
-	etcdctlArgs := []string{
-		"--dial-timeout=10s",
-		"--command-timeout=30s",
-	}
+	etcdctlArgs := []string{}
 
 	etcdctlArgs = append(etcdctlArgs, args...)
 
@@ -146,6 +155,8 @@ func (db *Etcd) etcdctl(args ...string) (string, error) {
 	if db.key != "" {
 		etcdctlArgs = append(etcdctlArgs, "--key", db.key)
 	}
+
+	etcdctlArgs = append(etcdctlArgs, "--dial-timeout=10s", "--command-timeout=30s")
 
 	// execute a etcdctl command
 	out, err := db.executor.ExecuteCommandWithOutput(etcdctlCommand, etcdctlEnvs, etcdctlArgs...)
