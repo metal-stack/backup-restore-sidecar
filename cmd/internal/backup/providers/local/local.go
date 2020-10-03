@@ -1,12 +1,14 @@
 package local
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/pkg/errors"
 
@@ -22,6 +24,7 @@ type BackupProviderLocal struct {
 	log             *zap.SugaredLogger
 	config          *BackupProviderConfigLocal
 	nextBackupCount int64
+	encrypter       *encryption.Encrypter
 }
 
 // BackupProviderConfigLocal provides configuration for the BackupProviderLocal
@@ -35,7 +38,7 @@ func (c *BackupProviderConfigLocal) validate() error {
 }
 
 // New returns a Local backup provider
-func New(log *zap.SugaredLogger, config *BackupProviderConfigLocal) (*BackupProviderLocal, error) {
+func New(log *zap.SugaredLogger, config *BackupProviderConfigLocal, encrypter *encryption.Encrypter) (*BackupProviderLocal, error) {
 	if config == nil {
 		return nil, errors.New("local backup provider requires a provider config")
 	}
@@ -53,8 +56,9 @@ func New(log *zap.SugaredLogger, config *BackupProviderConfigLocal) (*BackupProv
 	}
 
 	return &BackupProviderLocal{
-		config: config,
-		log:    log,
+		config:    config,
+		log:       log,
+		encrypter: encrypter,
 	}, nil
 }
 
@@ -82,7 +86,15 @@ func (b *BackupProviderLocal) DownloadBackup(version *providers.BackupVersion) e
 	b.log.Infow("download backup called for provider local")
 	source := filepath.Join(b.config.LocalBackupPath, version.Name)
 	destination := filepath.Join(constants.DownloadDir, version.Name)
-	err := utils.Copy(source, destination)
+
+	var err error
+	if b.encrypter != nil {
+		destination, err = b.encrypter.Decrypt(source)
+		if err != nil {
+			return fmt.Errorf("unable to decrypt backup:%v", err)
+		}
+	}
+	err = utils.Copy(source, destination)
 	if err != nil {
 		return err
 	}
@@ -93,7 +105,14 @@ func (b *BackupProviderLocal) DownloadBackup(version *providers.BackupVersion) e
 func (b *BackupProviderLocal) UploadBackup(sourcePath string) error {
 	b.log.Infow("upload backups called for provider local")
 	destination := filepath.Join(b.config.LocalBackupPath, filepath.Base(sourcePath))
-	err := utils.Copy(sourcePath, destination)
+	var err error
+	if b.encrypter != nil {
+		destination, err = b.encrypter.Encrypt(sourcePath)
+		if err != nil {
+			return fmt.Errorf("unable to encrypt backup:%v", err)
+		}
+	}
+	err = utils.Copy(sourcePath, destination)
 	if err != nil {
 		return err
 	}

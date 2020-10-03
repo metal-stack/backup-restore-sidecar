@@ -17,6 +17,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/postgres"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/rethinkdb"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/initializer"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/probe"
@@ -71,6 +72,8 @@ const (
 	s3SecretKeyFlg  = "s3-secret-key"
 
 	compressionMethod = "compression-method"
+
+	encryptionKey = "encryption-key"
 )
 
 var (
@@ -226,6 +229,8 @@ func init() {
 
 	startCmd.Flags().StringP(compressionMethod, "", "targz", "the compression method to use to compress the backups (tar|targz|tarlz4)")
 
+	startCmd.Flags().StringP(encryptionKey, "", "", "if given backups will be encrypted with key, must be either 16,24 or 32 byte long")
+
 	err = viper.BindPFlags(startCmd.Flags())
 	if err != nil {
 		fmt.Printf("unable to construct initializer command: %v", err)
@@ -332,7 +337,15 @@ func initDatabase() error {
 
 func initBackupProvider() error {
 	bpString := viper.GetString(backupProviderFlg)
+	key := viper.GetString(encryptionKey)
+	var encrypter *encryption.Encrypter
 	var err error
+	if key != "" {
+		encrypter, err = encryption.New(logger.Named("encryption"), key)
+		if err != nil {
+			return fmt.Errorf("unable to initialize encryption:%v", err)
+		}
+	}
 	switch bpString {
 	case "gcp":
 		bp, err = gcp.New(
@@ -344,6 +357,7 @@ func initBackupProvider() error {
 				BucketName:     viper.GetString(gcpBucketNameFlg),
 				BucketLocation: viper.GetString(gcpBucketLocationFlg),
 			},
+			encrypter,
 		)
 	case "s3":
 		bp, err = s3.New(
@@ -357,6 +371,7 @@ func initBackupProvider() error {
 				AccessKey:     viper.GetString(s3AccessKeyFlg),
 				SecretKey:     viper.GetString(s3SecretKeyFlg),
 			},
+			encrypter,
 		)
 	case "local":
 		bp, err = local.New(
@@ -365,6 +380,7 @@ func initBackupProvider() error {
 				LocalBackupPath: viper.GetString(localBackupPathFlg),
 				ObjectsToKeep:   viper.GetInt64(objectsToKeepFlg),
 			},
+			encrypter,
 		)
 	default:
 		return fmt.Errorf("unsupported backup provider type: %s", bpString)

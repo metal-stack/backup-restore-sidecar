@@ -10,6 +10,8 @@ import (
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 
 	"go.uber.org/zap"
 
@@ -27,10 +29,11 @@ const (
 
 // BackupProviderS3 implements the backup provider interface for S3
 type BackupProviderS3 struct {
-	log    *zap.SugaredLogger
-	c      *s3.S3
-	sess   *session.Session
-	config *BackupProviderConfigS3
+	log       *zap.SugaredLogger
+	c         *s3.S3
+	sess      *session.Session
+	config    *BackupProviderConfigS3
+	encrypter *encryption.Encrypter
 }
 
 // BackupProviderConfigS3 provides configuration for the BackupProviderS3
@@ -63,7 +66,7 @@ func (c *BackupProviderConfigS3) validate() error {
 }
 
 // New returns a S3 backup provider
-func New(log *zap.SugaredLogger, config *BackupProviderConfigS3) (*BackupProviderS3, error) {
+func New(log *zap.SugaredLogger, config *BackupProviderConfigS3, encrypter *encryption.Encrypter) (*BackupProviderS3, error) {
 
 	if config == nil {
 		return nil, errors.New("s3 backup provider requires a provider config")
@@ -96,10 +99,11 @@ func New(log *zap.SugaredLogger, config *BackupProviderConfigS3) (*BackupProvide
 	}
 
 	return &BackupProviderS3{
-		c:      client,
-		sess:   newSession,
-		config: config,
-		log:    log,
+		c:         client,
+		sess:      newSession,
+		config:    config,
+		log:       log,
+		encrypter: encrypter,
 	}, nil
 }
 
@@ -208,6 +212,17 @@ func (b *BackupProviderS3) DownloadBackup(version *providers.BackupVersion) erro
 		return err
 	}
 
+	if b.encrypter != nil {
+		destination, err := b.encrypter.Decrypt(backupFilePath)
+		if err != nil {
+			return errors.Wrap(err, "unable to decrypt backup")
+		}
+		err = utils.Copy(destination, backupFilePath)
+		if err != nil {
+			return errors.Wrap(err, "error writing decrypted file")
+		}
+	}
+
 	return nil
 }
 
@@ -226,6 +241,13 @@ func (b *BackupProviderS3) UploadBackup(sourcePath string) error {
 		destination = b.config.ObjectPrefix + "/" + destination
 	}
 
+	if b.encrypter != nil {
+		destination, err = b.encrypter.Encrypt(destination)
+		if err != nil {
+			return errors.Wrap(err, "unable to encrypt backup")
+		}
+	}
+
 	b.log.Debugw("uploading object", "src", sourcePath, "dest", destination)
 
 	uploader := s3manager.NewUploader(b.sess)
@@ -237,7 +259,6 @@ func (b *BackupProviderS3) UploadBackup(sourcePath string) error {
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 
