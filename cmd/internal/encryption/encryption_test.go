@@ -2,6 +2,7 @@ package encryption
 
 import (
 	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,5 +39,16 @@ func TestEncrypter(t *testing.T) {
 	cleartext, err := ioutil.ReadFile(cleartextFile)
 	assert.NoError(t, err)
 	assert.Equal(t, cleartextInput, cleartext)
+
+	// Test with 100MB file
+	bigBuff := make([]byte, 100000000)
+	ioutil.WriteFile("bigfile.test", bigBuff, 0666)
+
+	bigEncFile, err := e.Encrypt("bigfile.test")
+	assert.NoError(t, err)
+	_, err = e.Decrypt(bigEncFile)
+	assert.NoError(t, err)
+	os.Remove("bigfile.test")
+	os.Remove("bigfile.test.aes")
 
 }
