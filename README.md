@@ -29,6 +29,12 @@ With `--compression-method` you can define how generated backups are compressed 
 - S3 Buckets (tested against Ceph RADOS gateway)
 - Local
 
+## Encryption
+
+For all three storage providers are AES encryption is supported, can be enabled with `--encryption-key=<YOUR_KEY>`.
+The key must be either 16 bytes (AES-128), 24 bytes (AES-192) or 32 bytes (AES-256) long.
+The backups are stored at the storage provider with the `.aes` suffix. If the file does not have this suffix, decryption is skipped.
+
 ## How it works
 
 ![Sequence Diagram](docs/sequence.png)
