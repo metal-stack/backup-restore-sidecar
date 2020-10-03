@@ -5,10 +5,14 @@ DOCKER_TAG := $(or ${GITHUB_TAG_NAME}, latest)
 BACKUP_PROVIDER := $(or ${BACKUP_PROVIDER},local)
 
 .PHONY: all
-all:
+all: test
 	go mod tidy
 	go build -ldflags "$(LINKMODE)" -tags 'osusergo netgo static_build' -o bin/backup-restore-sidecar github.com/metal-stack/backup-restore-sidecar/cmd
 	strip bin/backup-restore-sidecar
+
+.PHONY: test
+test:
+	go test -race ./...
 
 .PHONY: proto
 proto:
