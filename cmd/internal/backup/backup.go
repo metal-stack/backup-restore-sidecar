@@ -49,7 +49,7 @@ func Start(log *zap.SugaredLogger, backupSchedule string, db database.DatabasePr
 		if encrypter != nil {
 			filename, err = encrypter.Encrypt(filename)
 			if err != nil {
-				metrics.CountError("compress")
+				metrics.CountError("encrypt")
 				log.Errorw("unable to encrypt backup", "error", err)
 				return
 			}
