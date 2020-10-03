@@ -13,8 +13,6 @@ import (
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 
 	"go.uber.org/zap"
 	"google.golang.org/api/iterator"
@@ -28,10 +26,9 @@ const (
 
 // BackupProviderGCP implements the backup provider interface for GCP
 type BackupProviderGCP struct {
-	log       *zap.SugaredLogger
-	c         *storage.Client
-	config    *BackupProviderConfigGCP
-	encrypter *encryption.Encrypter
+	log    *zap.SugaredLogger
+	c      *storage.Client
+	config *BackupProviderConfigGCP
 }
 
 // BackupProviderConfigGCP provides configuration for the BackupProviderGCP
@@ -56,7 +53,7 @@ func (c *BackupProviderConfigGCP) validate() error {
 }
 
 // New returns a GCP backup provider
-func New(log *zap.SugaredLogger, config *BackupProviderConfigGCP, encrypter *encryption.Encrypter) (*BackupProviderGCP, error) {
+func New(log *zap.SugaredLogger, config *BackupProviderConfigGCP) (*BackupProviderGCP, error) {
 	ctx := context.Background()
 
 	if config == nil {
@@ -81,10 +78,9 @@ func New(log *zap.SugaredLogger, config *BackupProviderConfigGCP, encrypter *enc
 	}
 
 	return &BackupProviderGCP{
-		c:         client,
-		config:    config,
-		log:       log,
-		encrypter: encrypter,
+		c:      client,
+		config: config,
+		log:    log,
 	}, nil
 }
 
@@ -166,18 +162,6 @@ func (b *BackupProviderGCP) DownloadBackup(version *providers.BackupVersion) err
 	if err != nil {
 		return errors.Wrap(err, "error writing file from gcp to filesystem")
 	}
-
-	if b.encrypter != nil {
-		destination, err := b.encrypter.Decrypt(backupFilePath)
-		if err != nil {
-			return errors.Wrap(err, "unable to decrypt backup")
-		}
-		err = utils.Copy(destination, backupFilePath)
-		if err != nil {
-			return errors.Wrap(err, "error writing decrypted file")
-		}
-	}
-
 	return nil
 }
 
@@ -195,13 +179,6 @@ func (b *BackupProviderGCP) UploadBackup(sourcePath string) error {
 	destination := filepath.Base(sourcePath)
 	if b.config.ObjectPrefix != "" {
 		destination = b.config.ObjectPrefix + "/" + destination
-	}
-
-	if b.encrypter != nil {
-		destination, err = b.encrypter.Encrypt(destination)
-		if err != nil {
-			return errors.Wrap(err, "unable to encrypt backup")
-		}
 	}
 
 	b.log.Debugw("uploading object", "src", sourcePath, "dest", destination)

@@ -113,13 +113,21 @@ var startCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		initializer.New(logger.Named("initializer"), addr, db, bp, comp).Start(stop)
+		var encrypter *encryption.Encrypter
+		key := viper.GetString(encryptionKey)
+		if key != "" {
+			encrypter, err = encryption.New(logger.Named("encryption"), key)
+			if err != nil {
+				return fmt.Errorf("unable to initialize encryption:%v", err)
+			}
+		}
+		initializer.New(logger.Named("initializer"), addr, db, bp, comp, encrypter).Start(stop)
 		if err := probe.Start(logger.Named("probe"), db, stop); err != nil {
 			return err
 		}
 		metrics := metrics.New()
 		metrics.Start(logger.Named("metrics"))
-		return backup.Start(logger.Named("backup"), viper.GetString(backupCronScheduleFlg), db, bp, metrics, comp, stop)
+		return backup.Start(logger.Named("backup"), viper.GetString(backupCronScheduleFlg), db, bp, metrics, comp, encrypter, stop)
 	},
 }
 
@@ -145,7 +153,15 @@ var restoreCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return initializer.New(logger.Named("initializer"), "", db, bp, comp).Restore(version)
+		var encrypter *encryption.Encrypter
+		key := viper.GetString(encryptionKey)
+		if key != "" {
+			encrypter, err = encryption.New(logger.Named("encryption"), key)
+			if err != nil {
+				return fmt.Errorf("unable to initialize encryption:%v", err)
+			}
+		}
+		return initializer.New(logger.Named("initializer"), "", db, bp, comp, encrypter).Restore(version)
 	},
 }
 
@@ -337,15 +353,7 @@ func initDatabase() error {
 
 func initBackupProvider() error {
 	bpString := viper.GetString(backupProviderFlg)
-	key := viper.GetString(encryptionKey)
-	var encrypter *encryption.Encrypter
 	var err error
-	if key != "" {
-		encrypter, err = encryption.New(logger.Named("encryption"), key)
-		if err != nil {
-			return fmt.Errorf("unable to initialize encryption:%v", err)
-		}
-	}
 	switch bpString {
 	case "gcp":
 		bp, err = gcp.New(
@@ -357,7 +365,6 @@ func initBackupProvider() error {
 				BucketName:     viper.GetString(gcpBucketNameFlg),
 				BucketLocation: viper.GetString(gcpBucketLocationFlg),
 			},
-			encrypter,
 		)
 	case "s3":
 		bp, err = s3.New(
@@ -371,7 +378,6 @@ func initBackupProvider() error {
 				AccessKey:     viper.GetString(s3AccessKeyFlg),
 				SecretKey:     viper.GetString(s3SecretKeyFlg),
 			},
-			encrypter,
 		)
 	case "local":
 		bp, err = local.New(
@@ -380,7 +386,6 @@ func initBackupProvider() error {
 				LocalBackupPath: viper.GetString(localBackupPathFlg),
 				ObjectsToKeep:   viper.GetInt64(objectsToKeepFlg),
 			},
-			encrypter,
 		)
 	default:
 		return fmt.Errorf("unsupported backup provider type: %s", bpString)

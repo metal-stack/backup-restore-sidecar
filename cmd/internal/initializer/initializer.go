@@ -12,6 +12,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
@@ -30,19 +31,21 @@ type Initializer struct {
 	db            database.Database
 	bp            providers.BackupProvider
 	comp          *compress.Compressor
+	encrypter     *encryption.Encrypter
 }
 
-func New(log *zap.SugaredLogger, addr string, db database.Database, bp providers.BackupProvider, comp *compress.Compressor) *Initializer {
+func New(log *zap.SugaredLogger, addr string, db database.Database, bp providers.BackupProvider, comp *compress.Compressor, encrypter *encryption.Encrypter) *Initializer {
 	return &Initializer{
 		currentStatus: &v1.StatusResponse{
 			Status:  v1.StatusResponse_CHECKING,
 			Message: "starting initializer server",
 		},
-		log:  log,
-		addr: addr,
-		db:   db,
-		bp:   bp,
-		comp: comp,
+		log:       log,
+		addr:      addr,
+		db:        db,
+		bp:        bp,
+		comp:      comp,
+		encrypter: encrypter,
 	}
 }
 
@@ -170,6 +173,13 @@ func (i *Initializer) Restore(version *providers.BackupVersion) error {
 	err := i.bp.DownloadBackup(version)
 	if err != nil {
 		return errors.Wrap(err, "unable to download backup")
+	}
+
+	if i.encrypter != nil {
+		backupFilePath, err = i.encrypter.Decrypt(backupFilePath)
+		if err != nil {
+			return errors.Wrap(err, "unable to decrypt backup")
+		}
 	}
 
 	i.currentStatus.Message = "uncompressing backup"

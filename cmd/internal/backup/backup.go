@@ -8,13 +8,14 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
 	cron "github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 )
 
 // Start starts the backup component, which is periodically taking backups of the database
-func Start(log *zap.SugaredLogger, backupSchedule string, db database.DatabaseProber, bp backuproviders.BackupProvider, metrics *metrics.Metrics, comp *compress.Compressor, stop <-chan struct{}) error {
+func Start(log *zap.SugaredLogger, backupSchedule string, db database.DatabaseProber, bp backuproviders.BackupProvider, metrics *metrics.Metrics, comp *compress.Compressor, encrypter *encryption.Encrypter, stop <-chan struct{}) error {
 	log.Info("database is now available, starting periodic backups")
 
 	c := cron.New()
@@ -44,6 +45,15 @@ func Start(log *zap.SugaredLogger, backupSchedule string, db database.DatabasePr
 			return
 		}
 		log.Info("compressed backup")
+
+		if encrypter != nil {
+			filename, err = encrypter.Encrypt(filename)
+			if err != nil {
+				metrics.CountError("compress")
+				log.Errorw("unable to encrypt backup", "error", err)
+				return
+			}
+		}
 
 		err = bp.UploadBackup(filename)
 		if err != nil {
