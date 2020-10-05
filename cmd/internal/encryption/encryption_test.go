@@ -22,7 +22,7 @@ func TestEncrypter(t *testing.T) {
 	e, err = New(zap.L().Sugar(), "tooloooonoooooooooooooooooooooooooooongkey")
 	assert.EqualError(t, err, "key length:42 invalid, must be 16,24 or 32 bytes")
 
-	e, err = New(zap.L().Sugar(), "0123456789123456")
+	e, err = New(zap.L().Sugar(), "01234567891234560123456789123456")
 	assert.NoError(t, err, "")
 
 	input, err := ioutil.TempFile("", "encrypt")

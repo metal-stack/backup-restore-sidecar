@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"go.uber.org/zap"
 )
@@ -31,6 +32,9 @@ func New(log *zap.SugaredLogger, key string) (*Encrypter, error) {
 	default:
 		return nil, fmt.Errorf("key length:%d invalid, must be 16,24 or 32 bytes", len(key))
 	}
+	if !isASCII(key) {
+		return nil, fmt.Errorf("key must only contain ascii characters")
+	}
 
 	return &Encrypter{
 		key: key,
@@ -40,6 +44,8 @@ func New(log *zap.SugaredLogger, key string) (*Encrypter, error) {
 
 // Encrypt input file with key and store the encrypted files with suffix appended
 func (e *Encrypter) Encrypt(input string) (string, error) {
+	output := input + Suffix
+	e.log.Infow("encrypt", "input", input, "output", output)
 	infile, err := os.Open(input)
 	if err != nil {
 		return "", err
@@ -59,7 +65,6 @@ func (e *Encrypter) Encrypt(input string) (string, error) {
 		return "", err
 	}
 
-	output := input + Suffix
 	outfile, err := os.OpenFile(output, os.O_RDWR|os.O_CREATE, 0777)
 	if err != nil {
 		return "", err
@@ -91,12 +96,20 @@ func (e *Encrypter) Encrypt(input string) (string, error) {
 	}
 	// Append the IV
 	_, err = outfile.Write(iv)
+	if err == nil {
+		err := os.Remove(input)
+		if err != nil {
+			e.log.Warnw("unable to remove input", "error", err)
+		}
+	}
 	return output, err
 }
 
 // Decrypt input file with key and store decrypted result with suffix removed
 // if input does not end with suffix, it is assumed that the file was not encrypted.
 func (e *Encrypter) Decrypt(input string) (string, error) {
+	output := strings.TrimSuffix(input, Suffix)
+	e.log.Infow("decrypt", "input", input, "output", output)
 	extension := filepath.Ext(input)
 	if extension != Suffix {
 		return input, fmt.Errorf("input is not encrypted")
@@ -127,7 +140,6 @@ func (e *Encrypter) Decrypt(input string) (string, error) {
 		return "", err
 	}
 
-	output := strings.TrimSuffix(input, Suffix)
 	outfile, err := os.OpenFile(output, os.O_RDWR|os.O_CREATE, 0777)
 	if err != nil {
 		return "", err
@@ -162,5 +174,18 @@ func (e *Encrypter) Decrypt(input string) (string, error) {
 			break
 		}
 	}
+	err = os.Remove(input)
+	if err != nil {
+		e.log.Warnw("unable to remove input", "error", err)
+	}
 	return output, nil
+}
+
+func isASCII(s string) bool {
+	for _, c := range s {
+		if c > unicode.MaxASCII {
+			return false
+		}
+	}
+	return true
 }
