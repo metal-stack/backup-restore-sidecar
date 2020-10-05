@@ -33,7 +33,7 @@ spec:
         args:
         - sh
         - -c
-        - backup-restore-sidecar wait && etcd --name etcd-main-0 --data-dir=/data/etcd
+        - backup-restore-sidecar wait && etcd --name etcd-main-0 --data-dir=/data/etcd/main
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
@@ -111,7 +111,7 @@ spec:
         args:
         - sh
         - -c
-        - mkdir -p /data/etcd/ && backup-restore-sidecar start --log-level debug
+        - mkdir -p /data/etcd/main && backup-restore-sidecar start --log-level debug
         volumeMounts:
         - name: backup-etcd
           mountPath: /data
@@ -164,7 +164,7 @@ metadata:
 data:
   config.yaml: |
     db: etcd
-    db-data-directory: /data/etcd/
+    db-data-directory: /data/etcd/main
     backup-provider: s3
     backup-cron-schedule: "*/1 * * * *"
     object-prefix: etcd-test

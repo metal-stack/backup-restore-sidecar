@@ -93,7 +93,6 @@ func (db *Etcd) Backup() error {
 // Recover restores a database backup
 func (db *Etcd) Recover() error {
 	snapshotFileName := path.Join(constants.RestoreDir, "snapshot.db")
-	targetSnapshotFileName := path.Join(db.datadir, "snapshot.db")
 	if _, err := os.Stat(snapshotFileName); os.IsNotExist(err) {
 		return fmt.Errorf("restore file is not present: %s", snapshotFileName)
 	}
@@ -107,13 +106,11 @@ func (db *Etcd) Recover() error {
 		return errors.Wrap(err, "could not clean database data directory")
 	}
 
-	// move to datadir
-	err = utils.Copy(snapshotFileName, targetSnapshotFileName)
-	if err != nil {
-		return errors.Wrap(err, "could not move restored snapshot to datadir")
+	if err := os.Remove(db.datadir); err != nil {
+		return errors.Wrap(err, "could not remove database data directory")
 	}
 
-	out, err = db.etcdctl("snapshot", "restore", "--data-dir", db.datadir, "--initial-cluster-token", db.name, snapshotFileName)
+	out, err = db.etcdctl("snapshot", "restore", "--data-dir", db.datadir, snapshotFileName)
 	if err != nil {
 		return fmt.Errorf("unable to restore:%v", err)
 	}
