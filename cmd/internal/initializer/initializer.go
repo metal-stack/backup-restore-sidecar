@@ -136,7 +136,7 @@ func (i *Initializer) initialize() error {
 		return nil
 	}
 
-	err = i.Restore(latestBackup)
+	err = i.Restore(latestBackup, false)
 	if err != nil {
 		return errors.Wrap(err, "unable to restore database")
 	}
@@ -145,7 +145,7 @@ func (i *Initializer) initialize() error {
 }
 
 // Restore restores the database with the given backup version
-func (i *Initializer) Restore(version *providers.BackupVersion) error {
+func (i *Initializer) Restore(version *providers.BackupVersion, downloadOnly bool) error {
 	i.log.Infow("restoring backup", "version", version.Version, "date", version.Date.String())
 
 	i.currentStatus.Status = v1.StatusResponse_RESTORING
@@ -186,6 +186,10 @@ func (i *Initializer) Restore(version *providers.BackupVersion) error {
 	err = i.comp.Decompress(backupFilePath)
 	if err != nil {
 		return errors.Wrap(err, "unable to uncompress backup")
+	}
+	if downloadOnly {
+		i.log.Info("downloadOnly was specified, skipping database recovery")
+		return nil
 	}
 
 	i.currentStatus.Message = "restoring backup"

@@ -44,6 +44,7 @@ const (
 
 	databaseFlg        = "db"
 	databaseDatadirFlg = "db-data-directory"
+	downloadOnlyFlg    = "download-only"
 
 	postgresUserFlg     = "postgres-user"
 	postgresHostFlg     = "postgres-host"
@@ -161,7 +162,8 @@ var restoreCmd = &cobra.Command{
 				return fmt.Errorf("unable to initialize encryption:%v", err)
 			}
 		}
-		return initializer.New(logger.Named("initializer"), "", db, bp, comp, encrypter).Restore(version)
+		downloadOnly := viper.GetBool(downloadOnlyFlg)
+		return initializer.New(logger.Named("initializer"), "", db, bp, comp, encrypter).Restore(version, downloadOnly)
 	},
 }
 
@@ -262,6 +264,7 @@ func init() {
 	}
 
 	restoreCmd.AddCommand(restoreListCmd)
+	restoreCmd.Flags().BoolP(downloadOnlyFlg, "", false, "if set, backups are only downloaded, decompressed and decrypted but no database recovery is made.")
 }
 
 func initConfig() {
