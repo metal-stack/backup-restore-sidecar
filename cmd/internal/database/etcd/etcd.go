@@ -69,7 +69,7 @@ func (db *Etcd) Backup() error {
 	}
 
 	// Create a etcd snapshot.
-	out, err := db.etcdctl("snapshot", "save", snapshotFileName)
+	out, err := db.etcdctl(true, "snapshot", "save", snapshotFileName)
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("error running backup command: %s", out))
 	}
@@ -81,7 +81,7 @@ func (db *Etcd) Backup() error {
 	if _, err := os.Stat(snapshotFileName); os.IsNotExist(err) {
 		return fmt.Errorf("backup file was not created: %s", snapshotFileName)
 	}
-	out, err = db.etcdctl("snapshot", "status", "--write-out", "json", snapshotFileName)
+	out, err = db.etcdctl(false, "snapshot", "status", "--write-out", "json", snapshotFileName)
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("backup was not created correct: %s", out))
 	}
@@ -96,7 +96,7 @@ func (db *Etcd) Recover() error {
 	if _, err := os.Stat(snapshotFileName); os.IsNotExist(err) {
 		return fmt.Errorf("restore file is not present: %s", snapshotFileName)
 	}
-	out, err := db.etcdctl("snapshot", "status", "--write-out", "json", snapshotFileName)
+	out, err := db.etcdctl(false, "snapshot", "status", "--write-out", "json", snapshotFileName)
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("restored backup file was not created correct: %s", out))
 	}
@@ -110,7 +110,7 @@ func (db *Etcd) Recover() error {
 		return errors.Wrap(err, "could not remove database data directory")
 	}
 
-	out, err = db.etcdctl("snapshot", "restore", "--data-dir", db.datadir, snapshotFileName)
+	out, err = db.etcdctl(false, "snapshot", "restore", "--data-dir", db.datadir, snapshotFileName)
 	if err != nil {
 		return fmt.Errorf("unable to restore:%v", err)
 	}
@@ -127,19 +127,32 @@ func (db *Etcd) Recover() error {
 
 // Probe indicates whether the database is running
 func (db *Etcd) Probe() error {
-	out, err := db.etcdctl("get", "foo")
+	out, err := db.etcdctl(true, "get", "foo")
 	if err != nil {
 		return fmt.Errorf("unable to check cluster health:%s %v", out, err)
 	}
 	return nil
 }
 
-func (db *Etcd) etcdctl(args ...string) (string, error) {
+func (db *Etcd) etcdctl(withConnectionArgs bool, args ...string) (string, error) {
 	etcdctlEnvs := []string{"ETCDCTL_API=3"}
 	etcdctlArgs := []string{}
 
 	etcdctlArgs = append(etcdctlArgs, args...)
 
+	if withConnectionArgs {
+		etcdctlArgs = append(etcdctlArgs, db.connectionArgs()...)
+	}
+	// execute a etcdctl command
+	out, err := db.executor.ExecuteCommandWithOutput(etcdctlCommand, etcdctlEnvs, etcdctlArgs...)
+	if err != nil {
+		return out, errors.Wrap(err, fmt.Sprintf("error running etcdctl command: %s", out))
+	}
+	return out, nil
+}
+
+func (db *Etcd) connectionArgs() []string {
+	etcdctlArgs := []string{}
 	if db.endpoints != "" {
 		etcdctlArgs = append(etcdctlArgs, "--endpoints", db.endpoints)
 	}
@@ -154,11 +167,5 @@ func (db *Etcd) etcdctl(args ...string) (string, error) {
 	}
 
 	etcdctlArgs = append(etcdctlArgs, "--dial-timeout=10s", "--command-timeout=30s")
-
-	// execute a etcdctl command
-	out, err := db.executor.ExecuteCommandWithOutput(etcdctlCommand, etcdctlEnvs, etcdctlArgs...)
-	if err != nil {
-		return out, errors.Wrap(err, fmt.Sprintf("error running etcdctl command: %s", out))
-	}
-	return out, nil
+	return etcdctlArgs
 }
