@@ -9,6 +9,8 @@ import (
 	"os/signal"
 	"strings"
 
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/localfs"
+
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
@@ -273,7 +275,7 @@ func init() {
 	rootCmd.AddCommand(startCmd, waitCmd, restoreCmd, createBackupCmd)
 
 	rootCmd.PersistentFlags().StringP(logLevelFlg, "", "info", "sets the application log level")
-	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb|etcd|meilisearch|redis|keydb]")
+	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb|etcd|meilisearch|redis|keydb|localfs]")
 	rootCmd.PersistentFlags().StringP(databaseDatadirFlg, "", "", "the directory where the database stores its data in")
 
 	err := viper.BindPFlags(rootCmd.PersistentFlags())
@@ -459,6 +461,12 @@ func initDatabase() error {
 		if err != nil {
 			return err
 		}
+	case "localfs":
+		db = localfs.New(
+			logger.Named("localfs"),
+			datadir,
+		)
+
 	default:
 		return fmt.Errorf("unsupported database type: %s", dbString)
 	}
