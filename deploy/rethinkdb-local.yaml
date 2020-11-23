@@ -77,7 +77,7 @@ spec:
           mountPath: /usr/local/bin/rethinkdb-restore
       initContainers:
       - name: backup-restore-sidecar-provider
-        image: metalstack/backup-restore-sidecar:latest
+        image: ghcr.io/metal-stack/backup-restore-sidecar:latest
         imagePullPolicy: IfNotPresent
         command:
         - cp

@@ -38,7 +38,7 @@ start-rethinkdb:
 
 .PHONY: start
 start: kind-cluster-create
-	kind --name backup-restore-sidecar load docker-image metalstack/backup-restore-sidecar:latest
+	kind --name backup-restore-sidecar load docker-image ghcr.io/metal-stack/backup-restore-sidecar:latest
 ifneq ($(BACKUP_PROVIDER),local)
 	# if you want to use other providers, please fill in your credentials and backup config!
 	# for this, you need to edit deploy/provider-secret-$(BACKUP_PROVIDER)
