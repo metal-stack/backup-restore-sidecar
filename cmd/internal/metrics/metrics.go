@@ -57,11 +57,14 @@ func (m *Metrics) Start(log *zap.SugaredLogger) {
 	log.Info("starting metrics server")
 	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<html>
+		_, err := w.Write([]byte(`<html>
 			<head><title>backup-restore metrics</title></head>
 			<body>
 			<h1>backup-restore metrics</h1>
 			<p><a href='/metrics'>Metrics</a></p </body </html>`))
+		if err != nil {
+			log.Errorw("error handling metrics root endpoint", "error", err)
+		}
 	})
 
 	prometheus.MustRegister(m.backupSuccess)

@@ -1,7 +1,7 @@
 GO111MODULE := on
 CGO_ENABLED := 1
 LINKMODE := -extldflags '-static -s -w'
-DOCKER_TAG := $(or ${GITHUB_TAG_NAME}, latest)
+DOCKER_TAG := $(or ${GITHUB_TAG_NAME},latest)
 BACKUP_PROVIDER := $(or ${BACKUP_PROVIDER},local)
 
 .PHONY: all
@@ -16,11 +16,11 @@ proto:
 
 .PHONY: dockerimage
 dockerimage:
-	docker build -t metalstack/backup-restore-sidecar:${DOCKER_TAG} .
+	docker build -t ghcr.io/metal-stack/backup-restore-sidecar:${DOCKER_TAG} .
 
 .PHONY: dockerpush
 dockerpush:
-	docker push metalstack/backup-restore-sidecar:${DOCKER_TAG}
+	docker push ghcr.io/metal-stack/backup-restore-sidecar:${DOCKER_TAG}
 
 # # #
 # the following tasks can be used to set up a development environment
