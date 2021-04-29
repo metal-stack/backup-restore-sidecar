@@ -217,7 +217,7 @@ func (b *BackupProviderGCP) ListBackups() (providers.BackupVersions, error) {
 	var objectAttrs []*storage.ObjectAttrs
 	for {
 		attrs, err := it.Next()
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		}
 		if err != nil {

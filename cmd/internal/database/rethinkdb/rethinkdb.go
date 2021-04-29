@@ -114,6 +114,7 @@ func (db *RethinkDB) Recover() error {
 	// inside the sidecar against which we can restore.
 
 	db.log.Infow("starting rethinkdb database within sidecar for restore")
+	//nolint
 	cmd := exec.Command(rethinkDBCmd, "--bind", "all", "--driver-port", "1", "--directory", db.datadir)
 	if err := cmd.Start(); err != nil {
 		return errors.Wrap(err, "unable to start database within sidecar for restore")
@@ -177,7 +178,7 @@ func (db *RethinkDB) Recover() error {
 func (db *RethinkDB) Probe() error {
 	conn, err := net.DialTimeout("tcp", db.url, connectionTimeout)
 	if err != nil {
-		return fmt.Errorf("connection error: %v", err)
+		return fmt.Errorf("connection error: %w", err)
 	}
 	defer conn.Close()
 	return nil

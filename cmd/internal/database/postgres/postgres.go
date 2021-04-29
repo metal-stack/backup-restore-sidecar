@@ -147,7 +147,7 @@ func (db *Postgres) Recover() error {
 func (db *Postgres) Probe() error {
 	conn, err := net.DialTimeout("tcp", net.JoinHostPort(db.host, strconv.Itoa(db.port)), connectionTimeout)
 	if err != nil {
-		return fmt.Errorf("connection error:%v", err)
+		return fmt.Errorf("connection error:%w", err)
 	}
 	defer conn.Close()
 	return nil
