@@ -1,4 +1,4 @@
-FROM golang:1.15 as builder
+FROM golang:1.16 as builder
 WORKDIR /work
 COPY api api
 COPY cmd cmd
@@ -20,7 +20,7 @@ COPY build/rethinkdb-restore.spec rethinkdb-restore.spec
 RUN pyinstaller rethinkdb-dump.spec \
     && pyinstaller rethinkdb-restore.spec
 
-FROM alpine:3.12
+FROM alpine:3.13
 RUN apk add --no-cache tini ca-certificates
 COPY --from=builder /work/bin/backup-restore-sidecar /backup-restore-sidecar
 COPY --from=ubuntu-tini /usr/local/bin/tini /ubuntu/tini
