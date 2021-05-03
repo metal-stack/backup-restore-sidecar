@@ -29,10 +29,6 @@ jobs:
     - name: Lint
       uses: golangci/golangci-lint-action@v2
       with:
-        args: cache clean
-    - name: Lint
-      uses: golangci/golangci-lint-action@v2
-      with:
         args: run -p bugs
 
     - name: Build
