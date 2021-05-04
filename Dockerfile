@@ -14,7 +14,7 @@ FROM krallin/ubuntu-tini as ubuntu-tini
 FROM rethinkdb:2.4.0 as rethinkdb-python-client-builder
 WORKDIR /work
 RUN apt update && apt install -y python3-pip
-RUN pip3 install https://github.com/pyinstaller/pyinstaller/archive/develop.zip rethinkdb==2.4.4.post1
+RUN pip3 install pyinstaller rethinkdb
 COPY build/rethinkdb-dump.spec rethinkdb-dump.spec
 COPY build/rethinkdb-restore.spec rethinkdb-restore.spec
 RUN pyinstaller rethinkdb-dump.spec \
