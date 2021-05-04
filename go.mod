@@ -4,7 +4,7 @@ go 1.16
 
 require (
 	cloud.google.com/go/storage v1.15.0
-	github.com/aws/aws-sdk-go v1.38.28
+	github.com/aws/aws-sdk-go v1.38.31
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/golang/protobuf v1.5.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
@@ -23,8 +23,8 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/viper v1.7.1
 	go.uber.org/zap v1.16.0
-	golang.org/x/net v0.0.0-20210428140749-89ef3d95e781 // indirect
-	google.golang.org/api v0.45.0
+	golang.org/x/net v0.0.0-20210504132125-bbd867fde50d // indirect
+	google.golang.org/api v0.46.0
 	google.golang.org/grpc v1.37.0
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/ini.v1 v1.62.0 // indirect
