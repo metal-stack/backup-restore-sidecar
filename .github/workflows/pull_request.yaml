@@ -31,7 +31,7 @@ jobs:
     - name: Lint
       uses: golangci/golangci-lint-action@v2
       with:
-        args: run -p bugs
+        args: -p bugs
 
     - name: Build
       run: |
