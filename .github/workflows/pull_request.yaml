@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v2
 
@@ -23,10 +23,15 @@ jobs:
         password: ${{ secrets.DOCKER_REGISTRY_TOKEN }}
       if: steps.fork.outputs.is_fork_pr == 'false'
 
+    - name: Set up Go 1.16
+      uses: actions/setup-go@v2.1.3
+      with:
+        go-version: '1.16.x'
+
     - name: Lint
       uses: golangci/golangci-lint-action@v2
       with:
-        version: v1.32.2
+        args: -p bugs
 
     - name: Build
       run: |

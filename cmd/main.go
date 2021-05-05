@@ -68,7 +68,8 @@ const (
 	s3RegionFlg     = "s3-region"
 	s3EndpointFlg   = "s3-endpoint"
 	s3AccessKeyFlg  = "s3-access-key"
-	s3SecretKeyFlg  = "s3-secret-key"
+	//nolint
+	s3SecretKeyFlg = "s3-secret-key"
 
 	compressionMethod = "compression-method"
 )
@@ -370,7 +371,7 @@ func initBackupProvider() error {
 		return fmt.Errorf("unsupported backup provider type: %s", bpString)
 	}
 	if err != nil {
-		return fmt.Errorf("error initializing backup provider: %s", err)
+		return fmt.Errorf("error initializing backup provider: %w", err)
 	}
 	logger.Infow("initialized backup provider", "type", bpString)
 	return nil
