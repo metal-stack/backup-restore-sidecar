@@ -10,7 +10,6 @@ import (
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
@@ -63,11 +62,11 @@ func (db *Postgres) Check() (bool, error) {
 // Backup takes a backup of the database
 func (db *Postgres) Backup() error {
 	if err := os.RemoveAll(constants.BackupDir); err != nil {
-		return errors.Wrap(err, "could not clean backup directory")
+		return fmt.Errorf("could not clean backup directory: %w", err)
 	}
 
 	if err := os.MkdirAll(constants.BackupDir, 0777); err != nil {
-		return errors.Wrap(err, "could not create backup directory")
+		return fmt.Errorf("could not create backup directory: %w", err)
 	}
 
 	args := []string{"-D", constants.BackupDir, "--wal-method=stream", "--checkpoint=fast", "-z", "--format=t"}
@@ -88,7 +87,7 @@ func (db *Postgres) Backup() error {
 
 	out, err := db.executor.ExecuteCommandWithOutput(postgresBackupCmd, env, args...)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("error running backup command: %s", out))
+		return fmt.Errorf("error running backup command: %s %w", out, err)
 	}
 
 	for _, p := range []string{postgresBaseTar, postgresWalTar} {
@@ -113,27 +112,27 @@ func (db *Postgres) Recover() error {
 	}
 
 	if err := utils.RemoveContents(db.datadir); err != nil {
-		return errors.Wrap(err, "could not clean database data directory")
+		return fmt.Errorf("could not clean database data directory: %w", err)
 	}
 
 	out, err := db.executor.ExecuteCommandWithOutput("tar", nil, "-xzvf", path.Join(constants.RestoreDir, postgresBaseTar), "-C", db.datadir)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("error untaring base backup: %s", out))
+		return fmt.Errorf("error untaring base backup: %s %w", out, err)
 	}
 
 	db.log.Debugw("restored postgres base backup", "output", out)
 
 	if err := os.RemoveAll(path.Join(db.datadir, "pg_wal")); err != nil {
-		return errors.Wrap(err, "could not clean pg_wal directory")
+		return fmt.Errorf("could not clean pg_wal directory: %w", err)
 	}
 
 	if err := os.MkdirAll(path.Join(db.datadir, "pg_wal"), 0777); err != nil {
-		return errors.Wrap(err, "could not create pg_wal directory")
+		return fmt.Errorf("could not create pg_wal directory: %w", err)
 	}
 
 	out, err = db.executor.ExecuteCommandWithOutput("tar", nil, "-xzvf", path.Join(constants.RestoreDir, postgresWalTar), "-C", path.Join(db.datadir, "pg_wal"))
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("error untaring wal backup: %s", out))
+		return fmt.Errorf("error untaring wal backup: %s %w", out, err)
 	}
 
 	db.log.Debugw("restored postgres pg_wal backup", "output", out)
