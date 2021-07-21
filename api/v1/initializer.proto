@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 package v1;
+option go_package = "./v1";
 
 service InitializerService {
     rpc Status(Empty) returns (StatusResponse);

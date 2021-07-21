@@ -10,10 +10,11 @@ import (
 	"syscall"
 	"time"
 
+	"errors"
+
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/probe"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
@@ -69,11 +70,11 @@ func (db *RethinkDB) Check() (bool, error) {
 // Backup takes a backup of the database
 func (db *RethinkDB) Backup() error {
 	if err := os.RemoveAll(constants.BackupDir); err != nil {
-		return errors.Wrap(err, "could not clean backup directory")
+		return fmt.Errorf("could not clean backup directory: %w", err)
 	}
 
 	if err := os.MkdirAll(constants.BackupDir, 0777); err != nil {
-		return errors.Wrap(err, "could not create backup directory")
+		return fmt.Errorf("could not create backup directory: %w", err)
 	}
 
 	args := []string{"-f", rethinkDBBackupFilePath}
@@ -86,7 +87,7 @@ func (db *RethinkDB) Backup() error {
 
 	out, err := db.executor.ExecuteCommandWithOutput(rethinkDBDumpCmd, nil, args...)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("error running backup command: %s", out))
+		return fmt.Errorf("error running backup command: %s %w", out, err)
 	}
 
 	if strings.Contains(out, "0 rows exported from 0 tables, with 0 secondary indexes, and 0 hook functions") {
@@ -117,7 +118,7 @@ func (db *RethinkDB) Recover() error {
 	//nolint
 	cmd := exec.Command(rethinkDBCmd, "--bind", "all", "--driver-port", "1", "--directory", db.datadir)
 	if err := cmd.Start(); err != nil {
-		return errors.Wrap(err, "unable to start database within sidecar for restore")
+		return fmt.Errorf("unable to start database within sidecar for restore: %w", err)
 	}
 	defer func() {
 		_ = cmd.Process.Kill()
@@ -136,7 +137,7 @@ func (db *RethinkDB) Recover() error {
 	select {
 	case <-done:
 		if err != nil {
-			return errors.Wrap(err, "error while probing")
+			return fmt.Errorf("error while probing: %w", err)
 		}
 		db.log.Infow("rethinkdb in sidecar is now available, now triggering restore commands...")
 	case <-time.After(restoreDatabaseStartupTimeout):
@@ -152,11 +153,11 @@ func (db *RethinkDB) Recover() error {
 
 	out, err := db.executor.ExecuteCommandWithOutput(rethinkDBRestoreCmd, nil, args...)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("error running restore command: %s", out))
+		return fmt.Errorf("error running restore command: %s %w", out, err)
 	}
 
 	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		return errors.Wrap(err, "failed to send sigterm signal to rethinkdb")
+		return fmt.Errorf("failed to send sigterm signal to rethinkdb: %w", err)
 	}
 
 	wait := make(chan error)
@@ -164,7 +165,7 @@ func (db *RethinkDB) Recover() error {
 	select {
 	case err := <-wait:
 		if err != nil {
-			return errors.Wrap(err, "rethinkdb did not shutdown cleanly")
+			return fmt.Errorf("rethinkdb did not shutdown cleanly: %w", err)
 		}
 		db.log.Infow("successfully restored rethinkdb database", "output", out)
 	case <-time.After(restoreDatabaseShutdownTimeout):

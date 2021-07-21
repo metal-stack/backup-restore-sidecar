@@ -2,6 +2,7 @@ package gcp
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -9,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pkg/errors"
+	"errors"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
@@ -143,7 +144,7 @@ func (b *BackupProviderGCP) DownloadBackup(version *providers.BackupVersion) err
 
 	r, err := bucket.Object(version.Name).Generation(gen).NewReader(ctx)
 	if err != nil {
-		return errors.Wrap(err, "backup not found")
+		return fmt.Errorf("backup not found: %w", err)
 	}
 	defer r.Close()
 
@@ -160,7 +161,7 @@ func (b *BackupProviderGCP) DownloadBackup(version *providers.BackupVersion) err
 
 	_, err = io.Copy(f, r)
 	if err != nil {
-		return errors.Wrap(err, "error writing file from gcp to filesystem")
+		return fmt.Errorf("error writing file from gcp to filesystem: %w", err)
 	}
 
 	return nil
