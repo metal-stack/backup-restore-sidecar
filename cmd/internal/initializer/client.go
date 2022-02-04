@@ -2,12 +2,14 @@ package initializer
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/url"
 
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 // NewInitializerClient returns a new initializer client.
@@ -21,7 +23,12 @@ func NewInitializerClient(ctx context.Context, rawurl string, log *zap.SugaredLo
 	}
 
 	opts := []grpc.DialOption{
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(
+			credentials.NewTLS(&tls.Config{
+				//nolint:gosec
+				InsecureSkipVerify: true},
+			),
+		),
 		grpc.WithBlock(),
 	}
 
