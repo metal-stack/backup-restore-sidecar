@@ -1,5 +1,6 @@
 FROM golang:1.17 as builder
 WORKDIR /work
+COPY .git .git
 COPY api api
 COPY cmd cmd
 COPY go.mod .

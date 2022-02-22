@@ -108,7 +108,7 @@ var startCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		addr := fmt.Sprintf("%s:%d", viper.GetString(bindAddrFlg), viper.GetInt(portFlg))
 
-		logger.Infow("starting backup-restore-sidecar", "version", v.V.String(), "bind-addr", addr)
+		logger.Infow("starting backup-restore-sidecar", "version", v.V, "bind-addr", addr)
 
 		comp, err := compress.New(viper.GetString(compressionMethod))
 		if err != nil {
