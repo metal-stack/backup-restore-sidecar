@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 const (
@@ -106,6 +107,8 @@ var startCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		addr := fmt.Sprintf("%s:%d", viper.GetString(bindAddrFlg), viper.GetInt(portFlg))
+
+		logger.Infow("starting backup-restore-sidecar", "version", v.V.String(), "bind-addr", addr)
 
 		comp, err := compress.New(viper.GetString(compressionMethod))
 		if err != nil {
@@ -287,6 +290,8 @@ func initLogging() {
 
 	cfg := zap.NewProductionConfig()
 	cfg.Level = zap.NewAtomicLevelAt(level)
+	cfg.EncoderConfig.TimeKey = "timestamp"
+	cfg.EncoderConfig.EncodeTime = zapcore.RFC3339TimeEncoder
 
 	l, err := cfg.Build()
 	if err != nil {
