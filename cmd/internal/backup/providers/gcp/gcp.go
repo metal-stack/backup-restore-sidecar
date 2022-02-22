@@ -109,7 +109,7 @@ func (b *BackupProviderGCP) EnsureBackupBucket() error {
 	}
 
 	if err := bucket.Create(ctx, b.config.ProjectID, attrs); err != nil {
-		if !strings.Contains(err.Error(), "You already own this bucket") {
+		if !strings.Contains(err.Error(), "you already own it") {
 			return err
 		}
 	}
