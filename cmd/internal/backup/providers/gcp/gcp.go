@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 
 	"go.uber.org/zap"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 
 	"cloud.google.com/go/storage"
@@ -109,7 +111,12 @@ func (b *BackupProviderGCP) EnsureBackupBucket() error {
 	}
 
 	if err := bucket.Create(ctx, b.config.ProjectID, attrs); err != nil {
-		if !strings.Contains(err.Error(), "you already own it") {
+		var googleErr *googleapi.Error
+		if errors.As(err, &googleErr) {
+			if googleErr.Code != http.StatusConflict {
+				return err
+			}
+		} else {
 			return err
 		}
 	}
