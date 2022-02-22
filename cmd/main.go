@@ -281,8 +281,9 @@ func initConfig() {
 func initLogging() {
 	level := zap.InfoLevel
 
+	var err error
 	if viper.IsSet(logLevelFlg) {
-		err := level.UnmarshalText([]byte(viper.GetString(logLevelFlg)))
+		level, err = zapcore.ParseLevel(viper.GetString(logLevelFlg))
 		if err != nil {
 			log.Fatalf("can't initialize zap logger: %v", err)
 		}
