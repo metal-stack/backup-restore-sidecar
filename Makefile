@@ -1,8 +1,18 @@
-GO111MODULE := on
-CGO_ENABLED := 1
-LINKMODE := -extldflags '-static -s -w'
 DOCKER_TAG := $(or ${GITHUB_TAG_NAME},latest)
 BACKUP_PROVIDER := $(or ${BACKUP_PROVIDER},local)
+
+SHA := $(shell git rev-parse --short=8 HEAD)
+GITVERSION := $(shell git describe --long --all)
+BUILDDATE := $(shell GO111MODULE=off go run ${COMMONDIR}/time.go)
+VERSION := $(or ${VERSION},$(shell git describe --tags --exact-match 2> /dev/null || git symbolic-ref -q --short HEAD || git rev-parse --short HEAD))
+
+GO111MODULE := on
+CGO_ENABLED := 1
+LINKMODE := -extldflags '-static -s -w' \
+	-X 'github.com/metal-stack/v.Version=$(VERSION)' \
+	-X 'github.com/metal-stack/v.Revision=$(GITVERSION)' \
+	-X 'github.com/metal-stack/v.GitSHA1=$(SHA)' \
+	-X 'github.com/metal-stack/v.BuildDate=$(BUILDDATE)'
 
 .PHONY: all
 all:
