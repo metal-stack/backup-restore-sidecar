@@ -3,8 +3,8 @@ module github.com/metal-stack/backup-restore-sidecar
 go 1.17
 
 require (
-	cloud.google.com/go/storage v1.20.0
-	github.com/aws/aws-sdk-go v1.42.46
+	cloud.google.com/go/storage v1.21.0
+	github.com/aws/aws-sdk-go v1.43.3
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/metal-stack/v v1.0.3
 	github.com/mholt/archiver/v3 v3.5.1
@@ -13,15 +13,15 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/spf13/cobra v1.3.0
 	github.com/spf13/viper v1.10.1
-	go.uber.org/zap v1.20.0
-	google.golang.org/api v0.67.0
+	go.uber.org/zap v1.21.0
+	google.golang.org/api v0.69.0
 	google.golang.org/grpc v1.44.0
 	google.golang.org/protobuf v1.27.1
 )
 
 require (
 	cloud.google.com/go v0.100.2 // indirect
-	cloud.google.com/go/compute v0.1.0 // indirect
+	cloud.google.com/go/compute v1.2.0 // indirect
 	cloud.google.com/go/iam v0.1.1 // indirect
 	github.com/andybalholm/brotli v1.0.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -59,13 +59,13 @@ require (
 	go.opencensus.io v0.23.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	golang.org/x/net v0.0.0-20211216030914-fe4d6282115f // indirect
+	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd // indirect
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
-	golang.org/x/sys v0.0.0-20220128215802-99c3d69c2c27 // indirect
+	golang.org/x/sys v0.0.0-20220209214540-3681064d5158 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20220201184016-50beb8ab5c44 // indirect
+	google.golang.org/genproto v0.0.0-20220216160803-4663080d8bc8 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/ini.v1 v1.66.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
