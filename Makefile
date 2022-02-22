@@ -12,7 +12,8 @@ all:
 
 .PHONY: proto
 proto:
-	docker run -it --rm -v ${PWD}/api:/work/api metalstack/builder protoc -I api/ api/v1/*.proto --go_out=plugins=grpc:api
+	docker pull metalstack/builder
+	docker run -it --rm --user $$(id -u):$$(id -g) -v ${PWD}/api:/work/api metalstack/builder protoc -I api/ api/v1/*.proto --go_out=plugins=grpc:api
 
 .PHONY: dockerimage
 dockerimage:
