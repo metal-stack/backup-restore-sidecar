@@ -130,12 +130,17 @@ spec:
         - name: bin-provision
           subPath: tini
           mountPath: /usr/local/bin/tini
+        - name: bin-provision
+          subPath: certs
+          mountPath: /etc/ssl/certs
       initContainers:
       - name: backup-restore-sidecar-provider
         image: ghcr.io/metal-stack/backup-restore-sidecar:latest
         imagePullPolicy: IfNotPresent
         command:
         - cp
+        - -r
+        - /etc/ssl/certs
         - /backup-restore-sidecar
         - /ubuntu/tini
         - /bin-provision
