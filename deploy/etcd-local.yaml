@@ -25,7 +25,8 @@ spec:
         role: main
     spec:
       containers:
-      - image: quay.io/coreos/etcd:v3.3.25
+      - image: quay.io/coreos/etcd:v3.5.4
+        # can also be gcr.io/etcd-development/etcd
         name: etcd
         command:
         - tini
