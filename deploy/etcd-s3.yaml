@@ -74,8 +74,8 @@ spec:
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
         volumeMounts:
-        - mountPath: /data/etcd
-          name: main-etcd
+        - mountPath: /data
+          name: etcd
         - name: bin-provision
           subPath: backup-restore-sidecar
           mountPath: /usr/local/bin/backup-restore-sidecar
@@ -118,9 +118,9 @@ spec:
         args:
         - sh
         - -c
-        - mkdir -p /data/etcd/main && backup-restore-sidecar start --log-level debug
+        - mkdir -p /data/etcd && backup-restore-sidecar start --log-level debug
         volumeMounts:
-        - name: backup-etcd
+        - name: etcd
           mountPath: /data
         - name: bin-provision
           subPath: backup-restore-sidecar
@@ -150,19 +150,15 @@ spec:
           name: backup-restore-sidecar-config-etcd
       - name: bin-provision
         emptyDir: {}
-      - name: backup-etcd
-        emptyDir: {}
-      - name: main-etcd
-        emptyDir: {}
-  # volumeClaimTemplates:
-  # - metadata:
-  #     name: main-etcd
-  #   spec:
-  #     accessModes:
-  #     - ReadWriteOnce
-  #     resources:
-  #       requests:
-  #         storage: 1Gi
+  volumeClaimTemplates:
+  - metadata:
+      name: etcd
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -171,9 +167,8 @@ metadata:
 data:
   config.yaml: |
     db: etcd
-    db-data-directory: /data/etcd/main
+    db-data-directory: /data/etcd/
     backup-provider: s3
     backup-cron-schedule: "*/1 * * * *"
     object-prefix: etcd-test
-    etcd-name: etcd-main-0
     compression-method: tarlz4

@@ -127,7 +127,7 @@ func (db *Etcd) Recover() error {
 func (db *Etcd) Probe() error {
 	out, err := db.etcdctl(true, "get", "foo")
 	if err != nil {
-		return fmt.Errorf("unable to check cluster health:%s %w", out, err)
+		return fmt.Errorf("unable to retrieve key:%s %w", out, err)
 	}
 	return nil
 }
