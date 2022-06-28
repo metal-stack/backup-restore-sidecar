@@ -34,19 +34,25 @@ spec:
         args:
         - sh
         - -c
-        - backup-restore-sidecar wait && etcd --name etcd-main-0 --data-dir=/data/etcd/main
+        - backup-restore-sidecar wait && etcd --data-dir=/data/etcd --listen-metrics-urls http://0.0.0.0:2381
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
             command:
-            - /bin/sh
-            - -ec
-            - ETCDCTL_API=3
-            - etcdctl
-            - --endpoints=https://etcd-main-local:2379
-            - get
-            - foo
+            - /usr/local/bin/etcdctl
+            - endpoint
+            - health
           failureThreshold: 3
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 2381
+            scheme: HTTP
           initialDelaySeconds: 15
           periodSeconds: 5
           successThreshold: 1
@@ -126,12 +132,12 @@ spec:
           mountPath: /usr/local/bin/tini
       initContainers:
       - name: backup-restore-sidecar-provider
-        image: metalstack/backup-restore-sidecar:latest
+        image: ghcr.io/metal-stack/backup-restore-sidecar:latest
         imagePullPolicy: IfNotPresent
         command:
         - cp
         - /backup-restore-sidecar
-        - /sbin/tini
+        - /ubuntu/tini
         - /bin-provision
         ports:
         - containerPort: 2112
@@ -140,7 +146,7 @@ spec:
           mountPath: /bin-provision
       volumes:
       - name: backup-restore-sidecar-config
-        configMap: 
+        configMap:
           name: backup-restore-sidecar-config-etcd
       - name: bin-provision
         emptyDir: {}

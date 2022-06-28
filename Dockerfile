@@ -12,7 +12,7 @@ FROM krallin/ubuntu-tini as ubuntu-tini
 
 # rethinkdb backup/restore requires the python client library
 # let's make small binaries of these commands in order not to blow up the image size
-FROM rethinkdb:2.4.0 as rethinkdb-python-client-builder
+FROM rethinkdb:2.4.1 as rethinkdb-python-client-builder
 WORKDIR /work
 RUN apt update && apt install -y python3-pip
 RUN pip3 install pyinstaller==4.3.0 rethinkdb
@@ -24,6 +24,6 @@ RUN pyinstaller rethinkdb-dump.spec \
 FROM alpine:3.16
 RUN apk add --no-cache tini ca-certificates
 COPY --from=builder /work/bin/backup-restore-sidecar /backup-restore-sidecar
-COPY --from=ubuntu-tini /usr/local/bin/tini /ubuntu/tini
+COPY --from=ubuntu-tini /usr/local/bin/tini-static /ubuntu/tini
 COPY --from=rethinkdb-python-client-builder /work/dist/rethinkdb-dump /work/dist/rethinkdb-restore /rethinkdb/
 CMD ["/backup-restore-sidecar"]
