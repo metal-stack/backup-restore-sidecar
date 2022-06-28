@@ -5,8 +5,6 @@ import (
 	"os"
 	"path"
 
-	"github.com/pkg/errors"
-
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"go.uber.org/zap"
@@ -61,17 +59,17 @@ func (db *Etcd) Check() (bool, error) {
 func (db *Etcd) Backup() error {
 	snapshotFileName := path.Join(constants.BackupDir, "snapshot.db")
 	if err := os.RemoveAll(constants.BackupDir); err != nil {
-		return errors.Wrap(err, "could not clean backup directory")
+		return fmt.Errorf("could not clean backup directory %w", err)
 	}
 
 	if err := os.MkdirAll(constants.BackupDir, 0777); err != nil {
-		return errors.Wrap(err, "could not create backup directory")
+		return fmt.Errorf("could not create backup directory %w", err)
 	}
 
 	// Create a etcd snapshot.
 	out, err := db.etcdctl(true, "snapshot", "save", snapshotFileName)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("error running backup command: %s", out))
+		return fmt.Errorf("error running backup command: %s", out)
 	}
 	db.log.Infow("took backup of etcd database", "output", out)
 
@@ -83,7 +81,7 @@ func (db *Etcd) Backup() error {
 	}
 	out, err = db.etcdctl(false, "snapshot", "status", "--write-out", "json", snapshotFileName)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("backup was not created correct: %s", out))
+		return fmt.Errorf("backup was not created correct: %s", out)
 	}
 	db.log.Infow("successfully took backup of etcd database, snapshot status is", "status", out)
 
@@ -98,16 +96,16 @@ func (db *Etcd) Recover() error {
 	}
 	out, err := db.etcdctl(false, "snapshot", "status", "--write-out", "json", snapshotFileName)
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("restored backup file was not created correct: %s", out))
+		return fmt.Errorf("restored backup file was not created correct: %s", out)
 	}
 	db.log.Infow("successfully pulled backup of etcd database, snapshot status is", "status", out)
 
 	if err := utils.RemoveContents(db.datadir); err != nil {
-		return errors.Wrap(err, "could not clean database data directory")
+		return fmt.Errorf("could not clean database data directory %w", err)
 	}
 
 	if err := os.Remove(db.datadir); err != nil {
-		return errors.Wrap(err, "could not remove database data directory")
+		return fmt.Errorf("could not remove database data directory %w", err)
 	}
 
 	out, err = db.etcdctl(false, "snapshot", "restore", "--data-dir", db.datadir, snapshotFileName)
@@ -118,7 +116,7 @@ func (db *Etcd) Recover() error {
 	db.log.Infow("restored etcd base backup", "output", out)
 
 	if err := os.RemoveAll(snapshotFileName); err != nil {
-		return errors.Wrap(err, "could not remove snapshot")
+		return fmt.Errorf("could not remove snapshot %w", err)
 	}
 
 	db.log.Infow("successfully restored etcd database")
@@ -146,7 +144,7 @@ func (db *Etcd) etcdctl(withConnectionArgs bool, args ...string) (string, error)
 	// execute a etcdctl command
 	out, err := db.executor.ExecuteCommandWithOutput(etcdctlCommand, etcdctlEnvs, etcdctlArgs...)
 	if err != nil {
-		return out, errors.Wrap(err, fmt.Sprintf("error running etcdctl command: %s", out))
+		return out, fmt.Errorf("error running etcdctl command: %s", out)
 	}
 	return out, nil
 }
