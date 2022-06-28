@@ -1,14 +1,16 @@
 package local
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 
+	"errors"
+
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
-	"github.com/pkg/errors"
 
 	"go.uber.org/zap"
 )
@@ -62,11 +64,11 @@ func New(log *zap.SugaredLogger, config *BackupProviderConfigLocal) (*BackupProv
 func (b *BackupProviderLocal) EnsureBackupBucket() error {
 	b.log.Infow("ensuring backup bucket called for provider local")
 	if err := os.RemoveAll(b.config.LocalBackupPath); err != nil {
-		return errors.Wrap(err, "could not clean local backup directory")
+		return fmt.Errorf("could not clean local backup directory: %w", err)
 	}
 
 	if err := os.MkdirAll(b.config.LocalBackupPath, 0777); err != nil {
-		return errors.Wrap(err, "could not create local backup directory")
+		return fmt.Errorf("could not create local backup directory: %w", err)
 	}
 	return nil
 }

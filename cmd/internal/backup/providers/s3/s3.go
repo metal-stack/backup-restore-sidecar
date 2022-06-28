@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/pkg/errors"
+	"errors"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
@@ -114,6 +114,8 @@ func (b *BackupProviderS3) EnsureBackupBucket() error {
 
 	_, err := b.c.CreateBucket(cparams)
 	if err != nil {
+		// FIXME check how to migrate to errors.As
+		//nolint
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case s3.ErrCodeBucketAlreadyExists:
@@ -135,6 +137,8 @@ func (b *BackupProviderS3) EnsureBackupBucket() error {
 	}
 	_, err = b.c.PutBucketVersioning(versioning)
 	if err != nil {
+		// FIXME check how to migrate to errors.As
+		//nolint
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			default:
@@ -163,6 +167,8 @@ func (b *BackupProviderS3) EnsureBackupBucket() error {
 	}
 	_, err = b.c.PutBucketLifecycleConfiguration(lifecycle)
 	if err != nil {
+		// FIXME check how to migrate to errors.As
+		//nolint
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			default:

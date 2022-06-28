@@ -98,7 +98,7 @@ spec:
           readOnly: true
       initContainers:
       - name: backup-restore-sidecar-provider
-        image: metalstack/backup-restore-sidecar:latest
+        image: ghcr.io/metal-stack/backup-restore-sidecar:latest
         imagePullPolicy: IfNotPresent
         command:
         - cp
@@ -123,7 +123,7 @@ spec:
           - key: rethinkdb-password
             path: rethinkdb-password.txt
       - name: backup-restore-sidecar-config
-        configMap: 
+        configMap:
           name: backup-restore-sidecar-config-rethinkdb
       - name: gcp-credentials
         secret:

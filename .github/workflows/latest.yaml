@@ -1,9 +1,9 @@
-name: Docker Image from release tags
+name: Build latest image
 
 on:
-  release:
-    types:
-      - published
+  push:
+    branches:
+      - master
 
 jobs:
   build:
@@ -30,6 +30,9 @@ jobs:
 
     - name: Build the Docker images
       run: |
-        export GITHUB_TAG_NAME=${GITHUB_REF##*/}
         make dockerimage
         make dockerpush
+
+    - uses: release-drafter/release-drafter@v5
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

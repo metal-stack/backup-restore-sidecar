@@ -1,6 +1,7 @@
 package initializer
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"path"
@@ -12,7 +13,6 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
 	"google.golang.org/grpc"
@@ -88,7 +88,7 @@ func (i *Initializer) Start(stop <-chan struct{}) {
 
 	err = i.initialize()
 	if err != nil {
-		i.log.Fatal(errors.Wrap(err, "error initializing database, shutting down"))
+		i.log.Fatal(fmt.Errorf("error initializing database, shutting down:%w", err))
 	}
 
 	i.log.Info("initializer done")
@@ -103,7 +103,7 @@ func (i *Initializer) initialize() error {
 	i.currentStatus.Message = "ensuring backup bucket"
 	err := i.bp.EnsureBackupBucket()
 	if err != nil {
-		return errors.Wrap(err, "unable to ensure backup bucket")
+		return fmt.Errorf("unable to ensure backup bucket: %w", err)
 	}
 
 	i.log.Info("checking database")
@@ -112,7 +112,7 @@ func (i *Initializer) initialize() error {
 
 	needsBackup, err := i.db.Check()
 	if err != nil {
-		return errors.Wrap(err, "unable to check data of database")
+		return fmt.Errorf("unable to check data of database: %w", err)
 	}
 
 	if !needsBackup {
@@ -124,7 +124,7 @@ func (i *Initializer) initialize() error {
 
 	versions, err := i.bp.ListBackups()
 	if err != nil {
-		return errors.Wrap(err, "unable retrieve backup versions")
+		return fmt.Errorf("unable retrieve backup versions: %w", err)
 	}
 
 	latestBackup := versions.Latest()
@@ -135,7 +135,7 @@ func (i *Initializer) initialize() error {
 
 	err = i.Restore(latestBackup)
 	if err != nil {
-		return errors.Wrap(err, "unable to restore database")
+		return fmt.Errorf("unable to restore database: %w", err)
 	}
 
 	return nil
@@ -149,11 +149,11 @@ func (i *Initializer) Restore(version *providers.BackupVersion) error {
 	i.currentStatus.Message = "prepare restore"
 
 	if err := os.RemoveAll(constants.RestoreDir); err != nil {
-		return errors.Wrap(err, "could not clean restore directory")
+		return fmt.Errorf("could not clean restore directory: %w", err)
 	}
 
 	if err := os.MkdirAll(constants.RestoreDir, 0777); err != nil {
-		return errors.Wrap(err, "could not create restore directory")
+		return fmt.Errorf("could not create restore directory: %w", err)
 	}
 
 	i.currentStatus.Message = "downloading backup"
@@ -164,24 +164,24 @@ func (i *Initializer) Restore(version *providers.BackupVersion) error {
 	}
 	backupFilePath := path.Join(constants.DownloadDir, downloadFileName)
 	if err := os.RemoveAll(backupFilePath); err != nil {
-		return errors.Wrap(err, "could not delete priorly downloaded file")
+		return fmt.Errorf("could not delete priorly downloaded file: %w", err)
 	}
 
 	err := i.bp.DownloadBackup(version)
 	if err != nil {
-		return errors.Wrap(err, "unable to download backup")
+		return fmt.Errorf("unable to download backup: %w", err)
 	}
 
 	i.currentStatus.Message = "uncompressing backup"
 	err = i.comp.Decompress(backupFilePath)
 	if err != nil {
-		return errors.Wrap(err, "unable to uncompress backup")
+		return fmt.Errorf("unable to uncompress backup: %w", err)
 	}
 
 	i.currentStatus.Message = "restoring backup"
 	err = i.db.Recover()
 	if err != nil {
-		return errors.Wrap(err, "restoring database was not successful")
+		return fmt.Errorf("restoring database was not successful: %w", err)
 	}
 
 	return nil

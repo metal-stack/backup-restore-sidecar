@@ -2,19 +2,22 @@ package gcp
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	"github.com/pkg/errors"
+	"errors"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 
 	"go.uber.org/zap"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 
 	"cloud.google.com/go/storage"
@@ -108,7 +111,12 @@ func (b *BackupProviderGCP) EnsureBackupBucket() error {
 	}
 
 	if err := bucket.Create(ctx, b.config.ProjectID, attrs); err != nil {
-		if !strings.Contains(err.Error(), "You already own this bucket") {
+		var googleErr *googleapi.Error
+		if errors.As(err, &googleErr) {
+			if googleErr.Code != http.StatusConflict {
+				return err
+			}
+		} else {
 			return err
 		}
 	}
@@ -143,7 +151,7 @@ func (b *BackupProviderGCP) DownloadBackup(version *providers.BackupVersion) err
 
 	r, err := bucket.Object(version.Name).Generation(gen).NewReader(ctx)
 	if err != nil {
-		return errors.Wrap(err, "backup not found")
+		return fmt.Errorf("backup not found: %w", err)
 	}
 	defer r.Close()
 
@@ -160,7 +168,7 @@ func (b *BackupProviderGCP) DownloadBackup(version *providers.BackupVersion) err
 
 	_, err = io.Copy(f, r)
 	if err != nil {
-		return errors.Wrap(err, "error writing file from gcp to filesystem")
+		return fmt.Errorf("error writing file from gcp to filesystem: %w", err)
 	}
 
 	return nil
@@ -217,7 +225,7 @@ func (b *BackupProviderGCP) ListBackups() (providers.BackupVersions, error) {
 	var objectAttrs []*storage.ObjectAttrs
 	for {
 		attrs, err := it.Next()
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		}
 		if err != nil {
