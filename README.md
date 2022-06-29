@@ -11,7 +11,8 @@ Probably, it does not make sense to use this project with large databases. Howev
 | Database  | Image     | Status |
 | --------- | --------- | ------ |
 | postgres  | 12-alpine | alpha  |
-| rethinkdb | 2.4.0     | alpha  |
+| rethinkdb | >= 2.4.0  | alpha  |
+| ETCD      | >= 3.5    | alpha  |
 
 ## Supported Compression Methods
 
