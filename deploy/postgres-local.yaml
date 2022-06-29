@@ -135,6 +135,7 @@ data:
     backup-provider: local
     backup-cron-schedule: "*/1 * * * *"
     object-prefix: postgres-test
+    compression-method: tar
 ---
 apiVersion: v1
 kind: Secret

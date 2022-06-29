@@ -15,6 +15,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/etcd"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/postgres"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/rethinkdb"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/initializer"
@@ -52,6 +53,12 @@ const (
 
 	rethinkDBPasswordFileFlg = "rethinkdb-passwordfile"
 	rethinkDBURLFlg          = "rethinkdb-url"
+
+	etcdCaCert    = "etcd-ca-cert"
+	etcdCert      = "etcd-cert"
+	etcdKey       = "etcd-key"
+	etcdEndpoints = "etcd-endpoints"
+	etcdName      = "etcd-name"
 
 	backupProviderFlg     = "backup-provider"
 	backupCronScheduleFlg = "backup-cron-schedule"
@@ -192,7 +199,7 @@ func init() {
 	rootCmd.AddCommand(startCmd, waitCmd, restoreCmd)
 
 	rootCmd.PersistentFlags().StringP(logLevelFlg, "", "info", "sets the application log level")
-	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb]")
+	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb|etcd]")
 	rootCmd.PersistentFlags().StringP(databaseDatadirFlg, "", "", "the directory where the database stores its data in")
 
 	err := viper.BindPFlags(rootCmd.PersistentFlags())
@@ -211,6 +218,12 @@ func init() {
 
 	startCmd.Flags().StringP(rethinkDBURLFlg, "", "localhost:28015", "the rethinkdb database url (will be used when db is rethinkdb)")
 	startCmd.Flags().StringP(rethinkDBPasswordFileFlg, "", "", "the rethinkdb database password file path (will be used when db is rethinkdb)")
+
+	startCmd.Flags().StringP(etcdCaCert, "", "", "path of the ETCD CA file (optional)")
+	startCmd.Flags().StringP(etcdCert, "", "", "path of the ETCD Cert file (optional)")
+	startCmd.Flags().StringP(etcdKey, "", "", "path of the ETCD private key file (optional)")
+	startCmd.Flags().StringP(etcdEndpoints, "", "http://localhost:2379", "URL to connect to ETCD with V3 protocol (optional)")
+	startCmd.Flags().StringP(etcdName, "", "", "name of the ETCD to connect to (optional)")
 
 	startCmd.Flags().StringP(backupProviderFlg, "", "", "the name of the backup provider [gcp|s3|local]")
 	startCmd.Flags().StringP(backupCronScheduleFlg, "", "*/3 * * * *", "cron schedule for taking backups periodically")
@@ -329,6 +342,16 @@ func initDatabase() error {
 			datadir,
 			viper.GetString(rethinkDBURLFlg),
 			viper.GetString(rethinkDBPasswordFileFlg),
+		)
+	case "etcd":
+		db = etcd.New(
+			logger.Named("etcd"),
+			datadir,
+			viper.GetString(etcdCaCert),
+			viper.GetString(etcdCert),
+			viper.GetString(etcdKey),
+			viper.GetString(etcdEndpoints),
+			viper.GetString(etcdName),
 		)
 	default:
 		return fmt.Errorf("unsupported database type: %s", dbString)

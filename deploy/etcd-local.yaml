@@ -1,0 +1,151 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app: etcd-statefulset
+    instance: etcd-main
+    name: etcd
+    role: main
+  name: etcd-main
+spec:
+  podManagementPolicy: OrderedReady
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      instance: etcd-main
+      name: etcd
+  serviceName: etcd-main-client
+  template:
+    metadata:
+      labels:
+        app: etcd-statefulset
+        instance: etcd-main
+        name: etcd
+        role: main
+    spec:
+      containers:
+      - image: quay.io/coreos/etcd:v3.5.4
+        # can also be gcr.io/etcd-development/etcd
+        name: etcd
+        command:
+        - tini
+        - --
+        args:
+        - sh
+        - -c
+        - backup-restore-sidecar wait && etcd --data-dir=/data/etcd --listen-metrics-urls http://0.0.0.0:2381
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - /usr/local/bin/etcdctl
+            - endpoint
+            - health
+          failureThreshold: 3
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        ports:
+        - containerPort: 2380
+          name: server
+          protocol: TCP
+        - containerPort: 2379
+          name: client
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 2381
+            scheme: HTTP
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 900m
+            memory: 3G
+          requests:
+            cpu: 300m
+            memory: 1G
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /data
+          name: etcd
+        - name: bin-provision
+          subPath: backup-restore-sidecar
+          mountPath: /usr/local/bin/backup-restore-sidecar
+        - name: backup-restore-sidecar-config
+          mountPath: /etc/backup-restore-sidecar
+        - name: bin-provision
+          subPath: tini
+          mountPath: /usr/local/bin/tini
+      - image:  quay.io/coreos/etcd:v3.5.4
+        name: backup-restore-sidecar
+        command:
+        - tini
+        - --
+        args:
+        - sh
+        - -c
+        - mkdir -p /data/etcd/ && backup-restore-sidecar start --log-level debug
+        env: []
+        volumeMounts:
+        - name: etcd
+          mountPath: /data
+        - name: bin-provision
+          subPath: backup-restore-sidecar
+          mountPath: /usr/local/bin/backup-restore-sidecar
+        - name: backup-restore-sidecar-config
+          mountPath: /etc/backup-restore-sidecar
+        - name: bin-provision
+          subPath: tini
+          mountPath: /usr/local/bin/tini
+      initContainers:
+      - name: backup-restore-sidecar-provider
+        image: ghcr.io/metal-stack/backup-restore-sidecar:latest
+        imagePullPolicy: IfNotPresent
+        command:
+        - cp
+        - /backup-restore-sidecar
+        - /ubuntu/tini
+        - /bin-provision
+        ports:
+        - containerPort: 2112
+        volumeMounts:
+        - name: bin-provision
+          mountPath: /bin-provision
+      volumes:
+      - name: etcd
+        persistentVolumeClaim:
+          claimName: etcd
+      - name: backup-restore-sidecar-config
+        configMap:
+          name: backup-restore-sidecar-config-etcd
+      - name: bin-provision
+        emptyDir: {}
+  volumeClaimTemplates:
+  - metadata:
+      name: etcd
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-restore-sidecar-config-etcd
+data:
+  config.yaml: |
+    db: etcd
+    db-data-directory: /data/etcd/
+    backup-provider: local
+    backup-cron-schedule: "*/1 * * * *"
+    object-prefix: etcd-test
