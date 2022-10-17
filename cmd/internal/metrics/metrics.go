@@ -3,13 +3,14 @@ package metrics
 import (
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 )
 
-//Metrics contains the collected metrics
+// Metrics contains the collected metrics
 type Metrics struct {
 	totalBackups  prometheus.Counter
 	backupSuccess prometheus.Gauge
@@ -17,7 +18,7 @@ type Metrics struct {
 	totalErrors   *prometheus.CounterVec
 }
 
-//New generates new metrics
+// New generates new metrics
 func New() *Metrics {
 	backupSuccess := prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "backup_success",
@@ -73,13 +74,18 @@ func (m *Metrics) Start(log *zap.SugaredLogger) {
 	prometheus.MustRegister(m.backupSize)
 
 	go func() {
-		if err := http.ListenAndServe(":2112", nil); err != nil {
+		server := http.Server{
+			Addr:              ":2112",
+			ReadHeaderTimeout: 1 * time.Minute,
+		}
+		err := server.ListenAndServe()
+		if err != nil {
 			log.Fatal(err)
 		}
 	}()
 }
 
-//CountBackup updates metrics counter
+// CountBackup updates metrics counter
 func (m *Metrics) CountBackup(backupFile string) {
 	s, _ := os.Stat(backupFile)
 	m.totalBackups.Inc()
@@ -87,7 +93,7 @@ func (m *Metrics) CountBackup(backupFile string) {
 	m.backupSize.Set(float64(s.Size()))
 }
 
-//CountError increases error counter for the given operation
+// CountError increases error counter for the given operation
 func (m *Metrics) CountError(op string) {
 	m.totalErrors.With(prometheus.Labels{"operation": op}).Inc()
 	m.backupSuccess.Set(0)
