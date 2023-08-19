@@ -25,6 +25,7 @@ const (
 	postgresWalTar    = "pg_wal.tar.gz"
 
 	postgresConfigCmd   = "pg_config"
+	postgresUpgradeCmd  = "pg_upgrade"
 	postgresVersionFile = "PG_VERSION"
 	oldPostgresBinDir   = "/usr/local/bin/pg-old"
 )
@@ -169,6 +170,12 @@ func (db *Postgres) Upgrade() error {
 		return nil
 	}
 
+	// Check if pg_upgrade is present
+	if _, err := os.Stat(postgresUpgradeCmd); errors.Is(err, fs.ErrNotExist) {
+		db.log.Infow("pg_upgrade is not present, skipping upgrade")
+		return nil
+	}
+
 	// Then check the version of the existing database
 	// cat PG_VERSION
 	// 12
@@ -214,8 +221,22 @@ func (db *Postgres) Upgrade() error {
 		return nil
 	}
 
+	if oldBinaryVersionMajor != pgVersion {
+		db.log.Infow("database version and old binary version do not match, skipping upgrade", "old database", pgVersion, "old binary", oldBinaryVersionMajor)
+		return nil
+	}
+
 	// OK we need to upgrade the database in place, maybe taking a backup before is recommended
 	db.log.Infow("start upgrading from", "old database", pgVersion, "old binary", oldBinaryVersionMajor, "new binary", binaryVersionMajor)
+
+	// Take a backup
+	err = db.Backup()
+	if err != nil {
+		db.log.Infow("creating a backup before upgrading failed, skipping upgrade", "error", err)
+		return nil
+	}
+
+	// run the pg_upgrade command
 
 	return nil
 }
