@@ -26,6 +26,7 @@ const (
 
 	postgresConfigCmd   = "pg_config"
 	postgresVersionFile = "PG_VERSION"
+	oldPostgresBinDir   = "/usr/local/bin/pg-old"
 )
 
 // Postgres implements the database interface
@@ -185,26 +186,9 @@ func (db *Postgres) Upgrade() error {
 	// Now check the version of the postgres binaries
 	// pg_config  --version
 	// PostgreSQL 12.16
-
-	cmd := exec.Command(postgresConfigCmd, "--version")
-	out, err := cmd.CombinedOutput()
+	binaryVersionMajor, err := db.getBinaryVersion(postgresConfigCmd)
 	if err != nil {
-		db.log.Infow("unable to detect postgres binary version, skipping upgrade", "error", err)
-		return nil
-	}
-	_, binaryVersionString, found := strings.Cut(string(out), "PostgreSQL ")
-	if !found {
-		db.log.Infow("unable to detect postgres binary version in pg_config output, skipping upgrade", "pg_config", binaryVersionString)
-		return nil
-	}
-	binaryVersionMajorString, _, found := strings.Cut(binaryVersionString, ".")
-	if !found {
-		db.log.Info("unable to parse postgres binary version, skipping upgrade")
-		return nil
-	}
-	binaryVersionMajor, err := strconv.Atoi(binaryVersionMajorString)
-	if err != nil {
-		db.log.Infow("unable to parse postgres binary version to an int, skipping upgrade", "error", err)
+		db.log.Infow("unable to get binary version", "error", err)
 		return nil
 	}
 
@@ -217,8 +201,42 @@ func (db *Postgres) Upgrade() error {
 		return fmt.Errorf("database is newer than postgres binary")
 	}
 
+	// Check if old pg binaries are present and match pgVersion
+	oldPGConfigCmd := path.Join(oldPostgresBinDir, postgresConfigCmd)
+	if _, err := os.Stat(oldPGConfigCmd); errors.Is(err, fs.ErrNotExist) {
+		db.log.Infow("pg_config of old version not present, skipping upgrade")
+		return nil
+	}
+
+	oldBinaryVersionMajor, err := db.getBinaryVersion(oldPGConfigCmd)
+	if err != nil {
+		db.log.Infow("unable to get old binary version", "error", err)
+		return nil
+	}
+
 	// OK we need to upgrade the database in place, maybe taking a backup before is recommended
-	db.log.Infow("start upgrading from", "old", pgVersion, "new", binaryVersionMajor)
+	db.log.Infow("start upgrading from", "old database", pgVersion, "old binary", oldBinaryVersionMajor, "new binary", binaryVersionMajor)
 
 	return nil
+}
+
+func (db *Postgres) getBinaryVersion(pgConfigCmd string) (int, error) {
+	cmd := exec.Command(pgConfigCmd, "--version")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return 0, fmt.Errorf("unable to detect postgres binary version, skipping upgrade %w", err)
+	}
+	_, binaryVersionString, found := strings.Cut(string(out), "PostgreSQL ")
+	if !found {
+		return 0, fmt.Errorf("unable to detect postgres binary version in pg_config output, skipping upgrade, output:%q", binaryVersionString)
+	}
+	binaryVersionMajorString, _, found := strings.Cut(binaryVersionString, ".")
+	if !found {
+		return 0, fmt.Errorf("unable to parse postgres binary version, skipping upgrade")
+	}
+	binaryVersionMajor, err := strconv.Atoi(binaryVersionMajorString)
+	if err != nil {
+		return 0, fmt.Errorf("unable to parse postgres binary version to an int, skipping upgrade %w", err)
+	}
+	return binaryVersionMajor, nil
 }
