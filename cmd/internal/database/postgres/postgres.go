@@ -176,9 +176,9 @@ func (db *Postgres) Upgrade() error {
 		db.log.Infow("unable to read PG_VERSION", "error", err)
 		return nil
 	}
-	pgVersion, err := strconv.Atoi(string(pgVersionBytes))
+	pgVersion, err := strconv.Atoi(strings.TrimSpace(string(pgVersionBytes)))
 	if err != nil {
-		db.log.Infow("unable to parse PG_VERSION to an int", "PG_VRSION", string(pgVersionBytes), "error", err)
+		db.log.Infow("unable to parse PG_VERSION to an int", "PG_VERSION", string(pgVersionBytes), "error", err)
 		return nil
 	}
 
