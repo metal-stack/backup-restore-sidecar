@@ -136,6 +136,11 @@ func (db *Etcd) Probe() error {
 	return nil
 }
 
+// Upgrade indicates whether the database files are from a previous version of and need to be upgraded
+func (db *Etcd) Upgrade() error {
+	return nil
+}
+
 func (db *Etcd) etcdctl(withConnectionArgs bool, args ...string) (string, error) {
 	var (
 		etcdctlEnvs []string

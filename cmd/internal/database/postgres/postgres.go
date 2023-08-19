@@ -1,11 +1,15 @@
 package postgres
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
+	"os/exec"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
@@ -19,6 +23,9 @@ const (
 	postgresBackupCmd = "pg_basebackup"
 	postgresBaseTar   = "base.tar.gz"
 	postgresWalTar    = "pg_wal.tar.gz"
+
+	postgresConfigCmd   = "pg_config"
+	postgresVersionFile = "PG_VERSION"
 )
 
 // Postgres implements the database interface
@@ -137,7 +144,7 @@ func (db *Postgres) Recover() error {
 
 	db.log.Debugw("restored postgres pg_wal backup", "output", out)
 
-	db.log.Infow("successfully restored postgres database")
+	db.log.Info("successfully restored postgres database")
 
 	return nil
 }
@@ -149,5 +156,69 @@ func (db *Postgres) Probe() error {
 		return fmt.Errorf("connection error:%w", err)
 	}
 	defer conn.Close()
+	return nil
+}
+
+// Upgrade indicates whether the database files are from a previous version of and need to be upgraded
+func (db *Postgres) Upgrade() error {
+	// First check if there are data already present
+	pgVersionFile := path.Join(db.datadir, postgresVersionFile)
+	if _, err := os.Stat(pgVersionFile); errors.Is(err, fs.ErrNotExist) {
+		db.log.Infow("PG_VERSION is not present, no upgrade required")
+		return nil
+	}
+
+	// Then check the version of the existing database
+	// cat PG_VERSION
+	// 12
+	pgVersionBytes, err := os.ReadFile(pgVersionFile)
+	if err != nil {
+		db.log.Infow("unable to read PG_VERSION", "error", err)
+		return nil
+	}
+	pgVersion, err := strconv.Atoi(string(pgVersionBytes))
+	if err != nil {
+		db.log.Infow("unable to parse PG_VERSION to an int", "PG_VRSION", string(pgVersionBytes), "error", err)
+		return nil
+	}
+
+	// Now check the version of the postgres binaries
+	// pg_config  --version
+	// PostgreSQL 12.16
+
+	cmd := exec.Command(postgresConfigCmd, "--version")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		db.log.Infow("unable to detect postgres binary version, skipping upgrade", "error", err)
+		return nil
+	}
+	_, binaryVersionString, found := strings.Cut(string(out), "PostgreSQL ")
+	if !found {
+		db.log.Infow("unable to detect postgres binary version in pg_config output, skipping upgrade", "pg_config", binaryVersionString)
+		return nil
+	}
+	binaryVersionMajorString, _, found := strings.Cut(binaryVersionString, ".")
+	if !found {
+		db.log.Info("unable to parse postgres binary version, skipping upgrade")
+		return nil
+	}
+	binaryVersionMajor, err := strconv.Atoi(binaryVersionMajorString)
+	if err != nil {
+		db.log.Infow("unable to parse postgres binary version to an int, skipping upgrade", "error", err)
+		return nil
+	}
+
+	if pgVersion == binaryVersionMajor {
+		db.log.Infow("no version difference, skipping upgrade", "database version", pgVersion, "binary version", binaryVersionMajor)
+		return nil
+	}
+	if pgVersion > binaryVersionMajor {
+		db.log.Infow("database is newer than postgres binary, abort", "database version", pgVersion, "binary version", binaryVersionMajor)
+		return fmt.Errorf("database is newer than postgres binary")
+	}
+
+	// OK we need to upgrade the database in place, maybe taking a backup before is recommended
+	db.log.Infow("start upgrading from", "old", pgVersion, "new", binaryVersionMajor)
+
 	return nil
 }

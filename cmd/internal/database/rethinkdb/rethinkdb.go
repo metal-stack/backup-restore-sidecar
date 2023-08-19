@@ -184,3 +184,8 @@ func (db *RethinkDB) Probe() error {
 	defer conn.Close()
 	return nil
 }
+
+// Upgrade indicates whether the database files are from a previous version of and need to be upgraded
+func (db *RethinkDB) Upgrade() error {
+	return nil
+}
