@@ -238,6 +238,19 @@ func (db *Postgres) Upgrade() error {
 
 	// run the pg_upgrade command
 
+	// mkdir /data/postgres-new
+	// initdb -D /data/postgres-new
+
+	// pg_upgrade \
+	// --old-datadir /data/postgres \
+	// --new-datadir /data/postgres \
+	// --old-bindir /usr/local/bin/pg-old \
+	// --new-bindir /usr/local/bin \
+	// --link
+
+	// rm -rf /data/postgres
+	// mv /data/postgres-new /data/postgres
+
 	return nil
 }
 
