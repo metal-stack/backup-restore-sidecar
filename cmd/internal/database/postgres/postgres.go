@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/user"
 	"path"
 	"strconv"
 	"strings"
@@ -253,25 +254,22 @@ func (db *Postgres) Upgrade() error {
 		db.log.Infow("unable to create new datadir, skipping upgrade", "error", err)
 		return nil
 	}
-	fsinfo, err := os.Stat(db.datadir)
+
+	pgUser, err := user.Lookup("postgres")
 	if err != nil {
 		return err
 	}
-	var (
-		uid int
-		gid int
-	)
-	if stat, ok := fsinfo.Sys().(*syscall.Stat_t); ok {
-		uid = int(stat.Uid)
-		gid = int(stat.Gid)
-	} else {
-		return fmt.Errorf("unable to detect owner of datadir")
-	}
-	err = os.Chown(newDataDirTemp, uid, gid)
+
+	chownCMD := exec.Command("chown", "-R", "postgres", newDataDirTemp)
+	err = chownCMD.Run()
 	if err != nil {
 		return err
 	}
 	// initdb -D /data/postgres-new
+	uid, err := strconv.Atoi(pgUser.Uid)
+	if err != nil {
+		return err
+	}
 	err = syscall.Setuid(uid)
 	if err != nil {
 		return err
