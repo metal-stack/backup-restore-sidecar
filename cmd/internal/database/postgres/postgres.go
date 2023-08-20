@@ -26,6 +26,7 @@ const (
 
 	postgresConfigCmd   = "pg_config"
 	postgresUpgradeCmd  = "pg_upgrade"
+	postgresInitDBCmd   = "initdb"
 	postgresVersionFile = "PG_VERSION"
 	oldPostgresBinDir   = "/usr/local/bin/pg-old"
 )
@@ -239,7 +240,20 @@ func (db *Postgres) Upgrade() error {
 	// run the pg_upgrade command
 
 	// mkdir /data/postgres-new
+	newDataDirTemp := path.Join("/data", "postgres-new")
+	err = os.MkdirAll(newDataDirTemp, os.ModeDir)
+	if err != nil {
+		db.log.Infow("unable to create new datadir, skipping upgrade", "error", err)
+		return nil
+	}
 	// initdb -D /data/postgres-new
+	cmd := exec.Command(postgresInitDBCmd, newDataDirTemp)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		db.log.Infow("unable to run initdb on new new datadir, skipping upgrade", "error", err)
+		return nil
+	}
+	db.log.Infow("new database director initialized", "output", string(out))
 
 	// pg_upgrade \
 	// --old-datadir /data/postgres \
@@ -247,11 +261,25 @@ func (db *Postgres) Upgrade() error {
 	// --old-bindir /usr/local/bin/pg-old \
 	// --new-bindir /usr/local/bin \
 	// --link
+	cmd = exec.Command(postgresUpgradeCmd, "--old-datadir", db.datadir, "--new-datadir", newDataDirTemp, "--old-bindir", oldPostgresBinDir, "--new-bindir", "/usr/local/bin", "--link") //nolint:gosec
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		db.log.Infow("unable to run pg_upgrade on new new datadir, abort upgrade", "error", err)
+		return nil
+	}
+	db.log.Infow("pg_ugrade done", "output", string(out))
 
 	// rm -rf /data/postgres
+	err = os.RemoveAll(db.datadir)
+	if err != nil {
+		return fmt.Errorf("unable to remove old datadir %w", err)
+	}
 	// mv /data/postgres-new /data/postgres
+	cmd = exec.Command("cp", "-a", path.Join(newDataDirTemp, "*", db.datadir)) //nolint:gosec
+	out, err = cmd.CombinedOutput()
+	db.log.Infow("pg_ugrade done and new data in place", "output", string(out))
 
-	return nil
+	return err
 }
 
 func (db *Postgres) getBinaryVersion(pgConfigCmd string) (int, error) {
