@@ -248,7 +248,7 @@ func (db *Postgres) Upgrade() error {
 
 	// mkdir /data/postgres-new
 	newDataDirTemp := path.Join("/data", "postgres-new")
-	err = os.Mkdir(newDataDirTemp, 0700)
+	err = os.MkdirAll(newDataDirTemp, 0700)
 	if err != nil {
 		db.log.Infow("unable to create new datadir, skipping upgrade", "error", err)
 		return nil
