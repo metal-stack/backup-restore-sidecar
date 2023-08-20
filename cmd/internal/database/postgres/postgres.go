@@ -296,7 +296,7 @@ func (db *Postgres) Upgrade() error {
 		db.log.Infow("unable to run pg_upgrade on new new datadir, abort upgrade", "output", out, "error", err)
 		return nil
 	}
-	db.log.Infow("pg_ugrade done", "output", string(out))
+	db.log.Infow("pg_upgrade done", "output", string(out))
 
 	// rm -rf /data/postgres
 	err = os.RemoveAll(db.datadir)
@@ -304,11 +304,15 @@ func (db *Postgres) Upgrade() error {
 		return fmt.Errorf("unable to remove old datadir %w", err)
 	}
 	// mv /data/postgres-new /data/postgres
-	cmd = exec.Command("cp", "-a", path.Join(newDataDirTemp, "*", db.datadir)) //nolint:gosec
+	cmd = exec.Command("mv", path.Join(newDataDirTemp, "*"), db.datadir) //nolint:gosec
 	out, err = cmd.CombinedOutput()
-	db.log.Infow("pg_ugrade done and new data in place", "output", string(out))
+	if err != nil {
+		return fmt.Errorf("unable to copy upgraded datadir to destination, output:%q error %w", string(out), err)
+	}
 
-	return err
+	db.log.Infow("pg_upgrade done and new data in place", "output", string(out))
+
+	return nil
 }
 
 func (db *Postgres) getBinaryVersion(pgConfigCmd string) (int, error) {
