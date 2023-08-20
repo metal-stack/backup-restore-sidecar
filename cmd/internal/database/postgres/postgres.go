@@ -272,10 +272,14 @@ func (db *Postgres) Upgrade() error {
 		return err
 	}
 	// initdb -D /data/postgres-new
-	cmd := exec.Command(postgresInitDBCmd, newDataDirTemp)
+	err = syscall.Setuid(uid)
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(postgresInitDBCmd, "-D", newDataDirTemp)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		db.log.Infow("unable to run initdb on new new datadir, skipping upgrade", "error", err)
+		db.log.Infow("unable to run initdb on new new datadir, skipping upgrade", "output", string(out), "error", err)
 		return nil
 	}
 	db.log.Infow("new database director initialized", "output", string(out))
