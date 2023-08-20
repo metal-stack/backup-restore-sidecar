@@ -10,6 +10,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
@@ -247,10 +248,28 @@ func (db *Postgres) Upgrade() error {
 
 	// mkdir /data/postgres-new
 	newDataDirTemp := path.Join("/data", "postgres-new")
-	err = os.MkdirAll(newDataDirTemp, os.ModeDir)
+	err = os.MkdirAll(newDataDirTemp, fs.ModePerm)
 	if err != nil {
 		db.log.Infow("unable to create new datadir, skipping upgrade", "error", err)
 		return nil
+	}
+	fsinfo, err := os.Stat(db.datadir)
+	if err != nil {
+		return err
+	}
+	var (
+		uid int
+		gid int
+	)
+	if stat, ok := fsinfo.Sys().(*syscall.Stat_t); ok {
+		uid = int(stat.Uid)
+		gid = int(stat.Gid)
+	} else {
+		return fmt.Errorf("unable to detect owner of datadir")
+	}
+	err = os.Chown(newDataDirTemp, uid, gid)
+	if err != nil {
+		return err
 	}
 	// initdb -D /data/postgres-new
 	cmd := exec.Command(postgresInitDBCmd, newDataDirTemp)
