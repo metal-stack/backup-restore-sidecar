@@ -307,6 +307,7 @@ func (db *Postgres) Upgrade() error {
 	cmd = exec.Command("mv", path.Join(newDataDirTemp, "*"), db.datadir) //nolint:gosec
 	out, err = cmd.CombinedOutput()
 	if err != nil {
+		// mv: can't rename '/data/postgres-new/*': No such file or
 		return fmt.Errorf("unable to copy upgraded datadir to destination, output:%q error %w", string(out), err)
 	}
 
