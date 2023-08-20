@@ -235,11 +235,13 @@ func (db *Postgres) Upgrade() error {
 	db.log.Infow("start upgrading from", "old database", pgVersion, "old binary", oldBinaryVersionMajor, "new binary", binaryVersionMajor)
 
 	// Take a backup
-	err = db.Backup()
-	if err != nil {
-		db.log.Infow("creating a backup before upgrading failed, skipping upgrade", "error", err)
-		return nil
-	}
+	// masterdata-db-0 backup-restore-sidecar {"level":"info","timestamp":"2023-08-20T12:10:44Z","logger":"postgres","caller":"postgres/postgres.go:240","msg":"creating a backup before upgrading failed, skipping upgrade","error":"error running backup command: pg_basebackup: error: connection to server at \"127.0.0.1\", port
+	// 5432 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections? exit status 1"}
+	// err = db.Backup()
+	// if err != nil {
+	// 	db.log.Infow("creating a backup before upgrading failed, skipping upgrade", "error", err)
+	// 	return nil
+	// }
 
 	// run the pg_upgrade command
 
