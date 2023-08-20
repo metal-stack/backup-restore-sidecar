@@ -245,7 +245,19 @@ func (db *Postgres) Upgrade() error {
 	// 	return nil
 	// }
 
-	// run the pg_upgrade command
+	// run the pg_upgrade command as postgres user
+	pgUser, err := user.Lookup("postgres")
+	if err != nil {
+		return err
+	}
+	uid, err := strconv.Atoi(pgUser.Uid)
+	if err != nil {
+		return err
+	}
+	err = syscall.Setuid(uid)
+	if err != nil {
+		return err
+	}
 
 	// mkdir /data/postgres-new
 	newDataDirTemp := path.Join("/data", "postgres-new")
@@ -255,25 +267,7 @@ func (db *Postgres) Upgrade() error {
 		return nil
 	}
 
-	pgUser, err := user.Lookup("postgres")
-	if err != nil {
-		return err
-	}
-
-	chownCMD := exec.Command("chown", "-R", "postgres", newDataDirTemp)
-	err = chownCMD.Run()
-	if err != nil {
-		return err
-	}
 	// initdb -D /data/postgres-new
-	uid, err := strconv.Atoi(pgUser.Uid)
-	if err != nil {
-		return err
-	}
-	err = syscall.Setuid(uid)
-	if err != nil {
-		return err
-	}
 	cmd := exec.Command(postgresInitDBCmd, "-D", newDataDirTemp)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
