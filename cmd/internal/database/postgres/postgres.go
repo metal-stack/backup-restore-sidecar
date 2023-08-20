@@ -172,7 +172,11 @@ func (db *Postgres) Upgrade() error {
 	}
 
 	// Check if pg_upgrade is present
-	if _, err := os.Stat(postgresUpgradeCmd); errors.Is(err, fs.ErrNotExist) {
+	p, err := exec.LookPath(postgresUpgradeCmd)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(p); errors.Is(err, fs.ErrNotExist) {
 		db.log.Infow("pg_upgrade is not present, skipping upgrade")
 		return nil
 	}
