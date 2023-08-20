@@ -285,6 +285,7 @@ func (db *Postgres) Upgrade() error {
 	pgUpgradeArgs := []string{"--old-datadir", db.datadir, "--new-datadir", newDataDirTemp, "--old-bindir", oldPostgresBinDir, "--new-bindir", "/usr/local/bin", "--link"}
 	db.log.Infow("running pg_upgrade with", "args", pgUpgradeArgs)
 	cmd = exec.Command(postgresUpgradeCmd, pgUpgradeArgs...) //nolint:gosec
+	cmd.Dir = "/data"
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		db.log.Infow("unable to run pg_upgrade on new new datadir, abort upgrade", "output", out, "error", err)
