@@ -80,7 +80,7 @@ func (db *Postgres) Upgrade() error {
 		return fmt.Errorf("database is newer than postgres binary")
 	}
 
-	oldPostgresBindir := fmt.Sprintf("pg-bin-v%d", pgVersion)
+	oldPostgresBindir := path.Join(db.datadir, fmt.Sprintf("pg-bin-v%d", pgVersion))
 
 	// Check if old pg_config are present and match pgVersion
 	oldPostgresConfigCmd := path.Join(oldPostgresBindir, postgresConfigCmd)
