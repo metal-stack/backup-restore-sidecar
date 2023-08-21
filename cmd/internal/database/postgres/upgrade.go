@@ -22,7 +22,6 @@ const (
 	postgresUpgradeCmd  = "pg_upgrade"
 	postgresInitDBCmd   = "initdb"
 	postgresVersionFile = "PG_VERSION"
-	oldPostgresBindir   = "/usr/local/bin/pg-old"
 )
 
 var (
@@ -80,6 +79,8 @@ func (db *Postgres) Upgrade() error {
 		db.log.Infow("database is newer than postgres binary, abort", "database version", pgVersion, "binary version", binaryVersionMajor)
 		return fmt.Errorf("database is newer than postgres binary")
 	}
+
+	oldPostgresBindir := fmt.Sprintf("pg-bin-v%d", pgVersion)
 
 	// Check if old pg_config are present and match pgVersion
 	oldPostgresConfigCmd := path.Join(oldPostgresBindir, postgresConfigCmd)
