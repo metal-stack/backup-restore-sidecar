@@ -266,11 +266,6 @@ func (db *Postgres) Upgrade() error {
 		db.log.Infow("unable to remove new datadir, skipping upgrade", "error", err)
 		return nil
 	}
-	err = os.MkdirAll(newDataDirTemp, 0700)
-	if err != nil {
-		db.log.Infow("unable to create new datadir, skipping upgrade", "error", err)
-		return nil
-	}
 
 	// initdb -D /data/postgres-new
 	cmd := exec.Command(postgresInitDBCmd, "-D", newDataDirTemp)
@@ -287,7 +282,13 @@ func (db *Postgres) Upgrade() error {
 	// --old-bindir /usr/local/bin/pg-old \
 	// --new-bindir /usr/local/bin \
 	// --link
-	pgUpgradeArgs := []string{"--old-datadir", db.datadir, "--new-datadir", newDataDirTemp, "--old-bindir", oldPostgresBinDir, "--new-bindir", "/usr/local/bin", "--link"}
+	pgUpgradeArgs := []string{
+		"--old-datadir", db.datadir,
+		"--new-datadir", newDataDirTemp,
+		"--old-bindir", oldPostgresBinDir,
+		"--new-bindir", "/usr/local/bin",
+		"--link",
+	}
 	db.log.Infow("running pg_upgrade with", "args", pgUpgradeArgs)
 	cmd = exec.Command(postgresUpgradeCmd, pgUpgradeArgs...) //nolint:gosec
 	cmd.Dir = "/data"
@@ -303,12 +304,10 @@ func (db *Postgres) Upgrade() error {
 	if err != nil {
 		return fmt.Errorf("unable to remove old datadir %w", err)
 	}
-	// mv /data/postgres-new /data/postgres
-	cmd = exec.Command("mv", path.Join(newDataDirTemp, "*"), db.datadir) //nolint:gosec
-	out, err = cmd.CombinedOutput()
+
+	err = os.Rename(newDataDirTemp, db.datadir)
 	if err != nil {
-		// mv: can't rename '/data/postgres-new/*': No such file or
-		return fmt.Errorf("unable to copy upgraded datadir to destination, output:%q error %w", string(out), err)
+		return fmt.Errorf("unable to rename upgraded datadir to destination, output:%q error %w", string(out), err)
 	}
 
 	db.log.Infow("pg_upgrade done and new data in place", "output", string(out))
