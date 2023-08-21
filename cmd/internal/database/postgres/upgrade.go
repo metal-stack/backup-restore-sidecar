@@ -202,9 +202,9 @@ func (db *Postgres) getBinaryVersion(pgConfigCmd string) (int, error) {
 	if !found {
 		return 0, fmt.Errorf("unable to detect postgres binary version in pg_config output, skipping upgrade, output:%q", binaryVersionString)
 	}
-	v, err := semver.NewVersion(binaryVersionString)
+	v, err := semver.NewVersion(strings.TrimSpace(binaryVersionString))
 	if err != nil {
-		return 0, fmt.Errorf("unable to parse postgres binary version %w", err)
+		return 0, fmt.Errorf("unable to parse postgres binary version in %q %w", binaryVersionString, err)
 	}
 	return int(v.Major()), nil
 }
