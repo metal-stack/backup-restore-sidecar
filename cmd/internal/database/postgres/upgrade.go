@@ -23,7 +23,9 @@ const (
 	oldPostgresBindir   = "/usr/local/bin/pg-old"
 )
 
-// Upgrade indicates whether the database files are from a previous version of and need to be upgraded
+// Upgrade indicates whether the database files are from a previous version of and need to be upgraded.
+// If any preconditions are not met, no error is returned, a info log entry is created with the reason.
+// Once the upgrade was made, any error condition will require to recover the database from backup.
 func (db *Postgres) Upgrade() error {
 	start := time.Now()
 	// First check if there are data already present
@@ -141,12 +143,6 @@ func (db *Postgres) Upgrade() error {
 		return fmt.Errorf("unable to detect bindir of actual postgres %w", err)
 	}
 
-	// pg_upgrade \
-	// --old-datadir /data/postgres \
-	// --new-datadir /data/postgres-new \
-	// --old-bindir /usr/local/bin/pg-old \
-	// --new-bindir /usr/local/bin \
-	// --link
 	pgUpgradeArgs := []string{
 		"--old-datadir", db.datadir,
 		"--new-datadir", newDataDirTemp,
