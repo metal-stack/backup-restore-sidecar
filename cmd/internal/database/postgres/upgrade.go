@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -146,6 +147,11 @@ func (db *Postgres) Upgrade() error {
 		return err
 	}
 
+	err = db.restoreOldPostgresBinaries(db.datadir, newDataDirTemp)
+	if err != nil {
+		return err
+	}
+
 	newPostgresBindir, err := db.getBindir(postgresConfigCmd)
 	if err != nil {
 		return fmt.Errorf("unable to detect bindir of actual postgres %w", err)
@@ -271,4 +277,26 @@ func (db *Postgres) copyPostgresBinaries() error {
 		return fmt.Errorf("unable to copy pgbindir %w", err)
 	}
 	return nil
+}
+
+func (db *Postgres) restoreOldPostgresBinaries(src, dst string) error {
+	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !strings.HasPrefix(d.Name(), "pg-bin-v") {
+			return nil
+		}
+		db.log.Infow("copying postgres binaries from old datadir to new datadir", "from", path, "to", dst)
+		copy := exec.Command("cp", "-av", path, dst)
+		copy.Stdout = os.Stdout
+		copy.Stderr = os.Stderr
+		err = copy.Run()
+		if err != nil {
+			return fmt.Errorf("unable to copy pgbindir %w", err)
+		}
+
+		return nil
+	})
+	return err
 }
