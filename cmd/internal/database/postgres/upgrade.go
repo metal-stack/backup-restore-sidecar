@@ -37,6 +37,12 @@ var (
 // Once the upgrade was made, any error condition will require to recover the database from backup.
 func (db *Postgres) Upgrade() error {
 	start := time.Now()
+
+	err := db.copyPostgresBinaries()
+	if err != nil {
+		return err
+	}
+
 	// First check if there are data already present
 	pgVersionFile := path.Join(db.datadir, postgresVersionFile)
 	if _, err := os.Stat(pgVersionFile); errors.Is(err, fs.ErrNotExist) {
@@ -235,4 +241,32 @@ func (db *Postgres) getBindir(pgConfigCmd string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+func (db *Postgres) copyPostgresBinaries() error {
+	bindir, err := db.getBindir(postgresConfigCmd)
+	if err != nil {
+		return err
+	}
+
+	version, err := db.getBinaryVersion(postgresConfigCmd)
+	if err != nil {
+		return err
+	}
+
+	pgbindir := path.Join(db.datadir, fmt.Sprintf("pg-bin-v%d", version))
+
+	err = os.RemoveAll(pgbindir)
+	if err != nil {
+		return fmt.Errorf("unable to remove old pgbindir %w", err)
+	}
+
+	copy := exec.Command("cp", "-a", bindir, pgbindir)
+	copy.Stdout = os.Stdout
+	copy.Stderr = os.Stderr
+	err = copy.Run()
+	if err != nil {
+		return fmt.Errorf("unable to copy pgbindir %w", err)
+	}
+	return nil
 }
