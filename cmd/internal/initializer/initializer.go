@@ -115,11 +115,6 @@ func (i *Initializer) initialize() error {
 		return fmt.Errorf("unable to check data of database: %w", err)
 	}
 
-	err = i.db.Upgrade()
-	if err != nil {
-		return err
-	}
-
 	if !needsBackup {
 		i.log.Info("database does not need to be restored")
 		return nil
@@ -141,6 +136,11 @@ func (i *Initializer) initialize() error {
 	err = i.Restore(latestBackup)
 	if err != nil {
 		return fmt.Errorf("unable to restore database: %w", err)
+	}
+
+	err = i.db.Upgrade()
+	if err != nil {
+		return err
 	}
 
 	return nil

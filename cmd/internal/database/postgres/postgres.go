@@ -220,7 +220,7 @@ func (db *Postgres) Upgrade() error {
 	// Check if old pg binaries are present and match pgVersion
 	oldPGConfigCmd := path.Join(oldPostgresBinDir, postgresConfigCmd)
 	if _, err := os.Stat(oldPGConfigCmd); errors.Is(err, fs.ErrNotExist) {
-		db.log.Infow("pg_config of old version not present, skipping upgrade")
+		db.log.Infow("old pg binaries are not present, skipping upgrade")
 		return nil
 	}
 
@@ -238,25 +238,12 @@ func (db *Postgres) Upgrade() error {
 	// OK we need to upgrade the database in place, maybe taking a backup before is recommended
 	db.log.Infow("start upgrading from", "old database", pgVersion, "old binary", oldBinaryVersionMajor, "new binary", binaryVersionMajor)
 
-	// Take a backup
-	// masterdata-db-0 backup-restore-sidecar {"level":"info","timestamp":"2023-08-20T12:10:44Z","logger":"postgres","caller":"postgres/postgres.go:240","msg":"creating a backup before upgrading failed, skipping upgrade","error":"error running backup command: pg_basebackup: error: connection to server at \"127.0.0.1\", port
-	// 5432 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections? exit status 1"}
-	// err = db.Backup()
-	// if err != nil {
-	// 	db.log.Infow("creating a backup before upgrading failed, skipping upgrade", "error", err)
-	// 	return nil
-	// }
-
 	// run the pg_upgrade command as postgres user
 	pgUser, err := user.Lookup("postgres")
 	if err != nil {
 		return err
 	}
 	uid, err := strconv.Atoi(pgUser.Uid)
-	if err != nil {
-		return err
-	}
-	err = syscall.Setuid(uid)
 	if err != nil {
 		return err
 	}
@@ -273,9 +260,12 @@ func (db *Postgres) Upgrade() error {
 	cmd := exec.Command(postgresInitDBCmd, "-D", newDataDirTemp)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Credential: &syscall.Credential{Uid: uint32(uid)},
+	}
 	err = cmd.Run()
 	if err != nil {
-		db.log.Infow("unable to run initdb on new new datadir, skipping upgrade", "error", err)
+		db.log.Errorw("unable to run initdb on new new datadir, skipping upgrade", "error", err)
 		return nil
 	}
 	db.log.Infow("new database directory initialized")
@@ -307,11 +297,14 @@ func (db *Postgres) Upgrade() error {
 	cmd = exec.Command(postgresUpgradeCmd, pgUpgradeArgs...) //nolint:gosec
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Credential: &syscall.Credential{Uid: uint32(uid)},
+	}
 	cmd.Dir = "/data"
 	err = cmd.Run()
 	if err != nil {
-		db.log.Infow("unable to run pg_upgrade on new new datadir, abort upgrade", "error", err)
-		return nil
+		db.log.Errorw("unable to run pg_upgrade on new new datadir, abort upgrade", "error", err)
+		return fmt.Errorf("unable to run pg_upgrade %w", err)
 	}
 	db.log.Infow("pg_upgrade done")
 
@@ -323,7 +316,7 @@ func (db *Postgres) Upgrade() error {
 
 	err = os.Rename(newDataDirTemp, db.datadir)
 	if err != nil {
-		return fmt.Errorf("unable to rename upgraded datadir to destination error %w", err)
+		return fmt.Errorf("unable to rename upgraded datadir to destination, a full restore is required, error %w", err)
 	}
 
 	db.log.Infow("pg_upgrade done and new data in place", "took", time.Since(start))
