@@ -31,7 +31,8 @@ var (
 
 // Upgrade performs an upgrade of the database in case a newer version of the database is detected.
 //
-// The function aborts the update without returning an error as long as the old data stays unmodified and only prints out the error to console. This behavior is intended to reduce unnecessary downtime caused by misconfigurations.
+// The function aborts the update without returning an error as long as the old data stays unmodified and only prints out the error to console.
+// This behavior is intended to reduce unnecessary downtime caused by misconfigurations.
 // If any preconditions are not met, no error is returned, a info log entry is created with the reason.
 // Once the upgrade was made, any error condition will require to recover the database from backup.
 func (db *Postgres) Upgrade() error {
