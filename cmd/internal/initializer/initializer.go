@@ -88,7 +88,12 @@ func (i *Initializer) Start(stop <-chan struct{}) {
 
 	err = i.initialize()
 	if err != nil {
-		i.log.Fatal(fmt.Errorf("error initializing database, shutting down:%w", err))
+		i.log.Fatalw("error initializing database, shutting down", "error", err)
+	}
+
+	err = i.db.Upgrade()
+	if err != nil {
+		i.log.Fatalw("ugrade database failed", "error", err)
 	}
 
 	i.log.Info("initializer done")
@@ -136,11 +141,6 @@ func (i *Initializer) initialize() error {
 	err = i.Restore(latestBackup)
 	if err != nil {
 		return fmt.Errorf("unable to restore database: %w", err)
-	}
-
-	err = i.db.Upgrade()
-	if err != nil {
-		return err
 	}
 
 	return nil
