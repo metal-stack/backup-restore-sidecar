@@ -259,7 +259,7 @@ func (db *Postgres) Upgrade() error {
 		return err
 	}
 
-	// mkdir /data/postgres-new
+	// remove /data/postgres-new if present
 	newDataDirTemp := path.Join("/data", "postgres-new")
 	err = os.RemoveAll(newDataDirTemp)
 	if err != nil {
@@ -269,12 +269,14 @@ func (db *Postgres) Upgrade() error {
 
 	// initdb -D /data/postgres-new
 	cmd := exec.Command(postgresInitDBCmd, "-D", newDataDirTemp)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		db.log.Infow("unable to run initdb on new new datadir, skipping upgrade", "output", string(out), "error", err)
+		db.log.Infow("unable to run initdb on new new datadir, skipping upgrade", "error", err)
 		return nil
 	}
-	db.log.Infow("new database director initialized", "output", string(out))
+	db.log.Infow("new database directory initialized", "output", string(out))
 
 	// restore old pg_hba.conf
 	pgHBAConf, err := os.ReadFile(path.Join(db.datadir, "pg_hba.conf"))
@@ -301,10 +303,12 @@ func (db *Postgres) Upgrade() error {
 	}
 	db.log.Infow("running pg_upgrade with", "args", pgUpgradeArgs)
 	cmd = exec.Command(postgresUpgradeCmd, pgUpgradeArgs...) //nolint:gosec
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	cmd.Dir = "/data"
 	out, err = cmd.CombinedOutput()
 	if err != nil {
-		db.log.Infow("unable to run pg_upgrade on new new datadir, abort upgrade", "output", out, "error", err)
+		db.log.Infow("unable to run pg_upgrade on new new datadir, abort upgrade", "error", err)
 		return nil
 	}
 	db.log.Infow("pg_upgrade done", "output", string(out))
