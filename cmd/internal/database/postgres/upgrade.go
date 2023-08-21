@@ -25,6 +25,10 @@ const (
 	oldPostgresBindir   = "/usr/local/bin/pg-old"
 )
 
+var (
+	requiredCommands = []string{postgresUpgradeCmd, postgresConfigCmd, postgresInitDBCmd}
+)
+
 // Upgrade indicates whether the database files are from a previous version of and need to be upgraded.
 // If any preconditions are not met, no error is returned, a info log entry is created with the reason.
 // Once the upgrade was made, any error condition will require to recover the database from backup.
@@ -37,20 +41,12 @@ func (db *Postgres) Upgrade() error {
 		return nil
 	}
 
-	// Check if pg_upgrade is present
-	if ok := db.isCommandPresent(postgresUpgradeCmd); !ok {
-		db.log.Infof("%q is not present, skipping upgrade", postgresUpgradeCmd)
-		return nil
-	}
-	// Check if pg_config is present
-	if ok := db.isCommandPresent(postgresConfigCmd); !ok {
-		db.log.Infof("%q is not present, skipping upgrade", postgresConfigCmd)
-		return nil
-	}
-	// Check if initdb is present
-	if ok := db.isCommandPresent(postgresInitDBCmd); !ok {
-		db.log.Infof("%q is not present, skipping upgrade", postgresInitDBCmd)
-		return nil
+	// Check if required commands are present
+	for _, command := range requiredCommands {
+		if ok := db.isCommandPresent(command); !ok {
+			db.log.Infof("%q is not present, skipping upgrade", command)
+			return nil
+		}
 	}
 
 	// Then check the version of the existing database
