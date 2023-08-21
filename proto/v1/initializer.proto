@@ -15,6 +15,7 @@ message StatusResponse {
     CHECKING = 0;
     RESTORING = 1;
     DONE = 2;
+    UPGRADING = 3;
   }
   InitializerStatus status = 1;
   string message = 2;

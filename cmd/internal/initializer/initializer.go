@@ -91,9 +91,10 @@ func (i *Initializer) Start(stop <-chan struct{}) {
 		i.log.Fatalw("error initializing database, shutting down", "error", err)
 	}
 
+	i.currentStatus.Status = v1.StatusResponse_UPGRADING
 	err = i.db.Upgrade()
 	if err != nil {
-		i.log.Fatalw("ugrade database failed", "error", err)
+		i.log.Fatalw("upgrade database failed", "error", err)
 	}
 
 	i.log.Info("initializer done")
