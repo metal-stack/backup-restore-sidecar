@@ -261,7 +261,8 @@ func (db *Postgres) copyPostgresBinaries() error {
 		return fmt.Errorf("unable to remove old pgbindir %w", err)
 	}
 
-	copy := exec.Command("cp", "-a", bindir, pgbindir)
+	db.log.Infow("copying postgres binaries for later upgrades", "from", bindir, "to", pgbindir)
+	copy := exec.Command("cp", "-av", bindir, pgbindir)
 	copy.Stdout = os.Stdout
 	copy.Stderr = os.Stderr
 	err = copy.Run()
