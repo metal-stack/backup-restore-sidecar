@@ -12,6 +12,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/Masterminds/semver/v3"
 )
 
 const (
@@ -195,15 +197,11 @@ func (db *Postgres) getBinaryVersion(pgConfigCmd string) (int, error) {
 	if !found {
 		return 0, fmt.Errorf("unable to detect postgres binary version in pg_config output, skipping upgrade, output:%q", binaryVersionString)
 	}
-	binaryVersionMajorString, _, found := strings.Cut(binaryVersionString, ".")
-	if !found {
-		return 0, fmt.Errorf("unable to parse postgres binary version, skipping upgrade")
-	}
-	binaryVersionMajor, err := strconv.Atoi(binaryVersionMajorString)
+	v, err := semver.NewVersion(binaryVersionString)
 	if err != nil {
-		return 0, fmt.Errorf("unable to parse postgres binary version to an int, skipping upgrade %w", err)
+		return 0, fmt.Errorf("unable to parse postgres binary version %w", err)
 	}
-	return binaryVersionMajor, nil
+	return int(v.Major()), nil
 }
 
 func (db *Postgres) getDatabaseVersion(pgVersionFile string) (int, error) {
