@@ -173,6 +173,8 @@ func (db *Postgres) Upgrade() error {
 		return nil
 	}
 
+	start := time.Now()
+
 	// Check if pg_upgrade is present
 	p, err := exec.LookPath(postgresUpgradeCmd)
 	if err != nil {
@@ -321,10 +323,10 @@ func (db *Postgres) Upgrade() error {
 
 	err = os.Rename(newDataDirTemp, db.datadir)
 	if err != nil {
-		return fmt.Errorf("unable to rename upgraded datadir to destination, output:%q error %w", string(out), err)
+		return fmt.Errorf("unable to rename upgraded datadir to destination error %w", err)
 	}
 
-	db.log.Infow("pg_upgrade done and new data in place", "output", string(out))
+	db.log.Infow("pg_upgrade done and new data in place", "took", time.Since(start))
 
 	return nil
 }
