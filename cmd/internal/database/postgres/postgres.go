@@ -276,6 +276,16 @@ func (db *Postgres) Upgrade() error {
 	}
 	db.log.Infow("new database director initialized", "output", string(out))
 
+	// restore old pg_hba.conf
+	pgHBAConf, err := os.ReadFile(path.Join(db.datadir, "pg_hba.conf"))
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(path.Join(newDataDirTemp, "pg_hba.conf"), pgHBAConf, 0600)
+	if err != nil {
+		return err
+	}
+
 	// pg_upgrade \
 	// --old-datadir /data/postgres \
 	// --new-datadir /data/postgres-new \
