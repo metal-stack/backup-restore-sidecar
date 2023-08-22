@@ -137,12 +137,12 @@ func (db *Postgres) Recover() error {
 
 	db.log.Debugw("restored postgres pg_wal backup", "output", out)
 
-	db.log.Infow("successfully restored postgres database")
+	db.log.Info("successfully restored postgres database")
 
 	return nil
 }
 
-// Probe indicates whether the database is running
+// Probe figures out if the database is running and available for taking backups.
 func (db *Postgres) Probe() error {
 	conn, err := net.DialTimeout("tcp", net.JoinHostPort(db.host, strconv.Itoa(db.port)), connectionTimeout)
 	if err != nil {

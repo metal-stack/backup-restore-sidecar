@@ -5,7 +5,7 @@ managed:
     default: github.com/metal-stack/droptailer/api
 plugins:
   # generate go structs for protocol buffer definition
-  - plugin: buf.build/protocolbuffers/go:v1.28.1
+  - plugin: buf.build/protocolbuffers/go:v1.31.0
     out: ../api
     opt: paths=source_relative
   - plugin: buf.build/grpc/go:v1.3.0

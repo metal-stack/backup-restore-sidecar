@@ -127,12 +127,17 @@ func (db *Etcd) Recover() error {
 	return nil
 }
 
-// Probe indicates whether the database is running
+// Probe figures out if the database is running and available for taking backups.
 func (db *Etcd) Probe() error {
 	out, err := db.etcdctl(true, "get", "foo")
 	if err != nil {
 		return fmt.Errorf("unable to retrieve key:%s %w", out, err)
 	}
+	return nil
+}
+
+// Upgrade performs an upgrade of the database in case a newer version of the database is detected.
+func (db *Etcd) Upgrade() error {
 	return nil
 }
 
