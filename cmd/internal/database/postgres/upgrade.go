@@ -19,6 +19,7 @@ import (
 
 const (
 	postgresHBAConf     = "pg_hba.conf"
+	postgresqlConf      = "postgresql.conf"
 	postgresConfigCmd   = "pg_config"
 	postgresUpgradeCmd  = "pg_upgrade"
 	postgresInitDBCmd   = "initdb"
@@ -137,14 +138,17 @@ func (db *Postgres) Upgrade() error {
 	}
 	db.log.Infow("new database directory initialized")
 
-	// restore old pg_hba.conf
-	pgHBAConf, err := os.ReadFile(path.Join(db.datadir, postgresHBAConf))
-	if err != nil {
-		return err
-	}
-	err = os.WriteFile(path.Join(newDataDirTemp, postgresHBAConf), pgHBAConf, 0600)
-	if err != nil {
-		return err
+	// restore old pg_hba.conf and postgresql.conf
+	for _, config := range []string{postgresHBAConf, postgresqlConf} {
+		db.log.Infow("restore old configuration into new datadir", "config", config)
+		cfg, err := os.ReadFile(path.Join(db.datadir, config))
+		if err != nil {
+			return err
+		}
+		err = os.WriteFile(path.Join(newDataDirTemp, config), cfg, 0600)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = db.restoreOldPostgresBinaries(db.datadir, newDataDirTemp)
