@@ -8,11 +8,11 @@ Probably, it does not make sense to use this project with large databases. Howev
 
 ## Supported Databases
 
-| Database  | Image     | Status |
-| --------- | --------- | ------ |
-| postgres  | 12-alpine | alpha  |
-| rethinkdb | >= 2.4.0  | alpha  |
-| ETCD      | >= 3.5    | alpha  |
+| Database  | Image        | Status | Upgrade Support |
+|-----------|--------------|--------|-----------------|
+| postgres  | >= 12-alpine | beta   | yes             |
+| rethinkdb | >= 2.4.0     | beta   | no              |
+| ETCD      | >= 3.5       | alpha  | no              |
 
 ## Database upgrades
 
@@ -28,10 +28,10 @@ To achieve this, `backup-restore-sidecar` saves the postgres binaries in the dat
 
 With `--compression-method` you can define how generated backups are compressed before stored at the storage provider. Available compression methods are:
 
-| compression-method | suffix   | comments |
-| ------------------ | -------- | -------- |
-| tar                | .tar     | no compression, best suited for already compressed content |
-| targz              | .tar.gz  | tar and gzip, most commonly used, best compression ratio, average performance |
+| compression-method | suffix   | comments                                                                                     |
+|--------------------|----------|----------------------------------------------------------------------------------------------|
+| tar                | .tar     | no compression, best suited for already compressed content                                   |
+| targz              | .tar.gz  | tar and gzip, most commonly used, best compression ratio, average performance                |
 | tarlz4             | .tar.lz4 | tar and lz4, very fast compression/decompression speed compared to gz, slightly bigger files |
 
 ## Supported Storage Providers
