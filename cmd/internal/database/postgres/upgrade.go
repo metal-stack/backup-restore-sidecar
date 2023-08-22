@@ -18,12 +18,13 @@ import (
 )
 
 const (
-	postgresHBAConf     = "pg_hba.conf"
-	postgresqlConf      = "postgresql.conf"
-	postgresConfigCmd   = "pg_config"
-	postgresUpgradeCmd  = "pg_upgrade"
-	postgresInitDBCmd   = "initdb"
-	postgresVersionFile = "PG_VERSION"
+	postgresHBAConf         = "pg_hba.conf"
+	postgresqlConf          = "postgresql.conf"
+	postgresConfigCmd       = "pg_config"
+	postgresUpgradeCmd      = "pg_upgrade"
+	postgresInitDBCmd       = "initdb"
+	postgresVersionFile     = "PG_VERSION"
+	postgresBinBackupPrefix = "pg-bin-v"
 )
 
 var (
@@ -77,7 +78,7 @@ func (db *Postgres) Upgrade() error {
 		return fmt.Errorf("database is newer than postgres binary")
 	}
 
-	oldPostgresBinDir := path.Join(db.datadir, fmt.Sprintf("pg-bin-v%d", pgVersion))
+	oldPostgresBinDir := path.Join(db.datadir, fmt.Sprintf("%s%d", postgresBinBackupPrefix, pgVersion))
 
 	// Check if old pg_config are present and match pgVersion
 	oldPostgresConfigCmd := path.Join(oldPostgresBinDir, postgresConfigCmd)
@@ -273,7 +274,7 @@ func (db *Postgres) copyPostgresBinaries() error {
 		return err
 	}
 
-	pgBinDir := path.Join(db.datadir, fmt.Sprintf("pg-bin-v%d", version))
+	pgBinDir := path.Join(db.datadir, fmt.Sprintf("%s%d", postgresBinBackupPrefix, version))
 
 	err = os.RemoveAll(pgBinDir)
 	if err != nil {
@@ -298,7 +299,7 @@ func (db *Postgres) restoreOldPostgresBinaries(src, dst string) error {
 			return err
 		}
 
-		if !strings.HasPrefix(d.Name(), "pg-bin-v") {
+		if !strings.HasPrefix(d.Name(), postgresBinBackupPrefix) {
 			return nil
 		}
 
