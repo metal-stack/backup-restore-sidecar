@@ -1,6 +1,7 @@
 package initializer
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -30,24 +31,26 @@ type Initializer struct {
 	db            database.Database
 	bp            providers.BackupProvider
 	comp          *compress.Compressor
+	dbDataDir     string
 }
 
-func New(log *zap.SugaredLogger, addr string, db database.Database, bp providers.BackupProvider, comp *compress.Compressor) *Initializer {
+func New(log *zap.SugaredLogger, addr string, db database.Database, bp providers.BackupProvider, comp *compress.Compressor, dbDataDir string) *Initializer {
 	return &Initializer{
 		currentStatus: &v1.StatusResponse{
 			Status:  v1.StatusResponse_CHECKING,
 			Message: "starting initializer server",
 		},
-		log:  log,
-		addr: addr,
-		db:   db,
-		bp:   bp,
-		comp: comp,
+		log:       log,
+		addr:      addr,
+		db:        db,
+		bp:        bp,
+		comp:      comp,
+		dbDataDir: dbDataDir,
 	}
 }
 
 // Start starts the initializer, which includes a server component and the initializer itself, which is potentially restoring a backup
-func (i *Initializer) Start(stop <-chan struct{}) {
+func (i *Initializer) Start(ctx context.Context) {
 	opts := []grpc.ServerOption{
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
 			grpc_ctxtags.StreamServerInterceptor(),
@@ -75,7 +78,7 @@ func (i *Initializer) Start(stop <-chan struct{}) {
 	}
 
 	go func() {
-		<-stop
+		<-ctx.Done()
 		i.log.Info("received stop signal, shutting down")
 		grpcServer.Stop()
 	}()
@@ -99,9 +102,15 @@ func (i *Initializer) Start(stop <-chan struct{}) {
 func (i *Initializer) initialize() error {
 	i.log.Info("start running initializer")
 
+	i.log.Info("ensuring database data directory")
+	err := os.MkdirAll(i.dbDataDir, 0755)
+	if err != nil {
+		return fmt.Errorf("unable to ensure database data directory: %w", err)
+	}
+
 	i.log.Info("ensuring backup bucket")
 	i.currentStatus.Message = "ensuring backup bucket"
-	err := i.bp.EnsureBackupBucket()
+	err = i.bp.EnsureBackupBucket()
 	if err != nil {
 		return fmt.Errorf("unable to ensure backup bucket: %w", err)
 	}

@@ -20,13 +20,8 @@ spec:
       - image: rethinkdb:2.4.0
         name: rethinkdb
         command:
-        - tini
-        - --
-        args:
-        - sh
-        - -c
-        # IMPORTANT: the --directory needs to point to the exact sidecar data dir, otherwise the database will be restored to the wrong location
-        - backup-restore-sidecar wait && rethinkdb --bind all --directory /data/rethinkdb --initial-password ${RETHINKDB_PASSWORD}
+        - backup-restore-sidecar
+        - wait
         env:
         - name: RETHINKDB_PASSWORD
           valueFrom:
@@ -44,18 +39,12 @@ spec:
           mountPath: /usr/local/bin/backup-restore-sidecar
         - name: backup-restore-sidecar-config
           mountPath: /etc/backup-restore-sidecar
-        - name: bin-provision
-          subPath: tini
-          mountPath: /usr/local/bin/tini
       - image: rethinkdb:2.4.0
         name: backup-restore-sidecar
         command:
-        - tini
-        - --
-        args:
-        - sh
-        - -c
-        - mkdir -p /data/rethinkdb && backup-restore-sidecar start --log-level debug
+        - backup-restore-sidecar
+        - start
+        - --log-level=debug
         env:
         - name: BACKUP_RESTORE_SIDECAR_GCP_PROJECT
           valueFrom:
@@ -85,9 +74,6 @@ spec:
           subPath: backup-restore-sidecar
           mountPath: /usr/local/bin/backup-restore-sidecar
         - name: bin-provision
-          subPath: tini
-          mountPath: /usr/local/bin/tini
-        - name: bin-provision
           subPath: rethinkdb-dump
           mountPath: /usr/local/bin/rethinkdb-dump
         - name: bin-provision
@@ -103,7 +89,6 @@ spec:
         command:
         - cp
         - /backup-restore-sidecar
-        - /ubuntu/tini
         - /rethinkdb/rethinkdb-dump
         - /rethinkdb/rethinkdb-restore
         - /bin-provision
@@ -155,6 +140,9 @@ data:
     rethinkdb-passwordfile: /rethinkdb-secret/rethinkdb-password.txt
     backup-cron-schedule: "*/1 * * * *"
     object-prefix: rethinkdb-test
+    post-exec-cmds:
+      # IMPORTANT: the --directory needs to point to the exact sidecar data dir, otherwise the database will be restored to the wrong location
+      - rethinkdb --bind all --directory /data/rethinkdb --initial-password ${RETHINKDB_PASSWORD}
 ---
 apiVersion: v1
 kind: Secret

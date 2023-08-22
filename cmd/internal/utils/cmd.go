@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -44,4 +45,21 @@ func runCommandWithOutput(cmd *exec.Cmd, combinedOutput bool) (string, error) {
 	out := strings.TrimSpace(string(output))
 
 	return out, err
+}
+
+func (c *CmdExecutor) ExecWithStreamingOutput(ctx context.Context, command string) error {
+	command = os.ExpandEnv(command)
+
+	parts := strings.Split(command, " ")
+
+	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...) // nolint:gosec
+
+	c.log.Debugw("running command", "command", cmd.Path, "args", cmd.Args)
+
+	cmd.Env = os.Environ()
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stdout
+
+	return cmd.Run()
 }

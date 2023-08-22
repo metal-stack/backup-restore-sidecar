@@ -1,6 +1,7 @@
 package rethinkdb
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -40,11 +41,13 @@ type RethinkDB struct {
 	passwordFile string
 	log          *zap.SugaredLogger
 	executor     *utils.CmdExecutor
+	ctx          context.Context
 }
 
 // New instantiates a new rethinkdb database
-func New(log *zap.SugaredLogger, datadir string, url string, passwordFile string) *RethinkDB {
+func New(ctx context.Context, log *zap.SugaredLogger, datadir string, url string, passwordFile string) *RethinkDB {
 	return &RethinkDB{
+		ctx:          ctx,
 		log:          log,
 		datadir:      datadir,
 		url:          url,
@@ -125,13 +128,18 @@ func (db *RethinkDB) Recover() error {
 	}()
 
 	db.log.Infow("waiting for rethinkdb database to come up")
-	restoreDB := New(db.log, db.datadir, "localhost:1", "")
-	stop := make(chan struct{})
+
+	restoreDB := New(db.ctx, db.log, db.datadir, "localhost:1", "")
+
 	done := make(chan bool)
 	defer close(done)
+
+	probeCtx, probeCancel := context.WithTimeout(context.Background(), restoreDatabaseStartupTimeout)
+	defer probeCancel()
+
 	var err error
 	go func() {
-		err = probe.Start(restoreDB.log, restoreDB, stop)
+		err = probe.Start(probeCtx, restoreDB.log, restoreDB)
 		done <- true
 	}()
 	select {
@@ -140,8 +148,7 @@ func (db *RethinkDB) Recover() error {
 			return fmt.Errorf("error while probing: %w", err)
 		}
 		db.log.Infow("rethinkdb in sidecar is now available, now triggering restore commands...")
-	case <-time.After(restoreDatabaseStartupTimeout):
-		close(stop)
+	case <-probeCtx.Done():
 		return errors.New("rethinkdb database did not come up in time")
 	}
 

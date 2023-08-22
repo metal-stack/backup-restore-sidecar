@@ -20,12 +20,9 @@ spec:
       - image: postgres:12-alpine
         name: backup-restore-sidecar
         command:
-        - tini
-        - --
-        args:
-        - sh
-        - -c
-        - mkdir -p /data/postgres && tail -f /etc/os-release
+        - tail
+        - -f
+        - /etc/os-release
         env:
         - name: BACKUP_RESTORE_SIDECAR_GCP_PROJECT
           valueFrom:
@@ -62,9 +59,6 @@ spec:
           mountPath: /usr/local/bin/backup-restore-sidecar
         - name: backup-restore-sidecar-config
           mountPath: /etc/backup-restore-sidecar
-        - name: bin-provision
-          subPath: tini
-          mountPath: /usr/local/bin/tini
         - name: gcp-credentials
           mountPath: /gcp/credentials
           readOnly: true
@@ -75,7 +69,6 @@ spec:
         command:
         - cp
         - /backup-restore-sidecar
-        - /sbin/tini
         - /bin-provision
         volumeMounts:
         - name: bin-provision
