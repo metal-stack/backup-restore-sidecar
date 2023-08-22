@@ -14,7 +14,7 @@ Probably, it does not make sense to use this project with large databases. Howev
 | rethinkdb | >= 2.4.0     | beta   | no              |
 | ETCD      | >= 3.5       | alpha  | no              |
 
-## Database upgrades
+## Database Upgrades
 
 ### Postgres
 
@@ -42,7 +42,7 @@ With `--compression-method` you can define how generated backups are compressed 
 
 ## How it works
 
-![Sequence Diagram](docs/sequence.png)
+![Sequence Diagram](docs/sequence.drawio.svg)
 
 ## Limitations
 
