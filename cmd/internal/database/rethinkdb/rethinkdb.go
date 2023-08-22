@@ -182,12 +182,17 @@ func (db *RethinkDB) Recover() error {
 	return nil
 }
 
-// Probe indicates whether the database is running
+// Probe figures out if the database is running and available for taking backups.
 func (db *RethinkDB) Probe() error {
 	conn, err := net.DialTimeout("tcp", db.url, connectionTimeout)
 	if err != nil {
 		return fmt.Errorf("connection error: %w", err)
 	}
 	defer conn.Close()
+	return nil
+}
+
+// Upgrade performs an upgrade of the database in case a newer version of the database is detected.
+func (db *RethinkDB) Upgrade() error {
 	return nil
 }
