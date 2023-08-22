@@ -9,10 +9,10 @@ Probably, it does not make sense to use this project with large databases. Howev
 ## Supported Databases
 
 | Database  | Image        | Status | Upgrade Support |
-|-----------|--------------|--------|-----------------|
-| postgres  | >= 12-alpine | beta   | yes             |
-| rethinkdb | >= 2.4.0     | beta   | no              |
-| ETCD      | >= 3.5       | alpha  | no              |
+| --------- | ------------ | :----: | :-------------: |
+| postgres  | >= 12-alpine |  beta  |       ✅        |
+| rethinkdb | >= 2.4.0     |  beta  |       ❌        |
+| ETCD      | >= 3.5       | alpha  |       ❌        |
 
 ## Database Upgrades
 
