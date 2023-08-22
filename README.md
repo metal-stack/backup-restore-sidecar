@@ -14,6 +14,16 @@ Probably, it does not make sense to use this project with large databases. Howev
 | rethinkdb | >= 2.4.0  | alpha  |
 | ETCD      | >= 3.5    | alpha  |
 
+## Database upgrades
+
+### Postgres
+
+Postgres requires special treatment if a major version upgrade is planned. `pg_upgrade` needs to be called with the old and new binaries, also the old data directory and a already initialized data directory which was initialized with the new binary, e.g. `initdb <new directory>`.
+
+To make this process as smooth as possible, backup-restore-sidecar will detect if the version of the database files and the version of the postgres binary. If the binary is newer than the database files it will start the upgrade process. Strict validation to ensure all prerequisites are met is done before actually starting the upgrade process.
+
+To achieve this, `backup-restore-sidecar` saves the postgres binaries in the database directory in the form of `pg-bin-v12` for postgres 12. If later the database version is upgraded, the previous postgres binaries are present for doing the actual upgrade.
+
 ## Supported Compression Methods
 
 With `--compression-method` you can define how generated backups are compressed before stored at the storage provider. Available compression methods are:

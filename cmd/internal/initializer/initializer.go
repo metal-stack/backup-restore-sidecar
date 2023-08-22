@@ -92,6 +92,7 @@ func (i *Initializer) Start(stop <-chan struct{}) {
 	}
 
 	i.currentStatus.Status = v1.StatusResponse_UPGRADING
+	i.currentStatus.Message = "start upgrading database"
 	err = i.db.Upgrade()
 	if err != nil {
 		i.log.Fatalw("upgrade database failed", "error", err)
