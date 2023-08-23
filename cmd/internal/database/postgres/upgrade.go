@@ -35,16 +35,17 @@ var (
 func (db *Postgres) Upgrade() error {
 	start := time.Now()
 
-	err := db.copyPostgresBinaries()
-	if err != nil {
-		return err
-	}
-
 	// First check if there are data already present
 	pgVersionFile := path.Join(db.datadir, postgresVersionFile)
 	if _, err := os.Stat(pgVersionFile); errors.Is(err, fs.ErrNotExist) {
 		db.log.Infof("%q is not present, no upgrade required", pgVersionFile)
 		return nil
+	}
+
+	// If this is a database directory, save actual postgres binaries for a later major upgrade
+	err := db.copyPostgresBinaries()
+	if err != nil {
+		return err
 	}
 
 	// Check if required commands are present
