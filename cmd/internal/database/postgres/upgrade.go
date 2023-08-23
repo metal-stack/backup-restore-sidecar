@@ -271,19 +271,19 @@ func (db *Postgres) copyPostgresBinaries(override bool) error {
 		return err
 	}
 
-	if !override {
-		if _, err := os.Stat(path.Join(binDir, postgresConfigCmd)); err == nil {
-			db.log.Info("postgres binaries for later upgrade already in place, not copying")
-			return nil
-		}
-	}
-
 	version, err := db.getBinaryVersion(postgresConfigCmd)
 	if err != nil {
 		return err
 	}
 
 	pgBinDir := path.Join(db.datadir, fmt.Sprintf("%s%d", postgresBinBackupPrefix, version))
+
+	if !override {
+		if _, err := os.Stat(path.Join(pgBinDir, postgresConfigCmd)); err == nil {
+			db.log.Info("postgres binaries for later upgrade already in place, not copying")
+			return nil
+		}
+	}
 
 	err = os.RemoveAll(pgBinDir)
 	if err != nil {
