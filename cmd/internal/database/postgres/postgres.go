@@ -65,7 +65,7 @@ func (db *Postgres) Backup() error {
 	// therefore this happens in the backup task where the database is already available
 	//
 	// implication: one backup has to be taken before an upgrade can be made
-	err := db.copyPostgresBinaries()
+	err := db.copyPostgresBinaries(false)
 	if err != nil {
 		return err
 	}

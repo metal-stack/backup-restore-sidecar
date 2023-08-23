@@ -43,7 +43,7 @@ func (db *Postgres) Upgrade() error {
 	}
 
 	// If this is a database directory, save actual postgres binaries for a later major upgrade
-	err := db.copyPostgresBinaries()
+	err := db.copyPostgresBinaries(true)
 	if err != nil {
 		return err
 	}
@@ -265,10 +265,17 @@ func (db *Postgres) getBinDir(pgConfigCmd string) (string, error) {
 }
 
 // copyPostgresBinaries is needed to save old postgres binaries for a later major upgrade
-func (db *Postgres) copyPostgresBinaries() error {
+func (db *Postgres) copyPostgresBinaries(override bool) error {
 	binDir, err := db.getBinDir(postgresConfigCmd)
 	if err != nil {
 		return err
+	}
+
+	if !override {
+		if _, err := os.Stat(path.Join(binDir, postgresConfigCmd)); err == nil {
+			db.log.Info("postgres binaries for later upgrade already in place, not copying")
+			return nil
+		}
 	}
 
 	version, err := db.getBinaryVersion(postgresConfigCmd)
