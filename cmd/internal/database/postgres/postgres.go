@@ -61,6 +61,15 @@ func (db *Postgres) Check() (bool, error) {
 
 // Backup takes a backup of the database
 func (db *Postgres) Backup() error {
+	// for new databases the postgres binaries required for Upgrade() cannot be copied before the database is running
+	// therefore this happens in the backup task where the database is already available
+	//
+	// implication: one backup has to be taken before an upgrade can be made
+	err := db.copyPostgresBinaries(false)
+	if err != nil {
+		return err
+	}
+
 	if err := os.RemoveAll(constants.BackupDir); err != nil {
 		return fmt.Errorf("could not clean backup directory: %w", err)
 	}
