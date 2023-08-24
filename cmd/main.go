@@ -221,6 +221,9 @@ var waitCmd = &cobra.Command{
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
+		if logger == nil {
+			panic(err)
+		}
 		logger.Fatalw("failed executing root command", "error", err)
 	}
 }
