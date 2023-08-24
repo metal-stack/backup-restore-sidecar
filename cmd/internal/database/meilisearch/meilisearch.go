@@ -65,14 +65,12 @@ func (db *Meilisearch) Backup() error {
 			return fmt.Errorf("dump still processing")
 		case meilisearch.TaskStatusEnqueued:
 			return fmt.Errorf("dump enqueued")
+		case meilisearch.TaskStatusUnknown:
+			return fmt.Errorf("dump status unknown")
+		case meilisearch.TaskStatusSucceeded:
+			db.log.Infow("dump details", "details", dumpTask.Details)
+			return nil
 		}
-
-		if dumpTask.FinishedAt.IsZero() {
-			return fmt.Errorf("dump still processing")
-		}
-
-		// TODO figure out how to get dumpID
-		db.log.Infow("dump details", "details", dumpTask.Details)
 		return nil
 	}, nil)
 	if err != nil {
