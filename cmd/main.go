@@ -16,6 +16,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/etcd"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/meilisearch"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/postgres"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/rethinkdb"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/initializer"
@@ -50,6 +51,9 @@ const (
 	postgresHostFlg     = "postgres-host"
 	postgresPasswordFlg = "postgres-password"
 	postgresPortFlg     = "postgres-port"
+
+	meilisearchURLFlg    = "meilisearch-url"
+	meilisearchAPIKeyFlg = "meilisearch-apikey"
 
 	rethinkDBPasswordFileFlg = "rethinkdb-passwordfile"
 	rethinkDBURLFlg          = "rethinkdb-url"
@@ -199,7 +203,7 @@ func init() {
 	rootCmd.AddCommand(startCmd, waitCmd, restoreCmd)
 
 	rootCmd.PersistentFlags().StringP(logLevelFlg, "", "info", "sets the application log level")
-	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb|etcd]")
+	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb|etcd|meilisearch]")
 	rootCmd.PersistentFlags().StringP(databaseDatadirFlg, "", "", "the directory where the database stores its data in")
 
 	err := viper.BindPFlags(rootCmd.PersistentFlags())
@@ -352,6 +356,13 @@ func initDatabase() error {
 			viper.GetString(etcdKey),
 			viper.GetString(etcdEndpoints),
 			viper.GetString(etcdName),
+		)
+	case "meilisearch":
+		db = meilisearch.New(
+			logger.Named("meilisearch"),
+			datadir,
+			viper.GetString(meilisearchURLFlg),
+			viper.GetString(meilisearchAPIKeyFlg),
 		)
 	default:
 		return fmt.Errorf("unsupported database type: %s", dbString)

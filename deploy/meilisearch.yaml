@@ -1,0 +1,165 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app.kubernetes.io/name: meilisearch
+  name: auditing-meili-meilisearch
+  namespace: metal-control-plane
+spec:
+  serviceName: auditing-meili-meilisearch
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: meilisearch
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: meilisearch
+    spec:
+      containers:
+      - envFrom:
+        - configMapRef:
+            name: auditing-meili-meilisearch-environment
+        - secretRef:
+            name: metal-auditing-master-key
+        image: getmeili/meilisearch:v1.2.0
+        imagePullPolicy: IfNotPresent
+        name: meilisearch
+        command:
+        - tini
+        - --
+        args:
+        - sh
+        - -c
+        - backup-restore-sidecar wait && meilisearch
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        ports:
+        - containerPort: 7700
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        startupProbe:
+          failureThreshold: 60
+          httpGet:
+            path: /health
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 1
+          periodSeconds: 1
+          successThreshold: 1
+          timeoutSeconds: 1
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp
+        - mountPath: /meili_data
+          name: data
+        - name: bin-provision
+          subPath: backup-restore-sidecar
+          mountPath: /usr/local/bin/backup-restore-sidecar
+        - name: backup-restore-sidecar-config
+          mountPath: /etc/backup-restore-sidecar
+        - name: bin-provision
+          subPath: tini
+          mountPath: /usr/local/bin/tini
+      - image: getmeili/meilisearch:v1.2.0
+        name: backup-restore-sidecar
+        command:
+        - tini
+        - --
+        args:
+        - sh
+        - -c
+        - backup-restore-sidecar start --log-level debug
+        env:
+        # FIXME fetch from secret
+        - name: BACKUP_RESTORE_SIDECAR_MEILISEARCH_APIKEY
+          value: geheim
+        - name: BACKUP_RESTORE_SIDECAR_MEILISEARCH_URL
+          value: http://localhost:7700
+        volumeMounts:
+        - name: data
+          mountPath: /meili_data
+        - name: bin-provision
+          subPath: backup-restore-sidecar
+          mountPath: /usr/local/bin/backup-restore-sidecar
+        - name: backup-restore-sidecar-config
+          mountPath: /etc/backup-restore-sidecar
+        - name: bin-provision
+          subPath: tini
+          mountPath: /usr/local/bin/tini
+      initContainers:
+      - name: backup-restore-sidecar-provider
+        image: ghcr.io/metal-stack/backup-restore-sidecar:latest
+        imagePullPolicy: IfNotPresent
+        command:
+        - cp
+        - /backup-restore-sidecar
+        - /sbin/tini
+        - /bin-provision
+        ports:
+        - containerPort: 2112
+        volumeMounts:
+        - name: bin-provision
+          mountPath: /bin-provision
+      volumes:
+      - emptyDir: {}
+        name: tmp
+      - name: data
+        persistentVolumeClaim:
+          claimName: auditing-meili-meilisearch
+      - name: backup-restore-sidecar-config
+        configMap:
+          name: backup-restore-sidecar-config-meilisearch
+      - name: bin-provision
+        emptyDir: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-restore-sidecar-config-meilisearch
+data:
+  config.yaml: |
+    db: meilisearch
+    db-data-directory: /meili_data/
+    backup-provider: local
+    backup-cron-schedule: "*/1 * * * *"
+    object-prefix: meilisearch-test
+    compression-method: tar
+---
+apiVersion: v1
+data:
+  MEILI_ENV: development
+  MEILI_NO_ANALYTICS: "true"
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/name: meilisearch
+  name: auditing-meili-meilisearch-environment
+  namespace: metal-control-plane
