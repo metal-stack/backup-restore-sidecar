@@ -235,9 +235,14 @@ func (db *Meilisearch) getBinaryVersion() (int, error) {
 		return 0, fmt.Errorf("unable to detect meilisearch binary version: %w", err)
 	}
 
-	v, err := semver.NewVersion(strings.TrimSpace(string(out)))
+	_, binaryVersionString, found := strings.Cut(string(out), "meilisearch ")
+	if !found {
+		return 0, fmt.Errorf("unable to detect meilisearch binary version in %q", binaryVersionString)
+	}
+
+	v, err := semver.NewVersion(strings.TrimSpace(binaryVersionString))
 	if err != nil {
-		return 0, fmt.Errorf("unable to parse postgres binary version in %q: %w", string(out), err)
+		return 0, fmt.Errorf("unable to parse meilisearch binary version in %q: %w", binaryVersionString, err)
 	}
 
 	// TODO check major
