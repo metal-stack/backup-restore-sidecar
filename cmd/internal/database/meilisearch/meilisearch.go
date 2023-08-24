@@ -162,7 +162,7 @@ func (db *Meilisearch) Upgrade() error {
 	db.log.Infow("start upgrade", "from", dbVersion, "to", meilisearchVersion)
 
 	// meilisearch --import-dump /dumps/20200813-042312213.dump
-	cmd := exec.Command(meilisearchCmd, "--import-dump", " --ignore-dump-if-db-exists", path.Join(db.dumpdir, latestStableDump)) // nolint:gosec
+	cmd := exec.Command(meilisearchCmd, "--import-dump", "--ignore-dump-if-db-exists", path.Join(db.dumpdir, latestStableDump)) // nolint:gosec
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()

@@ -32,7 +32,7 @@ spec:
         - sh
         - -x
         - -c
-        - backup-restore-sidecar wait --log-level debug && cd /meili_data && meilisearch
+        - backup-restore-sidecar wait --log-level debug && meilisearch
         livenessProbe:
           failureThreshold: 3
           httpGet:
