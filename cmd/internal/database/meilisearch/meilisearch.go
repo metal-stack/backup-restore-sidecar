@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -168,17 +169,29 @@ func (db *Meilisearch) Upgrade() error {
 		return fmt.Errorf("unable to rename dbdir: %w", err)
 	}
 
-	args := []string{"--ignore-dump-if-db-exists", "--import-dump", path.Join(db.dumpdir, latestStableDump), "--master-key", db.apikey}
-	db.log.Infow("execute meilisearch", "args", args)
+	var cmd *exec.Cmd
+	go func() {
+		args := []string{"--import-dump", path.Join(db.dumpdir, latestStableDump), "--master-key", db.apikey}
+		db.log.Infow("execute meilisearch", "args", args)
 
-	cmd := exec.Command(meilisearchCmd, args...) // nolint:gosec
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err = cmd.Run()
-	if err != nil {
-		db.log.Errorw("unable import latest dump, skipping upgrade", "error", err)
-		return nil
-	}
+		cmd = exec.Command(meilisearchCmd, args...) // nolint:gosec
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err = cmd.Run()
+		if err != nil {
+			db.log.Errorw("unable import latest dump, skipping upgrade", "error", err)
+		}
+	}()
+
+	retry.Do(func() error {
+		v, err := db.client.Version()
+		if err != nil {
+			return err
+		}
+		db.log.Infow("meilisearch started after upgrade, killing it", "version", v)
+		return cmd.Process.Signal(syscall.SIGTERM)
+	})
+
 	db.log.Infow("upgrade done and new data in place", "took", time.Since(start))
 	return nil
 }
