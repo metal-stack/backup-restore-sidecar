@@ -62,33 +62,3 @@ func Copy(src, dst string) error {
 	}
 	return nil
 }
-
-// Move a file cross mountpoints
-func Move(source, destination string) error {
-	src, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	dst, err := os.Create(destination)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if src != nil {
-			_ = src.Close()
-		}
-		if dst != nil {
-			_ = dst.Close()
-		}
-		_ = os.Remove(destination)
-	}()
-	_, err = io.Copy(dst, src)
-	if err != nil {
-		return err
-	}
-	fi, err := src.Stat()
-	if err != nil {
-		return err
-	}
-	return os.Chmod(destination, fi.Mode())
-}

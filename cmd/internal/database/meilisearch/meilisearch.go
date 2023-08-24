@@ -137,8 +137,8 @@ func (db *Meilisearch) Upgrade() error {
 	start := time.Now()
 
 	versionFile := path.Join(db.dbdir, meilisearchVersionFile)
-	if _, err := os.Stat(meilisearchVersionFile); errors.Is(err, fs.ErrNotExist) {
-		db.log.Infof("%q is not present, no upgrade required", meilisearchVersionFile)
+	if _, err := os.Stat(versionFile); errors.Is(err, fs.ErrNotExist) {
+		db.log.Infof("%q is not present, no upgrade required", versionFile)
 		return nil
 	}
 
