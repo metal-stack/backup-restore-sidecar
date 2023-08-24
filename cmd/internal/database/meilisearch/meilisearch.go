@@ -38,7 +38,7 @@ type Meilisearch struct {
 	client   *meilisearch.Client
 }
 
-// New instantiates a new postgres database
+// New instantiates a new meilisearch database
 func New(log *zap.SugaredLogger, datadir string, url string, apikey string) *Meilisearch {
 	client := meilisearch.NewClient(meilisearch.ClientConfig{
 		Host:   url,
@@ -150,14 +150,16 @@ func (db *Meilisearch) Upgrade() error {
 	if err != nil {
 		return err
 	}
-	if dbVersion == meilisearchVersion {
+	if (dbVersion.Major() == meilisearchVersion.Major()) && (dbVersion.Minor() == meilisearchVersion.Minor()) {
 		db.log.Infow("no version difference, no upgrade required", "database-version", dbVersion, "binary-version", meilisearchVersion)
 		return nil
 	}
-	if dbVersion > meilisearchVersion {
+	if dbVersion.GreaterThan(meilisearchVersion) {
 		db.log.Errorw("database is newer than meilisearch binary, aborting", "database-version", dbVersion, "binary-version", meilisearchVersion)
 		return fmt.Errorf("database is newer than meilisearch binary")
 	}
+
+	db.log.Infow("start upgrade", "from", dbVersion, "to", meilisearchVersion)
 
 	// meilisearch --import-dump /dumps/20200813-042312213.dump
 	cmd := exec.Command(meilisearchCmd, "--import-dump", path.Join(db.dumpdir, latestStableDump)) // nolint:gosec
@@ -210,41 +212,41 @@ func (db *Meilisearch) moveDumpsToBackupDir() error {
 	})
 }
 
-func (db *Meilisearch) getDatabaseVersion(versionFile string) (int, error) {
+func (db *Meilisearch) getDatabaseVersion(versionFile string) (*semver.Version, error) {
 	// cat VERSION
 	// 1.2.0
 	versionBytes, err := os.ReadFile(versionFile)
 	if err != nil {
-		return 0, fmt.Errorf("unable to read %q: %w", versionFile, err)
+		return nil, fmt.Errorf("unable to read %q: %w", versionFile, err)
 	}
 
 	v, err := semver.NewVersion(strings.TrimSpace(string(versionBytes)))
 	if err != nil {
-		return 0, fmt.Errorf("unable to parse postgres binary version in %q: %w", string(versionBytes), err)
+		return nil, fmt.Errorf("unable to parse postgres binary version in %q: %w", string(versionBytes), err)
 	}
 	// TODO check major
-	return int(v.Minor()), nil
+	return v, nil
 }
 
-func (db *Meilisearch) getBinaryVersion() (int, error) {
+func (db *Meilisearch) getBinaryVersion() (*semver.Version, error) {
 	// meilisearch  --version
 	// 1.2.0
 	cmd := exec.Command(meilisearchCmd, "--version")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return 0, fmt.Errorf("unable to detect meilisearch binary version: %w", err)
+		return nil, fmt.Errorf("unable to detect meilisearch binary version: %w", err)
 	}
 
 	_, binaryVersionString, found := strings.Cut(string(out), "meilisearch ")
 	if !found {
-		return 0, fmt.Errorf("unable to detect meilisearch binary version in %q", binaryVersionString)
+		return nil, fmt.Errorf("unable to detect meilisearch binary version in %q", binaryVersionString)
 	}
 
 	v, err := semver.NewVersion(strings.TrimSpace(binaryVersionString))
 	if err != nil {
-		return 0, fmt.Errorf("unable to parse meilisearch binary version in %q: %w", binaryVersionString, err)
+		return nil, fmt.Errorf("unable to parse meilisearch binary version in %q: %w", binaryVersionString, err)
 	}
 
 	// TODO check major
-	return int(v.Minor()), nil
+	return v, nil
 }
