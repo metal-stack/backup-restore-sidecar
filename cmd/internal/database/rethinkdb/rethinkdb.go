@@ -156,6 +156,9 @@ func (db *RethinkDB) Recover() error {
 	if db.url != "" {
 		args = append(args, "--connect="+restoreDB.url)
 	}
+	if db.passwordFile != "" {
+		args = append(args, "--password-file="+db.passwordFile)
+	}
 	args = append(args, rethinkDBRestoreFilePath)
 
 	out, err := db.executor.ExecuteCommandWithOutput(rethinkDBRestoreCmd, nil, args...)
