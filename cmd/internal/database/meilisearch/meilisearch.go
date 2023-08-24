@@ -68,7 +68,7 @@ func (db *Meilisearch) Backup() error {
 		case meilisearch.TaskStatusUnknown:
 			return fmt.Errorf("dump status unknown")
 		case meilisearch.TaskStatusSucceeded:
-			db.log.Infow("dump details", "details", dumpTask.Details)
+			db.log.Infow("dump finished", "duration", dumpTask.Duration, "details", dumpTask.Details)
 			return nil
 		}
 		return nil
