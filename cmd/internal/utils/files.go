@@ -71,19 +71,22 @@ func Move(source, destination string) error {
 	}
 	dst, err := os.Create(destination)
 	if err != nil {
-		src.Close()
 		return err
 	}
 	defer func() {
-		_ = src.Close()
-		_ = dst.Close()
+		if src != nil {
+			_ = src.Close()
+		}
+		if dst != nil {
+			_ = dst.Close()
+		}
 		_ = os.Remove(destination)
 	}()
 	_, err = io.Copy(dst, src)
 	if err != nil {
 		return err
 	}
-	fi, err := os.Stat(source)
+	fi, err := src.Stat()
 	if err != nil {
 		return err
 	}

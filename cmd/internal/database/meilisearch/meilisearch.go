@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -141,7 +142,10 @@ func (db *Meilisearch) moveDumpsToBackupDir() error {
 		src := basepath
 		db.log.Infow("move dump", "from", src, "to", dst)
 
-		err = utils.Move(src, dst)
+		copy := exec.Command("mv", "-v", src, dst)
+		copy.Stdout = os.Stdout
+		copy.Stderr = os.Stderr
+		err = copy.Run()
 		if err != nil {
 			return fmt.Errorf("unable move dump: %w", err)
 		}
