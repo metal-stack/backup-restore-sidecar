@@ -50,7 +50,7 @@ func runCommandWithOutput(cmd *exec.Cmd, combinedOutput bool) (string, error) {
 func (c *CmdExecutor) ExecWithStreamingOutput(ctx context.Context, command string) error {
 	command = os.ExpandEnv(command)
 
-	parts := strings.Split(command, " ")
+	parts := strings.Fields(command)
 
 	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...) // nolint:gosec
 
