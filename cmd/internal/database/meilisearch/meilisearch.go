@@ -183,7 +183,7 @@ func (db *Meilisearch) Upgrade() error {
 		}
 	}()
 
-	retry.Do(func() error {
+	err = retry.Do(func() error {
 		v, err := db.client.Version()
 		if err != nil {
 			return err
@@ -191,6 +191,9 @@ func (db *Meilisearch) Upgrade() error {
 		db.log.Infow("meilisearch started after upgrade, killing it", "version", v)
 		return cmd.Process.Signal(syscall.SIGTERM)
 	})
+	if err != nil {
+		return err
+	}
 
 	db.log.Infow("upgrade done and new data in place", "took", time.Since(start))
 	return nil
