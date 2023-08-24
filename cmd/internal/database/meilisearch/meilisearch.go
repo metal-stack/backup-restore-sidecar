@@ -17,6 +17,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	dumpExtension             = ".dump"
+	latestStableDumpExtension = ".latestdump"
+)
+
 // Meilisearch implements the database interface
 type Meilisearch struct {
 	datadir  string
@@ -124,6 +129,8 @@ func (db *Meilisearch) Upgrade() error {
 	return nil
 }
 
+// moveDumpsToBackupDir move all dumps to the backupdir
+// also create a stable last stable dump for later upgrades
 func (db *Meilisearch) moveDumpsToBackupDir() error {
 	dumpDir := path.Join(db.datadir, "dumps")
 	return filepath.Walk(dumpDir, func(basepath string, d fs.FileInfo, err error) error {
@@ -134,13 +141,20 @@ func (db *Meilisearch) moveDumpsToBackupDir() error {
 			return nil
 		}
 
-		if !strings.HasSuffix(d.Name(), ".dump") {
+		if !strings.HasSuffix(d.Name(), dumpExtension) {
 			return nil
 		}
 
 		dst := path.Join(constants.BackupDir, d.Name())
 		src := basepath
 		db.log.Infow("move dump", "from", src, "to", dst)
+
+		latestStableDst := path.Join(constants.BackupDir, strings.ReplaceAll(d.Name(), dumpExtension, latestStableDumpExtension))
+		db.log.Infow("create latest dump", "from", src, "to", latestStableDst)
+		err = utils.Copy(src, latestStableDst)
+		if err != nil {
+			return fmt.Errorf("unable create latest stable dump: %w", err)
+		}
 
 		copy := exec.Command("mv", "-v", src, dst)
 		copy.Stdout = os.Stdout
