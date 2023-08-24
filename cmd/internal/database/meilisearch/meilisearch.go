@@ -138,7 +138,7 @@ func (db *Meilisearch) moveDumpsToBackupDir() error {
 		}
 
 		dst := path.Join(constants.BackupDir, d.Name())
-		src := path.Join(basepath, d.Name())
+		src := basepath
 		db.log.Infow("move dump", "from", src, "to", dst)
 
 		err = os.Rename(src, dst)

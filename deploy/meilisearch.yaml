@@ -105,6 +105,8 @@ spec:
         - name: BACKUP_RESTORE_SIDECAR_MEILISEARCH_URL
           value: http://localhost:7700
         volumeMounts:
+        - mountPath: /tmp
+          name: tmp
         - name: data
           mountPath: /meili_data
         - name: bin-provision
