@@ -23,6 +23,7 @@ import (
 const (
 	meilisearchCmd         = "meilisearch"
 	meilisearchVersionFile = "VERSION"
+	meilisearchDumpDir     = "dumps"
 	dumpExtension          = ".dump"
 	latestStableDump       = "forupgrade.latestdump"
 )
@@ -30,6 +31,7 @@ const (
 // Meilisearch implements the database interface
 type Meilisearch struct {
 	datadir  string
+	dumpdir  string
 	log      *zap.SugaredLogger
 	executor *utils.CmdExecutor
 	client   *meilisearch.Client
@@ -44,6 +46,7 @@ func New(log *zap.SugaredLogger, datadir string, url string, apikey string) *Mei
 	return &Meilisearch{
 		log:      log,
 		datadir:  datadir,
+		dumpdir:  path.Join(datadir, meilisearchDumpDir),
 		executor: utils.NewExecutor(log),
 		client:   client,
 	}
@@ -156,7 +159,7 @@ func (db *Meilisearch) Upgrade() error {
 	}
 
 	// meilisearch --import-dump /dumps/20200813-042312213.dump
-	cmd := exec.Command(meilisearchCmd, "--import-dump", path.Join(db.datadir, latestStableDump)) // nolint:gosec
+	cmd := exec.Command(meilisearchCmd, "--import-dump", path.Join(db.dumpdir, latestStableDump)) // nolint:gosec
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
@@ -171,8 +174,7 @@ func (db *Meilisearch) Upgrade() error {
 // moveDumpsToBackupDir move all dumps to the backupdir
 // also create a stable last stable dump for later upgrades
 func (db *Meilisearch) moveDumpsToBackupDir() error {
-	dumpDir := path.Join(db.datadir, "dumps")
-	return filepath.Walk(dumpDir, func(basepath string, d fs.FileInfo, err error) error {
+	return filepath.Walk(db.dumpdir, func(basepath string, d fs.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -188,7 +190,7 @@ func (db *Meilisearch) moveDumpsToBackupDir() error {
 		src := basepath
 		db.log.Infow("move dump", "from", src, "to", dst)
 
-		latestStableDst := path.Join(src, latestStableDump)
+		latestStableDst := path.Join(db.dumpdir, latestStableDump)
 		db.log.Infow("create latest dump", "from", src, "to", latestStableDst)
 		err = utils.Copy(src, latestStableDst)
 		if err != nil {
