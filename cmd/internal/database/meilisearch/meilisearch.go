@@ -53,6 +53,8 @@ func (db *Meilisearch) Backup() error {
 		return fmt.Errorf("could not create a dump: %w", err)
 	}
 
+	db.log.Infow("dump creation triggered", "response", dumpResponse)
+
 	err = retry.Do(func() error {
 		dumpTask, err := db.client.GetTask(dumpResponse.TaskUID)
 		if err != nil {

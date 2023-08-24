@@ -30,8 +30,9 @@ spec:
         - --
         args:
         - sh
+        - -x
         - -c
-        - backup-restore-sidecar wait && meilisearch
+        - backup-restore-sidecar wait --log-level debug && cd /meili_data && meilisearch
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -116,8 +117,8 @@ spec:
           mountPath: /usr/local/bin/tini
       initContainers:
       - name: backup-restore-sidecar-provider
-        image: ghcr.io/metal-stack/backup-restore-sidecar:latest
-        imagePullPolicy: IfNotPresent
+        image: ghcr.io/metal-stack/backup-restore-sidecar:meilisearch-support
+        imagePullPolicy: Always
         command:
         - cp
         - /backup-restore-sidecar
@@ -139,6 +140,15 @@ spec:
           name: backup-restore-sidecar-config-meilisearch
       - name: bin-provision
         emptyDir: {}
+  # volumeClaimTemplates:
+  # - metadata:
+  #     name: auditing-meili-meilisearch
+  #   spec:
+  #     accessModes:
+  #     - ReadWriteOnce
+  #     resources:
+  #       requests:
+  #         storage: 1Gi
 ---
 apiVersion: v1
 kind: ConfigMap
