@@ -163,8 +163,15 @@ func (db *Meilisearch) Upgrade() error {
 
 	db.log.Infow("start upgrade", "from", dbVersion, "to", meilisearchVersion)
 
-	// meilisearch --import-dump /dumps/20200813-042312213.dump
-	cmd := exec.Command(meilisearchCmd, "--ignore-dump-if-db-exists", "--import-dump", path.Join(db.dumpdir, latestStableDump), "--master-key", db.apikey) // nolint:gosec
+	err = os.Rename(db.dbdir, db.dbdir+".old")
+	if err != nil {
+		return fmt.Errorf("unable to rename dbdir: %w", err)
+	}
+
+	args := []string{"--ignore-dump-if-db-exists", "--import-dump", path.Join(db.dumpdir, latestStableDump), "--master-key", db.apikey}
+	db.log.Infow("execute meilisearch", "args", args)
+
+	cmd := exec.Command(meilisearchCmd, args...) // nolint:gosec
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()

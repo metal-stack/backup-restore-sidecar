@@ -22,7 +22,7 @@ spec:
             name: auditing-meili-meilisearch-environment
         - secretRef:
             name: metal-auditing-master-key
-        image: getmeili/meilisearch:v1.3.1
+        image: getmeili/meilisearch:v1.2.0
         imagePullPolicy: IfNotPresent
         name: meilisearch
         command:
@@ -89,7 +89,7 @@ spec:
         - name: bin-provision
           subPath: tini
           mountPath: /usr/local/bin/tini
-      - image: getmeili/meilisearch:v1.3.1
+      - image: getmeili/meilisearch:v1.2.0
         name: backup-restore-sidecar
         command:
         - tini
