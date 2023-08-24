@@ -23,6 +23,7 @@ import (
 const (
 	meilisearchCmd         = "meilisearch"
 	meilisearchVersionFile = "VERSION"
+	meilisearchDBDir       = "data.ms"
 	meilisearchDumpDir     = "dumps"
 	dumpExtension          = ".dump"
 	latestStableDump       = "forupgrade.latestdump"
@@ -30,7 +31,7 @@ const (
 
 // Meilisearch implements the database interface
 type Meilisearch struct {
-	datadir  string
+	dbdir    string
 	dumpdir  string
 	log      *zap.SugaredLogger
 	executor *utils.CmdExecutor
@@ -45,7 +46,7 @@ func New(log *zap.SugaredLogger, datadir string, url string, apikey string) *Mei
 	})
 	return &Meilisearch{
 		log:      log,
-		datadir:  datadir,
+		dbdir:    path.Join(datadir, meilisearchDBDir),
 		dumpdir:  path.Join(datadir, meilisearchDumpDir),
 		executor: utils.NewExecutor(log),
 		client:   client,
@@ -104,7 +105,7 @@ func (db *Meilisearch) Backup() error {
 
 // Check implements database.Database.
 func (db *Meilisearch) Check() (bool, error) {
-	empty, err := utils.IsEmpty(db.datadir)
+	empty, err := utils.IsEmpty(db.dbdir)
 	if err != nil {
 		return false, err
 	}
@@ -135,7 +136,7 @@ func (db *Meilisearch) Recover() error {
 func (db *Meilisearch) Upgrade() error {
 	start := time.Now()
 
-	versionFile := path.Join(db.datadir, meilisearchVersionFile)
+	versionFile := path.Join(db.dbdir, meilisearchVersionFile)
 	if _, err := os.Stat(meilisearchVersionFile); errors.Is(err, fs.ErrNotExist) {
 		db.log.Infof("%q is not present, no upgrade required", meilisearchVersionFile)
 		return nil
