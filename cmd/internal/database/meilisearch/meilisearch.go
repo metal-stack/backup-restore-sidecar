@@ -141,7 +141,7 @@ func (db *Meilisearch) moveDumpsToBackupDir() error {
 		src := basepath
 		db.log.Infow("move dump", "from", src, "to", dst)
 
-		err = os.Rename(src, dst)
+		err = utils.Move(src, dst)
 		if err != nil {
 			return fmt.Errorf("unable move dump: %w", err)
 		}
