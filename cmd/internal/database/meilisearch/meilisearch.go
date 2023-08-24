@@ -1,6 +1,7 @@
 package meilisearch
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -8,7 +9,9 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/avast/retry-go/v4"
 	"github.com/meilisearch/meilisearch-go"
 
@@ -18,8 +21,10 @@ import (
 )
 
 const (
-	dumpExtension             = ".dump"
-	latestStableDumpExtension = ".latestdump"
+	meilisearchCmd         = "meilisearch"
+	meilisearchVersionFile = "VERSION"
+	dumpExtension          = ".dump"
+	latestStableDump       = "forupgrade.latestdump"
 )
 
 // Meilisearch implements the database interface
@@ -125,7 +130,41 @@ func (db *Meilisearch) Recover() error {
 
 // Upgrade implements database.Database.
 func (db *Meilisearch) Upgrade() error {
-	db.log.Error("upgrade is not yet implemented")
+	start := time.Now()
+
+	versionFile := path.Join(db.datadir, meilisearchVersionFile)
+	if _, err := os.Stat(meilisearchVersionFile); errors.Is(err, fs.ErrNotExist) {
+		db.log.Infof("%q is not present, no upgrade required", meilisearchVersionFile)
+		return nil
+	}
+
+	dbVersion, err := db.getDatabaseVersion(versionFile)
+	if err != nil {
+		return err
+	}
+	meilisearchVersion, err := db.getBinaryVersion()
+	if err != nil {
+		return err
+	}
+	if dbVersion == meilisearchVersion {
+		db.log.Infow("no version difference, no upgrade required", "database-version", dbVersion, "binary-version", meilisearchVersion)
+		return nil
+	}
+	if dbVersion > meilisearchVersion {
+		db.log.Errorw("database is newer than meilisearch binary, aborting", "database-version", dbVersion, "binary-version", meilisearchVersion)
+		return fmt.Errorf("database is newer than meilisearch binary")
+	}
+
+	// meilisearch --import-dump /dumps/20200813-042312213.dump
+	cmd := exec.Command(meilisearchCmd, "--import-dump", path.Join(db.datadir, latestStableDump)) // nolint:gosec
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err = cmd.Run()
+	if err != nil {
+		db.log.Errorw("unable import latest dump, skipping upgrade", "error", err)
+		return nil
+	}
+	db.log.Infow("upgrade done and new data in place", "took", time.Since(start))
 	return nil
 }
 
@@ -149,7 +188,7 @@ func (db *Meilisearch) moveDumpsToBackupDir() error {
 		src := basepath
 		db.log.Infow("move dump", "from", src, "to", dst)
 
-		latestStableDst := path.Join(constants.BackupDir, strings.ReplaceAll(d.Name(), dumpExtension, latestStableDumpExtension))
+		latestStableDst := path.Join(src, latestStableDump)
 		db.log.Infow("create latest dump", "from", src, "to", latestStableDst)
 		err = utils.Copy(src, latestStableDst)
 		if err != nil {
@@ -166,4 +205,38 @@ func (db *Meilisearch) moveDumpsToBackupDir() error {
 
 		return nil
 	})
+}
+
+func (db *Meilisearch) getDatabaseVersion(versionFile string) (int, error) {
+	// cat VERSION
+	// 1.2.0
+	versionBytes, err := os.ReadFile(versionFile)
+	if err != nil {
+		return 0, fmt.Errorf("unable to read %q: %w", versionFile, err)
+	}
+
+	v, err := semver.NewVersion(strings.TrimSpace(string(versionBytes)))
+	if err != nil {
+		return 0, fmt.Errorf("unable to parse postgres binary version in %q: %w", string(versionBytes), err)
+	}
+	// TODO check major
+	return int(v.Minor()), nil
+}
+
+func (db *Meilisearch) getBinaryVersion() (int, error) {
+	// meilisearch  --version
+	// 1.2.0
+	cmd := exec.Command(meilisearchCmd, "--version")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return 0, fmt.Errorf("unable to detect meilisearch binary version: %w", err)
+	}
+
+	v, err := semver.NewVersion(strings.TrimSpace(string(out)))
+	if err != nil {
+		return 0, fmt.Errorf("unable to parse postgres binary version in %q: %w", string(out), err)
+	}
+
+	// TODO check major
+	return int(v.Minor()), nil
 }
