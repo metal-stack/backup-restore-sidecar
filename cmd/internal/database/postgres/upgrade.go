@@ -43,7 +43,7 @@ func (db *Postgres) Upgrade() error {
 	}
 
 	// If this is a database directory, save actual postgres binaries for a later major upgrade
-	err := db.copyPostgresBinaries()
+	err := db.copyPostgresBinaries(true)
 	if err != nil {
 		return err
 	}
@@ -84,7 +84,7 @@ func (db *Postgres) Upgrade() error {
 	// Check if old pg_config are present and match pgVersion
 	oldPostgresConfigCmd := path.Join(oldPostgresBinDir, postgresConfigCmd)
 	if ok := db.isCommandPresent(oldPostgresConfigCmd); !ok {
-		db.log.Infof("%q is not present, skipping upgrade", oldPostgresConfigCmd)
+		db.log.Infof("%q is not present, please make sure that at least one backup was taken with the old postgres version or restart the backup-restore-sidecar container with the old postgres version before running an upgrade, skipping upgrade", oldPostgresConfigCmd)
 		return nil
 	}
 
@@ -264,7 +264,8 @@ func (db *Postgres) getBinDir(pgConfigCmd string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func (db *Postgres) copyPostgresBinaries() error {
+// copyPostgresBinaries is needed to save old postgres binaries for a later major upgrade
+func (db *Postgres) copyPostgresBinaries(override bool) error {
 	binDir, err := db.getBinDir(postgresConfigCmd)
 	if err != nil {
 		return err
@@ -276,6 +277,13 @@ func (db *Postgres) copyPostgresBinaries() error {
 	}
 
 	pgBinDir := path.Join(db.datadir, fmt.Sprintf("%s%d", postgresBinBackupPrefix, version))
+
+	if !override {
+		if _, err := os.Stat(path.Join(pgBinDir, postgresConfigCmd)); err == nil {
+			db.log.Info("postgres binaries for later upgrade already in place, not copying")
+			return nil
+		}
+	}
 
 	err = os.RemoveAll(pgBinDir)
 	if err != nil {
