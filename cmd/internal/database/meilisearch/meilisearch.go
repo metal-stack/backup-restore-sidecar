@@ -33,6 +33,7 @@ const (
 type Meilisearch struct {
 	dbdir    string
 	dumpdir  string
+	apikey   string
 	log      *zap.SugaredLogger
 	executor *utils.CmdExecutor
 	client   *meilisearch.Client
@@ -48,6 +49,7 @@ func New(log *zap.SugaredLogger, datadir string, url string, apikey string) *Mei
 		log:      log,
 		dbdir:    path.Join(datadir, meilisearchDBDir),
 		dumpdir:  path.Join(datadir, meilisearchDumpDir),
+		apikey:   apikey,
 		executor: utils.NewExecutor(log),
 		client:   client,
 	}
@@ -162,7 +164,7 @@ func (db *Meilisearch) Upgrade() error {
 	db.log.Infow("start upgrade", "from", dbVersion, "to", meilisearchVersion)
 
 	// meilisearch --import-dump /dumps/20200813-042312213.dump
-	cmd := exec.Command(meilisearchCmd, "--ignore-dump-if-db-exists", "--import-dump", path.Join(db.dumpdir, latestStableDump)) // nolint:gosec
+	cmd := exec.Command(meilisearchCmd, "--ignore-dump-if-db-exists", "--import-dump", path.Join(db.dumpdir, latestStableDump), "--master-key", db.apikey) // nolint:gosec
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
