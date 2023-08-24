@@ -74,7 +74,7 @@ func (db *Meilisearch) Backup() error {
 			return nil
 		}
 		return nil
-	}, nil)
+	})
 	if err != nil {
 		return err
 	}
