@@ -25,6 +25,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/probe"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/wait"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/client"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/metal-stack/v"
 	"github.com/spf13/cobra"
@@ -103,10 +104,6 @@ var rootCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		initLogging()
 		initConfig()
-		initSignalHandlers()
-		if err := initDatabase(); err != nil {
-			return err
-		}
 		return nil
 	},
 }
@@ -116,6 +113,10 @@ var startCmd = &cobra.Command{
 	Short: "starts the sidecar",
 	Long:  "the initializer will prepare starting the database. if there is no data or corrupt data, it checks whether there is a backup available and restore it prior to running allow running the database. The sidecar will then wait until the database is available and then take backups periodically",
 	PreRunE: func(cmd *cobra.Command, args []string) error {
+		initSignalHandlers()
+		if err := initDatabase(); err != nil {
+			return err
+		}
 		return initBackupProvider()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -158,19 +159,16 @@ var restoreCmd = &cobra.Command{
 		if len(args) == 0 {
 			return errors.New("no version argument given")
 		}
-		versions, err := bp.ListBackups()
+
+		c, err := client.New(context.Background(), viper.GetString(serverAddrFlg))
 		if err != nil {
-			return err
+			return fmt.Errorf("error creating client: %w", err)
 		}
-		version, err := versions.Get(args[0])
-		if err != nil {
-			return err
-		}
-		comp, err := compress.New(viper.GetString(compressionMethod))
-		if err != nil {
-			return err
-		}
-		return initializer.New(logger.Named("initializer"), "", db, bp, comp, viper.GetString(databaseDatadirFlg)).Restore(version)
+
+		_, err = c.BackupServiceClient().RestoreBackup(context.Background(), &v1.RestoreBackupRequest{
+			Version: args[0],
+		})
+		return err
 	},
 }
 
@@ -178,11 +176,8 @@ var restoreListCmd = &cobra.Command{
 	Use:     "list-versions",
 	Aliases: []string{"ls"},
 	Short:   "lists available backups",
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		return initBackupProvider()
-	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := initializer.NewClient(context.Background(), viper.GetString(serverAddrFlg))
+		c, err := client.New(context.Background(), viper.GetString(serverAddrFlg))
 		if err != nil {
 			return fmt.Errorf("error creating client: %w", err)
 		}
@@ -194,7 +189,7 @@ var restoreListCmd = &cobra.Command{
 
 		var data [][]string
 		for _, b := range backups.Backups {
-			data = append(data, []string{b.Timestamp.String(), b.Name, b.Version})
+			data = append(data, []string{b.Timestamp.AsTime().String(), b.Name, b.Version})
 		}
 
 		p := utils.NewTablePrinter()
@@ -203,30 +198,12 @@ var restoreListCmd = &cobra.Command{
 	},
 }
 
-var backupPresentCmd = &cobra.Command{
-	Use:   "is-backup-present",
-	Short: "returns true if a backup was already made",
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		return initBackupProvider()
-	},
-	RunE: func(cmd *cobra.Command, args []string) error {
-		versions, err := bp.ListBackups()
-		if err != nil {
-			return err
-		}
-		if len(versions.List()) > 0 {
-			fmt.Println("true")
-		} else {
-			fmt.Println("true")
-		}
-
-		return nil
-	},
-}
-
 var waitCmd = &cobra.Command{
 	Use:   "wait",
 	Short: "waits for the initializer to be done",
+	PreRun: func(cmd *cobra.Command, args []string) {
+		initSignalHandlers()
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := wait.Start(stop, logger.Named("wait"), viper.GetString(serverAddrFlg)); err != nil {
 			return err
@@ -322,7 +299,6 @@ func init() {
 	}
 
 	restoreCmd.AddCommand(restoreListCmd)
-	restoreCmd.AddCommand(backupPresentCmd)
 }
 
 func initConfig() {

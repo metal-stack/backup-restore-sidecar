@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -48,4 +49,50 @@ func portForwardAPod(req portForwardAPodRequest) error {
 		return err
 	}
 	return fw.ForwardPorts()
+}
+
+type runInPodForwardingRequest struct {
+	// RestConfig is the kubernetes config
+	RestConfig *rest.Config
+	// Pod is the selected pod for this port forwarding
+	Pod v1.Pod
+	// LocalPort is the local port that will be selected to expose the PodPort
+	LocalPort int
+	// PodPort is the target port for the pod
+	PodPort int
+}
+
+func runInPodForwarding(req runInPodForwardingRequest, fn func()) {
+	stopCh := make(chan struct{}, 1)
+	readyCh := make(chan struct{})
+	stream := genericclioptions.IOStreams{
+		// for debugging:
+		// In:     os.Stdout,
+		// Out:    os.Stdout,
+		// ErrOut: os.Stdout,
+		In:     nil,
+		Out:    io.Discard,
+		ErrOut: io.Discard,
+	}
+
+	go func() {
+		err := portForwardAPod(portForwardAPodRequest{
+			RestConfig: restConfig,
+			Pod:        req.Pod,
+			LocalPort:  req.LocalPort,
+			PodPort:    req.PodPort,
+			Streams:    stream,
+			StopCh:     stopCh,
+			ReadyCh:    readyCh,
+		})
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	<-readyCh
+
+	fn()
+
+	stopCh <- struct{}{}
 }

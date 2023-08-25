@@ -14,11 +14,18 @@ LINKMODE := -extldflags '-static -s -w' \
 	-X 'github.com/metal-stack/v.GitSHA1=$(SHA)' \
 	-X 'github.com/metal-stack/v.BuildDate=$(BUILDDATE)'
 
+KUBECONFIG := $(shell pwd)/.kubeconfig
+
 .PHONY: all
 all:
 	go mod tidy
 	go build -ldflags "$(LINKMODE)" -tags 'osusergo netgo static_build' -o bin/backup-restore-sidecar github.com/metal-stack/backup-restore-sidecar/cmd
 	strip bin/backup-restore-sidecar
+
+.PHONY: test-integration
+test-integration:
+	kind --name backup-restore-sidecar load docker-image ghcr.io/metal-stack/backup-restore-sidecar:latest
+	KUBECONFIG=$(KUBECONFIG) go test -v -p 1 -timeout 10m ./integration/...
 
 .PHONY: proto
 proto:
@@ -28,15 +35,9 @@ proto:
 dockerimage: all
 	docker build -t ghcr.io/metal-stack/backup-restore-sidecar:${DOCKER_TAG} .
 
-.PHONY: dockerpush
-dockerpush:
-	docker push ghcr.io/metal-stack/backup-restore-sidecar:${DOCKER_TAG}
-
 # # #
 # the following tasks can be used to set up a development environment
 # # #
-
-KUBECONFIG := $(shell pwd)/.kubeconfig
 
 .PHONY: start-postgres
 start-postgres:

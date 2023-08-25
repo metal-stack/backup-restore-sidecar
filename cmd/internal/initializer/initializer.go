@@ -67,7 +67,7 @@ func (i *Initializer) Start(ctx context.Context) {
 	grpcServer := grpc.NewServer(opts...)
 
 	initializerService := newInitializerService(i.currentStatus)
-	backupService := newBackupProviderService(i.bp)
+	backupService := newBackupProviderService(i.bp, i.Restore)
 
 	v1.RegisterInitializerServiceServer(grpcServer, initializerService)
 	v1.RegisterBackupServiceServer(grpcServer, backupService)

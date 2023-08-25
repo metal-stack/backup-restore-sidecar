@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	BackupService_ListBackups_FullMethodName = "/v1.BackupService/ListBackups"
+	BackupService_ListBackups_FullMethodName   = "/v1.BackupService/ListBackups"
+	BackupService_RestoreBackup_FullMethodName = "/v1.BackupService/RestoreBackup"
 )
 
 // BackupServiceClient is the client API for BackupService service.
@@ -27,6 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BackupServiceClient interface {
 	ListBackups(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*BackupListResponse, error)
+	RestoreBackup(ctx context.Context, in *RestoreBackupRequest, opts ...grpc.CallOption) (*RestoreBackupResponse, error)
 }
 
 type backupServiceClient struct {
@@ -46,11 +48,21 @@ func (c *backupServiceClient) ListBackups(ctx context.Context, in *Empty, opts .
 	return out, nil
 }
 
+func (c *backupServiceClient) RestoreBackup(ctx context.Context, in *RestoreBackupRequest, opts ...grpc.CallOption) (*RestoreBackupResponse, error) {
+	out := new(RestoreBackupResponse)
+	err := c.cc.Invoke(ctx, BackupService_RestoreBackup_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BackupServiceServer is the server API for BackupService service.
 // All implementations should embed UnimplementedBackupServiceServer
 // for forward compatibility
 type BackupServiceServer interface {
 	ListBackups(context.Context, *Empty) (*BackupListResponse, error)
+	RestoreBackup(context.Context, *RestoreBackupRequest) (*RestoreBackupResponse, error)
 }
 
 // UnimplementedBackupServiceServer should be embedded to have forward compatible implementations.
@@ -59,6 +71,9 @@ type UnimplementedBackupServiceServer struct {
 
 func (UnimplementedBackupServiceServer) ListBackups(context.Context, *Empty) (*BackupListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListBackups not implemented")
+}
+func (UnimplementedBackupServiceServer) RestoreBackup(context.Context, *RestoreBackupRequest) (*RestoreBackupResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RestoreBackup not implemented")
 }
 
 // UnsafeBackupServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -90,6 +105,24 @@ func _BackupService_ListBackups_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BackupService_RestoreBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreBackupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackupServiceServer).RestoreBackup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackupService_RestoreBackup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackupServiceServer).RestoreBackup(ctx, req.(*RestoreBackupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BackupService_ServiceDesc is the grpc.ServiceDesc for BackupService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -100,6 +133,10 @@ var BackupService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListBackups",
 			Handler:    _BackupService_ListBackups_Handler,
+		},
+		{
+			MethodName: "RestoreBackup",
+			Handler:    _BackupService_RestoreBackup_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

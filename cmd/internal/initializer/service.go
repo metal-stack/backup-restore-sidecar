@@ -2,6 +2,7 @@ package initializer
 
 import (
 	"context"
+	"fmt"
 
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
@@ -25,12 +26,14 @@ func (s *initializerService) Status(context.Context, *v1.Empty) (*v1.StatusRespo
 }
 
 type backupService struct {
-	bp providers.BackupProvider
+	bp        providers.BackupProvider
+	restoreFn func(version *providers.BackupVersion) error
 }
 
-func newBackupProviderService(bp providers.BackupProvider) *backupService {
+func newBackupProviderService(bp providers.BackupProvider, restoreFn func(version *providers.BackupVersion) error) *backupService {
 	return &backupService{
-		bp: bp,
+		bp:        bp,
+		restoreFn: restoreFn,
 	}
 }
 
@@ -54,4 +57,27 @@ func (s *backupService) ListBackups(context.Context, *v1.Empty) (*v1.BackupListR
 	}
 
 	return response, nil
+}
+
+func (s *backupService) RestoreBackup(ctx context.Context, req *v1.RestoreBackupRequest) (*v1.RestoreBackupResponse, error) {
+	if req.Version == "" {
+		return nil, status.Error(codes.InvalidArgument, "version to restore must be defined explicitly")
+	}
+
+	versions, err := s.bp.ListBackups()
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	version, err := versions.Get(req.Version)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	err = s.restoreFn(version)
+	if err != nil {
+		return nil, status.Error(codes.Internal, fmt.Sprintf("error restoring backup: %s", err))
+	}
+
+	return &v1.RestoreBackupResponse{}, nil
 }

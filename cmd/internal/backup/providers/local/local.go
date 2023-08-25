@@ -63,13 +63,11 @@ func New(log *zap.SugaredLogger, config *BackupProviderConfigLocal) (*BackupProv
 // EnsureBackupBucket ensures a backup bucket at the backup provider
 func (b *BackupProviderLocal) EnsureBackupBucket() error {
 	b.log.Infow("ensuring backup bucket called for provider local")
-	if err := os.RemoveAll(b.config.LocalBackupPath); err != nil {
-		return fmt.Errorf("could not clean local backup directory: %w", err)
-	}
 
 	if err := os.MkdirAll(b.config.LocalBackupPath, 0777); err != nil {
 		return fmt.Errorf("could not create local backup directory: %w", err)
 	}
+
 	return nil
 }
 

@@ -1,4 +1,4 @@
-package initializer
+package client
 
 import (
 	"context"
@@ -19,8 +19,8 @@ type client struct {
 	conn *grpc.ClientConn
 }
 
-// NewInitializerClient returns a new initializer client.
-func NewClient(ctx context.Context, rawurl string) (Client, error) {
+// New returns a new backup-restore-sidecar grpc client.
+func New(ctx context.Context, rawurl string) (Client, error) {
 	parsedurl, err := url.Parse(rawurl)
 	if err != nil {
 		return nil, err
