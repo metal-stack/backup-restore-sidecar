@@ -79,7 +79,7 @@ spec:
             - 127.0.0.1
             - -p
             - "5432"
-          initialDelaySeconds: 10
+          initialDelaySeconds: 5
           periodSeconds: 10
           timeoutSeconds: 5
         resources: {}

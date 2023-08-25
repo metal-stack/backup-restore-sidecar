@@ -2,16 +2,23 @@ package integration_test
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 	"testing"
 
+	"github.com/avast/retry-go/v4"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/metal-stack/metal-lib/pkg/pointer"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	_ "github.com/lib/pq"
 )
 
 const (
@@ -20,7 +27,7 @@ const (
 
 func Test_Postgres(t *testing.T) {
 	const (
-		db               = "postgres"
+		postgresDB       = "postgres"
 		postgresPassword = "test123!"
 		postgresUser     = "test"
 		table            = "precioustestdata"
@@ -79,7 +86,7 @@ func Test_Postgres(t *testing.T) {
 												Command: []string{"/bin/sh", "-c", "exec", "pg_isready", "-U", postgresUser, "-h", "127.0.0.1", "-p", "5432"},
 											},
 										},
-										InitialDelaySeconds: 10,
+										InitialDelaySeconds: 5,
 										TimeoutSeconds:      5,
 										PeriodSeconds:       10,
 									},
@@ -330,7 +337,7 @@ post-exec-cmds:
 						Namespace: namespace,
 					},
 					StringData: map[string]string{
-						"POSTGRES_DB":       db,
+						"POSTGRES_DB":       postgresDB,
 						"POSTGRES_USER":     postgresUser,
 						"POSTGRES_PASSWORD": postgresPassword,
 						"POSTGRES_DATA":     "/data/postgres/",
@@ -369,12 +376,59 @@ post-exec-cmds:
 			}
 		}
 
+		newPostgresSession = func(t *testing.T, ctx context.Context) *sql.DB {
+			var db *sql.DB
+			err := retry.Do(func() error {
+				connString := fmt.Sprintf("host=127.0.0.1 port=5432 user=%s password=%s dbname=%s sslmode=disable", postgresUser, postgresPassword, postgresDB)
+
+				var err error
+				db, err = sql.Open("postgres", connString)
+				if err != nil {
+					return err
+				}
+
+				return nil
+			}, retry.Context(ctx))
+			require.NoError(t, err)
+
+			return db
+		}
+
 		addTestData = func(t *testing.T, ctx context.Context) {
-			// TODO: Implement
+			db := newPostgresSession(t, ctx)
+			defer db.Close()
+
+			var (
+				createStmt = `CREATE TABLE backuprestore (
+					data text NOT NULL
+				 );`
+				insertStmt = `INSERT INTO backuprestore("data") VALUES ('I am precious');`
+			)
+
+			_, err := db.Exec(createStmt)
+			require.NoError(t, err)
+
+			_, err = db.Exec(insertStmt)
+			require.NoError(t, err)
 		}
 
 		verifyTestData = func(t *testing.T, ctx context.Context) {
-			// TODO: Implement
+			db := newPostgresSession(t, ctx)
+			defer db.Close()
+
+			rows, err := db.Query(`SELECT "data" FROM backuprestore`)
+			require.NoError(t, err)
+			require.NoError(t, rows.Err())
+			defer rows.Close()
+
+			require.True(t, rows.Next())
+			var data string
+
+			err = rows.Scan(&data)
+			require.NoError(t, err)
+
+			assert.Equal(t, "I am precious", data)
+			assert.False(t, rows.Next())
 		}
 	)
 

@@ -15,6 +15,10 @@ LINKMODE := -extldflags '-static -s -w' \
 	-X 'github.com/metal-stack/v.BuildDate=$(BUILDDATE)'
 
 KUBECONFIG := $(shell pwd)/.kubeconfig
+GO_RUN := $(or $(GO_RUN),)
+ifneq ($(GO_RUN),)
+GO_RUN_ARG := -run $(GO_RUN)
+endif
 
 .PHONY: all
 all:
@@ -25,7 +29,7 @@ all:
 .PHONY: test-integration
 test-integration: dockerimage
 	kind --name backup-restore-sidecar load docker-image ghcr.io/metal-stack/backup-restore-sidecar:latest
-	KUBECONFIG=$(KUBECONFIG) go test -v -p 1 -timeout 10m ./integration/...
+	KUBECONFIG=$(KUBECONFIG) go test $(GO_RUN_ARG) -v -p 1 -timeout 10m ./integration/...
 
 .PHONY: proto
 proto:

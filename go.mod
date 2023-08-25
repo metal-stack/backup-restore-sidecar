@@ -8,6 +8,7 @@ require (
 	github.com/avast/retry-go/v4 v4.5.0
 	github.com/aws/aws-sdk-go v1.44.324
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
+	github.com/lib/pq v1.10.9
 	github.com/metal-stack/metal-lib v0.13.2
 	github.com/metal-stack/v v1.0.3
 	github.com/mholt/archiver/v3 v3.5.1
