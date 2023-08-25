@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
-	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/metal-stack/metal-lib/pkg/pointer"
 	"github.com/stretchr/testify/assert"
@@ -20,8 +18,6 @@ import (
 
 	"github.com/avast/retry-go/v4"
 	r "gopkg.in/rethinkdb/rethinkdb-go.v6"
-
-	brsclient "github.com/metal-stack/backup-restore-sidecar/pkg/client"
 )
 
 const (
@@ -29,113 +25,24 @@ const (
 )
 
 func Test_RethinkDB(t *testing.T) {
+	type testData struct {
+		ID   string `rethinkdb:"id"`
+		Data string `rethinkdb:"data"`
+	}
+
 	const (
 		rethinkdbPassword = "test123!"
 		db                = "backup-restore"
 		table             = "precioustestdata"
 		rethinkdbPodName  = "rethinkdb-0"
 	)
-	var (
-		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
-		ns          = testNamespace(t)
-	)
-
-	defer cancel()
-
-	cleanup := func() {
-		t.Log("running cleanup")
-
-		err := c.Delete(ctx, ns)
-		require.NoError(t, client.IgnoreNotFound(err), "cleanup did not succeed")
-
-		err = waitUntilNotFound(ctx, &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: ns.Name,
-			},
-		})
-		require.NoError(t, err, "cleanup did not succeed")
-	}
-	cleanup()
-	defer cleanup()
-
-	err := c.Create(ctx, ns)
-	require.NoError(t, client.IgnoreAlreadyExists(err))
 
 	var (
-		cm = func() *corev1.ConfigMap {
-			return &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "backup-restore-sidecar-config-rethinkdb",
-					Namespace: ns.Name,
-				},
-				Data: map[string]string{
-					"config.yaml": `---
-bind-addr: 0.0.0.0
-db: rethinkdb
-db-data-directory: /data/rethinkdb/
-backup-provider: local
-rethinkdb-passwordfile: /rethinkdb-secret/rethinkdb-password.txt
-backup-cron-schedule: "*/1 * * * *"
-object-prefix: rethinkdb-test
-post-exec-cmds:
-# IMPORTANT: the --directory needs to point to the exact sidecar data dir, otherwise the database will be restored to the wrong location
-- rethinkdb --bind all --directory /data/rethinkdb --initial-password ${RETHINKDB_PASSWORD}
-`,
-				},
-			}
-		}
-
-		secret = func() *corev1.Secret {
-			return &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "rethinkdb",
-					Namespace: ns.Name,
-				},
-				StringData: map[string]string{
-					"rethinkdb-password": rethinkdbPassword,
-				},
-			}
-		}
-
-		service = func() *corev1.Service {
-			return &corev1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "rethinkdb",
-					Namespace: ns.Name,
-					Labels: map[string]string{
-						"app": "rethinkdb",
-					},
-				},
-				Spec: corev1.ServiceSpec{
-					Selector: map[string]string{
-						"app": "rethinkdb",
-					},
-					Ports: []corev1.ServicePort{
-						{
-							Name:       "10080",
-							Port:       10080,
-							TargetPort: intstr.FromInt32(10080),
-						},
-						{
-							Name:       "28015",
-							Port:       28015,
-							TargetPort: intstr.FromInt32(28015),
-						},
-						{
-							Name:       "metrics",
-							Port:       2112,
-							TargetPort: intstr.FromInt32(2112),
-						},
-					},
-				},
-			}
-		}
-
-		sts = func() *appsv1.StatefulSet {
+		sts = func(namespace string) *appsv1.StatefulSet {
 			return &appsv1.StatefulSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "rethinkdb",
-					Namespace: ns.Name,
+					Namespace: namespace,
 					Labels: map[string]string{
 						"app": "rethinkdb",
 					},
@@ -184,7 +91,7 @@ post-exec-cmds:
 									},
 									VolumeMounts: []corev1.VolumeMount{
 										{
-											Name:      "rethinkdb",
+											Name:      "data",
 											MountPath: "/data",
 										},
 										{
@@ -214,7 +121,7 @@ post-exec-cmds:
 											MountPath: constants.SidecarBaseDir,
 										},
 										{
-											Name:      "rethinkdb",
+											Name:      "data",
 											MountPath: "/data",
 										},
 										{
@@ -265,10 +172,10 @@ post-exec-cmds:
 							},
 							Volumes: []corev1.Volume{
 								{
-									Name: "rethinkdb",
+									Name: "data",
 									VolumeSource: corev1.VolumeSource{
 										PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-											ClaimName: "rethinkdb",
+											ClaimName: "data",
 										},
 									},
 								},
@@ -316,7 +223,7 @@ post-exec-cmds:
 					VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
 						{
 							ObjectMeta: metav1.ObjectMeta{
-								Name: "rethinkdb",
+								Name: "data",
 							},
 							Spec: corev1.PersistentVolumeClaimSpec{
 								AccessModes: []corev1.PersistentVolumeAccessMode{
@@ -348,141 +255,149 @@ post-exec-cmds:
 				},
 			}
 		}
+
+		backingResources = func(namespace string) []client.Object {
+			return []client.Object{
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "backup-restore-sidecar-config-rethinkdb",
+						Namespace: namespace,
+					},
+					Data: map[string]string{
+						"config.yaml": `---
+bind-addr: 0.0.0.0
+db: rethinkdb
+db-data-directory: /data/rethinkdb/
+backup-provider: local
+rethinkdb-passwordfile: /rethinkdb-secret/rethinkdb-password.txt
+backup-cron-schedule: "*/1 * * * *"
+object-prefix: rethinkdb-test
+post-exec-cmds:
+# IMPORTANT: the --directory needs to point to the exact sidecar data dir, otherwise the database will be restored to the wrong location
+- rethinkdb --bind all --directory /data/rethinkdb --initial-password ${RETHINKDB_PASSWORD}
+`,
+					},
+				},
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "rethinkdb",
+						Namespace: namespace,
+					},
+					StringData: map[string]string{
+						"rethinkdb-password": rethinkdbPassword,
+					},
+				},
+				&corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "rethinkdb",
+						Namespace: namespace,
+						Labels: map[string]string{
+							"app": "rethinkdb",
+						},
+					},
+					Spec: corev1.ServiceSpec{
+						Selector: map[string]string{
+							"app": "rethinkdb",
+						},
+						Ports: []corev1.ServicePort{
+							{
+								Name:       "10080",
+								Port:       10080,
+								TargetPort: intstr.FromInt32(10080),
+							},
+							{
+								Name:       "28015",
+								Port:       28015,
+								TargetPort: intstr.FromInt32(28015),
+							},
+							{
+								Name:       "metrics",
+								Port:       2112,
+								TargetPort: intstr.FromInt32(2112),
+							},
+						},
+					},
+				},
+			}
+		}
+
+		newRethinkdbSession = func(t *testing.T, ctx context.Context) *r.Session {
+			var session *r.Session
+			err := retry.Do(func() error {
+				var err error
+				session, err = r.Connect(r.ConnectOpts{
+					Addresses: []string{"localhost:28015"},
+					Database:  db,
+					Username:  "admin",
+					Password:  rethinkdbPassword,
+					MaxIdle:   10,
+					MaxOpen:   20,
+				})
+				if err != nil {
+					return fmt.Errorf("cannot connect to DB: %w", err)
+				}
+
+				return nil
+			}, retry.Context(ctx))
+			require.NoError(t, err)
+
+			return session
+		}
+
+		addTestData = func(t *testing.T, ctx context.Context) {
+			session := newRethinkdbSession(t, ctx)
+
+			_, err := r.DBCreate(db).RunWrite(session)
+			require.NoError(t, err)
+
+			_, err = r.DB(db).TableCreate(table).RunWrite(session)
+			require.NoError(t, err)
+
+			_, err = r.DB(db).Table(table).Insert(testData{
+				ID:   "1",
+				Data: "i am precious",
+			}).RunWrite(session)
+			require.NoError(t, err)
+
+			cursor, err := r.DB(db).Table(table).Get("1").Run(session)
+			require.NoError(t, err)
+
+			var d1 testData
+			err = cursor.One(&d1)
+			require.NoError(t, err)
+			require.Equal(t, "i am precious", d1.Data)
+		}
+
+		verifyTestData = func(t *testing.T, ctx context.Context) {
+			session := newRethinkdbSession(t, ctx)
+
+			var d2 testData
+			err := retry.Do(func() error {
+				cursor, err := r.DB(db).Table(table).Get("1").Run(session)
+				if err != nil {
+					return err
+				}
+
+				err = cursor.One(&d2)
+				if err != nil {
+					return err
+				}
+
+				return nil
+			})
+			require.NoError(t, err)
+
+			assert.Equal(t, "i am precious", d2.Data)
+		}
 	)
-
-	t.Log("applying resource manifests")
-
-	objects := []client.Object{cm(), secret(), service(), sts()}
-	dumpToExamples(t, "rethinkdb-local.yaml", objects...)
-	for _, o := range objects {
-		o := o
-		err = c.Create(ctx, o)
-		require.NoError(t, err)
-	}
-
-	err = waitForPodRunnig(ctx, rethinkdbPodName, ns.Name)
-	require.NoError(t, err)
-
-	t.Log("adding test data to database")
-
-	var session *r.Session
-	err = retry.Do(func() error {
-		var err error
-		session, err = r.Connect(r.ConnectOpts{
-			Addresses: []string{"localhost:28015"},
-			Database:  db,
-			Username:  "admin",
-			Password:  rethinkdbPassword,
-			MaxIdle:   10,
-			MaxOpen:   20,
-		})
-		if err != nil {
-			return fmt.Errorf("cannot connect to DB: %w", err)
-		}
-
-		return nil
-	}, retry.Context(ctx))
-	require.NoError(t, err)
-
-	_, _ = r.DBDrop(db).RunWrite(session)
-
-	_, err = r.DBCreate(db).RunWrite(session)
-	require.NoError(t, err)
-
-	_, err = r.DB(db).TableCreate(table).RunWrite(session)
-	require.NoError(t, err)
-
-	type testData struct {
-		ID   string `rethinkdb:"id"`
-		Data string `rethinkdb:"data"`
-	}
-
-	_, err = r.DB(db).Table(table).Insert(testData{
-		ID:   "1",
-		Data: "i am precious",
-	}).RunWrite(session)
-	require.NoError(t, err)
-
-	cursor, err := r.DB(db).Table(table).Get("1").Run(session)
-	require.NoError(t, err)
-
-	var d1 testData
-	err = cursor.One(&d1)
-	require.NoError(t, err)
-	require.Equal(t, "i am precious", d1.Data)
-
-	t.Log("taking a backup")
-
-	brsc, err := brsclient.New(ctx, "http://localhost:8000")
-	require.NoError(t, err)
-
-	_, err = brsc.DatabaseServiceClient().CreateBackup(ctx, &v1.Empty{})
-	assert.NoError(t, err)
-
-	var backup *v1.Backup
-	err = retry.Do(func() error {
-		backups, err := brsc.BackupServiceClient().ListBackups(ctx, &v1.Empty{})
-		if err != nil {
-			return err
-		}
-
-		if len(backups.Backups) == 0 {
-			return fmt.Errorf("no backups were made yet")
-		}
-
-		backup = backups.Backups[0]
-
-		return nil
-	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
-	require.NoError(t, err)
-	require.NotNil(t, backup)
-
-	t.Log("remove sts and delete data volume")
-
-	err = c.Delete(ctx, sts())
-	require.NoError(t, err)
-
-	err = c.Delete(ctx, &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rethinkdb-rethinkdb-0",
-			Namespace: ns.Name,
-		},
-	})
-	require.NoError(t, err)
-
-	err = waitUntilNotFound(ctx, &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      rethinkdbPodName,
-			Namespace: ns.Name,
-		},
-	})
-	require.NoError(t, err)
-
-	t.Log("recreate sts")
-
-	err = c.Create(ctx, sts())
-	require.NoError(t, err)
-
-	err = waitForPodRunnig(ctx, rethinkdbPodName, ns.Name)
-	require.NoError(t, err)
 
 	t.Log("verify that data gets restored")
 
-	var d2 testData
-	err = retry.Do(func() error {
-		cursor, err := r.DB(db).Table(table).Get("1").Run(session)
-		if err != nil {
-			return err
-		}
-
-		err = cursor.One(&d2)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
-	require.NoError(t, err)
-
-	require.Equal(t, "i am precious", d2.Data)
+	restoreFlow(t, &flowSpec{
+		databaseType:     db,
+		sts:              sts,
+		backingResources: backingResources,
+		addTestData:      addTestData,
+		verifyTestData:   verifyTestData,
+	})
 }

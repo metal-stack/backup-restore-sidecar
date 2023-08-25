@@ -8,8 +8,12 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/avast/retry-go/v4"
+	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
+	brsclient "github.com/metal-stack/backup-restore-sidecar/pkg/client"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -158,4 +162,121 @@ func waitUntilNotFound(ctx context.Context, obj client.Object) error {
 
 		return fmt.Errorf("resource is still running: %s", obj.GetName())
 	}, retry.Context(ctx), retry.Attempts(0))
+}
+
+type flowSpec struct {
+	databaseType     string
+	sts              func(namespace string) *appsv1.StatefulSet
+	backingResources func(namespace string) []client.Object
+	addTestData      func(t *testing.T, ctx context.Context)
+	verifyTestData   func(t *testing.T, ctx context.Context)
+}
+
+func restoreFlow(t *testing.T, spec *flowSpec) {
+	var (
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+		ns          = testNamespace(t)
+	)
+
+	defer cancel()
+
+	cleanup := func() {
+		t.Log("running cleanup")
+
+		err := c.Delete(ctx, ns)
+		require.NoError(t, client.IgnoreNotFound(err), "cleanup did not succeed")
+
+		err = waitUntilNotFound(ctx, &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: ns.Name,
+			},
+		})
+		require.NoError(t, err, "cleanup did not succeed")
+	}
+	cleanup()
+	defer cleanup()
+
+	err := c.Create(ctx, ns)
+	require.NoError(t, client.IgnoreAlreadyExists(err))
+
+	t.Log("applying resource manifests")
+
+	objects := []client.Object{spec.sts(ns.Name)}
+	objects = append(objects, spec.backingResources(ns.Name)...)
+
+	dumpToExamples(t, "rethinkdb-local.yaml", objects...)
+
+	for _, o := range objects {
+		o := o
+		err = c.Create(ctx, o)
+		require.NoError(t, err)
+	}
+
+	podName := spec.sts(ns.Name).Name + "-0"
+
+	err = waitForPodRunnig(ctx, podName, ns.Name)
+	require.NoError(t, err)
+
+	t.Log("adding test data to database")
+
+	spec.addTestData(t, ctx)
+
+	t.Log("taking a backup")
+
+	brsc, err := brsclient.New(ctx, "http://localhost:8000")
+	require.NoError(t, err)
+
+	_, err = brsc.DatabaseServiceClient().CreateBackup(ctx, &v1.Empty{})
+	assert.NoError(t, err)
+
+	var backup *v1.Backup
+	err = retry.Do(func() error {
+		backups, err := brsc.BackupServiceClient().ListBackups(ctx, &v1.Empty{})
+		if err != nil {
+			return err
+		}
+
+		if len(backups.Backups) == 0 {
+			return fmt.Errorf("no backups were made yet")
+		}
+
+		backup = backups.Backups[0]
+
+		return nil
+	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
+	require.NoError(t, err)
+	require.NotNil(t, backup)
+
+	t.Log("remove sts and delete data volume")
+
+	err = c.Delete(ctx, spec.sts(ns.Name))
+	require.NoError(t, err)
+
+	err = c.Delete(ctx, &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "data-" + podName,
+			Namespace: ns.Name,
+		},
+	})
+	require.NoError(t, err)
+
+	err = waitUntilNotFound(ctx, &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: ns.Name,
+		},
+	})
+	require.NoError(t, err)
+
+	t.Log("recreate sts")
+
+	err = c.Create(ctx, spec.sts(ns.Name))
+	require.NoError(t, err)
+
+	err = waitForPodRunnig(ctx, podName, ns.Name)
+	require.NoError(t, err)
+
+	t.Log("verify that data gets restored")
+
+	spec.verifyTestData(t, ctx)
 }
