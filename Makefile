@@ -29,7 +29,7 @@ all:
 .PHONY: test-integration
 test-integration: dockerimage
 	kind --name backup-restore-sidecar load docker-image ghcr.io/metal-stack/backup-restore-sidecar:latest
-	KUBECONFIG=$(KUBECONFIG) go test $(GO_RUN_ARG) -v -p 1 -timeout 10m ./integration/...
+	KUBECONFIG=$(KUBECONFIG) go test $(GO_RUN_ARG) -count 1 -v -p 1 -timeout 10m ./integration/...
 
 .PHONY: proto
 proto:

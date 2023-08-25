@@ -90,8 +90,9 @@ func (db *RethinkDB) Backup() error {
 	}
 
 	out, err := db.executor.ExecuteCommandWithOutput(rethinkDBDumpCmd, nil, args...)
+	fmt.Println(out)
 	if err != nil {
-		return fmt.Errorf("error running backup command: %s %w", out, err)
+		return fmt.Errorf("error running backup command: %w", err)
 	}
 
 	if strings.Contains(out, "0 rows exported from 0 tables, with 0 secondary indexes, and 0 hook functions") {
@@ -102,7 +103,7 @@ func (db *RethinkDB) Backup() error {
 		return fmt.Errorf("backup file was not created: %s", rethinkDBBackupFilePath)
 	}
 
-	db.log.Debugw("successfully took backup of rethinkdb database", "output", out)
+	db.log.Debugw("successfully took backup of rethinkdb database")
 
 	return nil
 }
@@ -124,15 +125,45 @@ func (db *RethinkDB) Recover() error {
 	// inside the sidecar against which we can restore.
 
 	var (
-		cmd  *exec.Cmd
-		g, _ = errgroup.WithContext(context.Background())
+		cmd                           *exec.Cmd
+		g, _                          = errgroup.WithContext(context.Background())
+		rethinkdbCtx, cancelRethinkdb = context.WithCancel(context.Background()) // cancel sends a KILL signal to the process
+
+		// IMPORTANT: when the recovery goes wrong, the database directory MUST be cleaned up
+		// otherwise on pod restart the database directory is not empty anymore and
+		// the backup-restore-sidecar will assume it's a fresh database and let the
+		// database start without restored data, which can mess up things big time
+
+		handleFailedRecovery = func(restoreErr error) error {
+			db.log.Errorw("trying to handle failed database recovery", "error", restoreErr)
+
+			// kill the rethinkdb process
+			cancelRethinkdb()
+
+			db.log.Info("waiting for async rethinkdb go routine to stop")
+
+			err := g.Wait()
+			if err != nil {
+				db.log.Errorw("rethinkdb go routine finished with error", "error", err)
+			}
+
+			if err := os.RemoveAll(db.datadir); err != nil {
+				db.log.Errorw("unable to cleanup database data directory after failed recovery attempt, high risk of starting with fresh database on container restart", "err", err)
+			} else {
+				db.log.Info("cleaned up database data directory after failed recovery attempt to prevent start of fresh database")
+			}
+
+			return restoreErr
+		}
 	)
+
+	defer cancelRethinkdb()
 
 	g.Go(func() error {
 		args := []string{"--bind", "all", "--driver-port", "1", "--directory", db.datadir, "--initial-password", strings.TrimSpace(string(passwordRaw))}
-		db.log.Infow("execute rethinkdb", "args", args)
+		db.log.Debugw("execute rethinkdb", "args", args)
 
-		cmd = exec.Command(rethinkDBCmd, args...) // nolint:gosec
+		cmd = exec.CommandContext(rethinkdbCtx, rethinkDBCmd, args...) // nolint:gosec
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		err := cmd.Run()
@@ -140,18 +171,20 @@ func (db *RethinkDB) Recover() error {
 			return fmt.Errorf("unable to run rethinkdb: %w", err)
 		}
 
-		db.log.Info("rethinkdb finished")
+		db.log.Info("rethinkdb process finished")
 
 		return nil
 	})
 
 	db.log.Infow("waiting for rethinkdb database to come up")
+
 	probeCtx, probeCancel := context.WithTimeout(context.Background(), restoreDatabaseStartupTimeout)
 	defer probeCancel()
+
 	restoreDB := New(db.ctx, db.log, db.datadir, "localhost:1", db.passwordFile)
 	err = probe.Start(probeCtx, restoreDB.log, restoreDB)
 	if err != nil {
-		return fmt.Errorf("rethinkdb did not come up: %w", err)
+		return handleFailedRecovery(fmt.Errorf("rethinkdb did not come up: %w", err))
 	}
 
 	args := []string{}
@@ -164,20 +197,20 @@ func (db *RethinkDB) Recover() error {
 	args = append(args, rethinkDBRestoreFilePath)
 
 	out, err := db.executor.ExecuteCommandWithOutput(rethinkDBRestoreCmd, nil, args...)
+	fmt.Println(out)
 	if err != nil {
-		return fmt.Errorf("error running restore command: %s %w", out, err)
+		return handleFailedRecovery(fmt.Errorf("error running restore command: %w", err))
 	}
 
-	db.log.Infow("successfully restored rethinkdb database", "output", out)
-
 	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		return fmt.Errorf("failed to send sigterm signal to rethinkdb: %w", err)
+		return handleFailedRecovery(fmt.Errorf("failed to send sigterm signal to rethinkdb: %w", err))
 	}
 
 	err = g.Wait()
 	if err != nil {
-		// sending a TERM signal will always result in a error response.
-		db.log.Errorw("importing dump terminated but reported an error which can be ignored", "error", err)
+		db.log.Errorw("rethinkdb process not properly terminated, but restore was successful", "error", err)
+	} else {
+		db.log.Infow("successfully restored rethinkdb database")
 	}
 
 	return nil
