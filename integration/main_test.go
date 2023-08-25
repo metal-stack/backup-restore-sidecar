@@ -92,6 +92,8 @@ func dumpToExamples(t *testing.T, name string, resources ...client.Object) {
 `)
 
 	for i, r := range resources {
+		r.SetNamespace("") // not needed for example manifests
+
 		r := r.DeepCopyObject()
 
 		if sts, ok := r.(*appsv1.StatefulSet); ok {
@@ -201,12 +203,15 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 
 	t.Log("applying resource manifests")
 
-	objects := []client.Object{spec.sts(ns.Name)}
-	objects = append(objects, spec.backingResources(ns.Name)...)
+	objects := func() []client.Object {
+		objects := []client.Object{spec.sts(ns.Name)}
+		objects = append(objects, spec.backingResources(ns.Name)...)
+		return objects
+	}
 
-	dumpToExamples(t, "rethinkdb-local.yaml", objects...)
+	dumpToExamples(t, spec.databaseType+"-local.yaml", objects()...)
 
-	for _, o := range objects {
+	for _, o := range objects() {
 		o := o
 		err = c.Create(ctx, o)
 		require.NoError(t, err)

@@ -7,7 +7,6 @@ metadata:
   labels:
     app: rethinkdb
   name: rethinkdb
-  namespace: test-rethinkdb
 spec:
   replicas: 1
   selector:
@@ -148,14 +147,12 @@ kind: ConfigMap
 metadata:
   creationTimestamp: null
   name: backup-restore-sidecar-config-rethinkdb
-  namespace: test-rethinkdb
 ---
 apiVersion: v1
 kind: Secret
 metadata:
   creationTimestamp: null
   name: rethinkdb
-  namespace: test-rethinkdb
 stringData:
   rethinkdb-password: test123!
 ---
@@ -166,7 +163,6 @@ metadata:
   labels:
     app: rethinkdb
   name: rethinkdb
-  namespace: test-rethinkdb
 spec:
   ports:
   - name: "10080"
