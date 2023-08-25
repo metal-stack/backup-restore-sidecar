@@ -26,13 +26,8 @@ spec:
         imagePullPolicy: IfNotPresent
         name: meilisearch
         command:
-        - tini
-        - --
-        args:
-        - sh
-        - -x
-        - -c
-        - backup-restore-sidecar wait --log-level debug && meilisearch
+        - backup-restore-sidecar
+        - wait
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -86,18 +81,12 @@ spec:
           mountPath: /usr/local/bin/backup-restore-sidecar
         - name: backup-restore-sidecar-config
           mountPath: /etc/backup-restore-sidecar
-        - name: bin-provision
-          subPath: tini
-          mountPath: /usr/local/bin/tini
       - image: getmeili/meilisearch:v1.2.0
         name: backup-restore-sidecar
         command:
-        - tini
-        - --
-        args:
-        - sh
-        - -c
-        - backup-restore-sidecar start --log-level debug
+        - backup-restore-sidecar
+        - start
+        - --log-level=debug
         env:
         # FIXME fetch from secret
         - name: BACKUP_RESTORE_SIDECAR_MEILISEARCH_APIKEY
@@ -114,9 +103,6 @@ spec:
           mountPath: /usr/local/bin/backup-restore-sidecar
         - name: backup-restore-sidecar-config
           mountPath: /etc/backup-restore-sidecar
-        - name: bin-provision
-          subPath: tini
-          mountPath: /usr/local/bin/tini
       initContainers:
       - name: backup-restore-sidecar-provider
         image: ghcr.io/metal-stack/backup-restore-sidecar:meilisearch-support
@@ -124,7 +110,6 @@ spec:
         command:
         - cp
         - /backup-restore-sidecar
-        - /sbin/tini
         - /bin-provision
         ports:
         - containerPort: 2112
@@ -164,6 +149,8 @@ data:
     backup-cron-schedule: "*/1 * * * *"
     object-prefix: meilisearch-test
     compression-method: tar
+    post-exec-cmds:
+      - meilisearch
 ---
 apiVersion: v1
 data:
