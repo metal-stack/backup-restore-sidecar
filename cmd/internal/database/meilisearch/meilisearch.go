@@ -206,6 +206,10 @@ func (db *Meilisearch) Upgrade() error {
 		if err != nil {
 			return err
 		}
+		healthy := db.client.IsHealthy()
+		if !healthy {
+			return fmt.Errorf("meilisearch does not report healthiness")
+		}
 		db.log.Infow("meilisearch started after upgrade, killing it", "version", v)
 		return cmd.Process.Signal(syscall.SIGTERM)
 	}, retry.Attempts(100))
@@ -214,7 +218,8 @@ func (db *Meilisearch) Upgrade() error {
 	}
 	err = g.Wait()
 	if err != nil {
-		return fmt.Errorf("database upgrade failed with %w", err)
+		// sending a TERM signal will always result in a error response.
+		db.log.Infow("upgrade database terminated but reported an error which can be ignored", "error", err)
 	}
 
 	db.log.Infow("upgrade done and new data in place", "took", time.Since(start))
