@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup"
@@ -21,7 +23,6 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/initializer"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/probe"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/signals"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/wait"
 	"github.com/metal-stack/v"
@@ -45,6 +46,9 @@ const (
 
 	databaseFlg        = "db"
 	databaseDatadirFlg = "db-data-directory"
+
+	preExecCommandsFlg  = "pre-exec-cmds"
+	postExecCommandsFlg = "post-exec-cmds"
 
 	postgresUserFlg     = "postgres-user"
 	postgresHostFlg     = "postgres-host"
@@ -87,13 +91,14 @@ var (
 	logger  *zap.SugaredLogger
 	db      database.Database
 	bp      providers.BackupProvider
-	stop    <-chan struct{}
+	stop    context.Context
 )
 
 var rootCmd = &cobra.Command{
-	Use:     moduleName,
-	Short:   "a backup restore sidecar for databases managed in K8s",
-	Version: v.V.String(),
+	Use:          moduleName,
+	Short:        "a backup restore sidecar for databases managed in K8s",
+	Version:      v.V.String(),
+	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		initLogging()
 		initConfig()
@@ -113,6 +118,17 @@ var startCmd = &cobra.Command{
 		return initBackupProvider()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		for _, cmd := range viper.GetStringSlice(preExecCommandsFlg) {
+			logger.Infow("running pre-exec command", "cmd", cmd)
+
+			executor := utils.NewExecutor(logger.Named("pre-executor"))
+
+			err := executor.ExecWithStreamingOutput(stop, cmd)
+			if err != nil {
+				return err
+			}
+		}
+
 		addr := fmt.Sprintf("%s:%d", viper.GetString(bindAddrFlg), viper.GetInt(portFlg))
 
 		logger.Infow("starting backup-restore-sidecar", "version", v.V, "bind-addr", addr)
@@ -121,13 +137,13 @@ var startCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		initializer.New(logger.Named("initializer"), addr, db, bp, comp).Start(stop)
-		if err := probe.Start(logger.Named("probe"), db, stop); err != nil {
+		initializer.New(logger.Named("initializer"), addr, db, bp, comp, viper.GetString(databaseDatadirFlg)).Start(stop)
+		if err := probe.Start(stop, logger.Named("probe"), db); err != nil {
 			return err
 		}
 		metrics := metrics.New()
 		metrics.Start(logger.Named("metrics"))
-		return backup.Start(logger.Named("backup"), viper.GetString(backupCronScheduleFlg), db, bp, metrics, comp, stop)
+		return backup.Start(stop, logger.Named("backup"), viper.GetString(backupCronScheduleFlg), db, bp, metrics, comp)
 	},
 }
 
@@ -153,7 +169,7 @@ var restoreCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return initializer.New(logger.Named("initializer"), "", db, bp, comp).Restore(version)
+		return initializer.New(logger.Named("initializer"), "", db, bp, comp, viper.GetString(databaseDatadirFlg)).Restore(version)
 	},
 }
 
@@ -185,12 +201,29 @@ var waitCmd = &cobra.Command{
 	Use:   "wait",
 	Short: "waits for the initializer to be done",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return wait.Start(logger.Named("wait"), viper.GetString(serverAddrFlg), stop)
+		if err := wait.Start(stop, logger.Named("wait"), viper.GetString(serverAddrFlg)); err != nil {
+			return err
+		}
+
+		for _, cmd := range viper.GetStringSlice(postExecCommandsFlg) {
+			logger.Infow("running post-exec command", "cmd", cmd)
+			executor := utils.NewExecutor(logger.Named("post-executor"))
+
+			err := executor.ExecWithStreamingOutput(stop, cmd)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
 	},
 }
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
+		if logger == nil {
+			panic(err)
+		}
 		logger.Fatalw("failed executing root command", "error", err)
 	}
 }
@@ -210,6 +243,8 @@ func init() {
 
 	startCmd.Flags().StringP(bindAddrFlg, "", "127.0.0.1", "the bind addr of the api server")
 	startCmd.Flags().IntP(portFlg, "", 8000, "the port to serve on")
+
+	startCmd.Flags().StringSlice(preExecCommandsFlg, nil, "runs given commands prior to executing the backup-restore-sidecar functionality")
 
 	startCmd.Flags().StringP(postgresUserFlg, "", "postgres", "the postgres database user (will be used when db is postgres)")
 	startCmd.Flags().StringP(postgresHostFlg, "", "127.0.0.1", "the postgres database address (will be used when db is postgres)")
@@ -250,6 +285,8 @@ func init() {
 	}
 
 	waitCmd.Flags().StringP(serverAddrFlg, "", "http://127.0.0.1:8000/", "the url of the initializer server")
+
+	waitCmd.Flags().StringSlice(postExecCommandsFlg, nil, "runs given commands after finished waiting for the backup-restore-sidecar's initializer (typically used for starting the database)")
 
 	err = viper.BindPFlags(waitCmd.Flags())
 	if err != nil {
@@ -316,7 +353,8 @@ func initLogging() {
 }
 
 func initSignalHandlers() {
-	stop = signals.SetupSignalHandler()
+	// don't need to store
+	stop, _ = signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 }
 
 func initDatabase() error {
@@ -326,6 +364,7 @@ func initDatabase() error {
 	}
 
 	dbString := viper.GetString(databaseFlg)
+
 	switch dbString {
 	case "postgres":
 		db = postgres.New(
@@ -338,6 +377,7 @@ func initDatabase() error {
 		)
 	case "rethinkdb":
 		db = rethinkdb.New(
+			stop,
 			logger.Named("rethinkdb"),
 			datadir,
 			viper.GetString(rethinkDBURLFlg),
@@ -356,7 +396,9 @@ func initDatabase() error {
 	default:
 		return fmt.Errorf("unsupported database type: %s", dbString)
 	}
+
 	logger.Infow("initialized database adapter", "type", dbString)
+
 	return nil
 }
 

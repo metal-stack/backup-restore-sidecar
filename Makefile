@@ -3,7 +3,7 @@ BACKUP_PROVIDER := $(or ${BACKUP_PROVIDER},local)
 
 SHA := $(shell git rev-parse --short=8 HEAD)
 GITVERSION := $(shell git describe --long --all)
-BUILDDATE := $(shell GO111MODULE=off go run ${COMMONDIR}/time.go)
+BUILDDATE := $(shell date --rfc-3339=seconds)
 VERSION := $(or ${VERSION},$(shell git describe --tags --exact-match 2> /dev/null || git symbolic-ref -q --short HEAD || git rev-parse --short HEAD))
 
 GO111MODULE := on
@@ -25,7 +25,7 @@ proto:
 	make -C proto protoc
 
 .PHONY: dockerimage
-dockerimage:
+dockerimage: all
 	docker build -t ghcr.io/metal-stack/backup-restore-sidecar:${DOCKER_TAG} .
 
 .PHONY: dockerpush

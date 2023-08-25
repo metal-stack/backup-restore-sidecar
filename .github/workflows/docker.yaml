@@ -47,6 +47,10 @@ jobs:
         [ "${GITHUB_EVENT_NAME}" == 'release' ] && echo "tag=${GITHUB_REF##*/}" >> $GITHUB_ENV || true
         [ "${GITHUB_EVENT_NAME}" == 'push' ] && echo "tag=latest" >> $GITHUB_ENV || true
 
+    - name: Build
+      run:
+        make all
+
     - name: Build and push image
       uses: docker/build-push-action@v4
       with:

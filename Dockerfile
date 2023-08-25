@@ -1,29 +1,12 @@
-FROM golang:1.21 as builder
-WORKDIR /work
-COPY .git .git
-COPY api api
-COPY cmd cmd
-COPY go.mod .
-COPY go.sum .
-COPY Makefile .
-RUN make
-
+# TODO: remove tini in a future release, not required anymore since pre- and post-exec-cmd flags
 FROM krallin/ubuntu-tini as ubuntu-tini
 
-# rethinkdb backup/restore requires the python client library
-# let's make small binaries of these commands in order not to blow up the image size
-FROM rethinkdb:2.4.1 as rethinkdb-python-client-builder
-WORKDIR /work
-RUN apt update && apt install -y python3-pip
-RUN pip3 install pyinstaller==4.3.0 rethinkdb
-COPY build/rethinkdb-dump.spec rethinkdb-dump.spec
-COPY build/rethinkdb-restore.spec rethinkdb-restore.spec
-RUN pyinstaller rethinkdb-dump.spec \
-    && pyinstaller rethinkdb-restore.spec
+FROM ghcr.io/metal-stack/rethinkdb-backup-tools-build:v2.4.1 as rethinkdb-backup-tools
 
 FROM alpine:3.18
+# TODO: remove tini in a future release, not required anymore since pre- and post-exec-cmd flags
 RUN apk add --no-cache tini ca-certificates
-COPY --from=builder /work/bin/backup-restore-sidecar /backup-restore-sidecar
+COPY bin/backup-restore-sidecar /backup-restore-sidecar
 COPY --from=ubuntu-tini /usr/local/bin/tini-static /ubuntu/tini
-COPY --from=rethinkdb-python-client-builder /work/dist/rethinkdb-dump /work/dist/rethinkdb-restore /rethinkdb/
+COPY --from=rethinkdb-backup-tools /rethinkdb-dump /rethinkdb-restore /rethinkdb/
 CMD ["/backup-restore-sidecar"]
