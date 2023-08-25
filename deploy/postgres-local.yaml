@@ -20,12 +20,8 @@ spec:
       - image: postgres:12-alpine
         name: postgres
         command:
-        - tini
-        - --
-        args:
-        - sh
-        - -c
-        - backup-restore-sidecar wait && docker-entrypoint.sh postgres
+        - backup-restore-sidecar
+        - wait
         ports:
         - containerPort: 5432
         env:
@@ -57,18 +53,12 @@ spec:
           mountPath: /usr/local/bin/backup-restore-sidecar
         - name: backup-restore-sidecar-config
           mountPath: /etc/backup-restore-sidecar
-        - name: bin-provision
-          subPath: tini
-          mountPath: /usr/local/bin/tini
       - image: postgres:12-alpine
         name: backup-restore-sidecar
         command:
-        - tini
-        - --
-        args:
-        - sh
-        - -c
-        - mkdir -p /data/postgres && backup-restore-sidecar start --log-level debug
+        - backup-restore-sidecar
+        - start
+        - --log-level=debug
         env:
         - name: BACKUP_RESTORE_SIDECAR_POSTGRES_PASSWORD
           valueFrom:
@@ -88,9 +78,6 @@ spec:
           mountPath: /usr/local/bin/backup-restore-sidecar
         - name: backup-restore-sidecar-config
           mountPath: /etc/backup-restore-sidecar
-        - name: bin-provision
-          subPath: tini
-          mountPath: /usr/local/bin/tini
       initContainers:
       - name: backup-restore-sidecar-provider
         image: ghcr.io/metal-stack/backup-restore-sidecar:latest
@@ -98,7 +85,6 @@ spec:
         command:
         - cp
         - /backup-restore-sidecar
-        - /sbin/tini
         - /bin-provision
         ports:
         - containerPort: 2112
@@ -136,6 +122,8 @@ data:
     backup-cron-schedule: "*/1 * * * *"
     object-prefix: postgres-test
     compression-method: tar
+    post-exec-cmds:
+      - docker-entrypoint.sh postgres
 ---
 apiVersion: v1
 kind: Secret

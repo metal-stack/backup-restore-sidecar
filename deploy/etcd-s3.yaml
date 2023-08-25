@@ -29,12 +29,8 @@ spec:
         # can also be gcr.io/etcd-development/etcd
         name: etcd
         command:
-        - tini
-        - --
-        args:
-        - sh
-        - -c
-        - backup-restore-sidecar wait && etcd --data-dir=/data/etcd --listen-metrics-urls http://0.0.0.0:2381
+        - backup-restore-sidecar
+        - wait
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
@@ -81,9 +77,6 @@ spec:
           mountPath: /usr/local/bin/backup-restore-sidecar
         - name: backup-restore-sidecar-config
           mountPath: /etc/backup-restore-sidecar
-        - name: bin-provision
-          subPath: tini
-          mountPath: /usr/local/bin/tini
       - image:  quay.io/coreos/etcd:v3.5.4
         name: backup-restore-sidecar
         env:
@@ -113,12 +106,9 @@ spec:
                 key: secret-key
                 name: backup-restore-sidecar-backup-provider-config
         command:
-        - tini
-        - --
-        args:
-        - sh
-        - -c
-        - mkdir -p /data/etcd && backup-restore-sidecar start --log-level debug
+        - backup-restore-sidecar
+        - start
+        - --log-level=debug
         volumeMounts:
         - name: etcd
           mountPath: /data
@@ -127,9 +117,6 @@ spec:
           mountPath: /usr/local/bin/backup-restore-sidecar
         - name: backup-restore-sidecar-config
           mountPath: /etc/backup-restore-sidecar
-        - name: bin-provision
-          subPath: tini
-          mountPath: /usr/local/bin/tini
         - name: bin-provision
           subPath: certs
           mountPath: /etc/ssl/certs
@@ -142,7 +129,6 @@ spec:
         - -r
         - /etc/ssl/certs
         - /backup-restore-sidecar
-        - /ubuntu/tini
         - /bin-provision
         ports:
         - containerPort: 2112
@@ -177,3 +163,5 @@ data:
     backup-cron-schedule: "*/1 * * * *"
     object-prefix: etcd-test
     compression-method: tarlz4
+    post-exec-cmds:
+      - etcd --data-dir=/data/etcd --listen-metrics-urls http://0.0.0.0:2381

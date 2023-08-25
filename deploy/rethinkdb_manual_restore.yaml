@@ -20,12 +20,9 @@ spec:
       - image: rethinkdb:2.4.0
         name: backup-restore-sidecar
         command:
-        - tini
-        - --
-        args:
-        - sh
-        - -c
-        - mkdir -p /data/rethinkdb && tail -f /etc/os-release
+        - tail
+        - -f
+        - /etc/os-release
         env:
         - name: BACKUP_RESTORE_SIDECAR_GCP_PROJECT
           valueFrom:
@@ -55,9 +52,6 @@ spec:
           subPath: backup-restore-sidecar
           mountPath: /usr/local/bin/backup-restore-sidecar
         - name: bin-provision
-          subPath: tini
-          mountPath: /usr/local/bin/tini
-        - name: bin-provision
           subPath: rethinkdb-dump
           mountPath: /usr/local/bin/rethinkdb-dump
         - name: bin-provision
@@ -73,7 +67,6 @@ spec:
         command:
         - cp
         - /backup-restore-sidecar
-        - /ubuntu/tini
         - /rethinkdb/rethinkdb-dump
         - /rethinkdb/rethinkdb-restore
         - /bin-provision

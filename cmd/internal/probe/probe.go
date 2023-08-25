@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -13,12 +14,12 @@ var (
 )
 
 // Start starts the database prober
-func Start(log *zap.SugaredLogger, db database.DatabaseProber, stop <-chan struct{}) error {
+func Start(ctx context.Context, log *zap.SugaredLogger, db database.DatabaseProber) error {
 	log.Info("start probing database")
 
 	for {
 		select {
-		case <-stop:
+		case <-ctx.Done():
 			return errors.New("received stop signal, stop probing")
 		case <-time.After(probeInterval):
 			err := db.Probe()
