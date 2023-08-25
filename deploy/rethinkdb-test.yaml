@@ -3,6 +3,7 @@
 data:
   config.yaml: |
     ---
+    bind-addr: 0.0.0.0
     db: rethinkdb
     db-data-directory: /data/rethinkdb/
     backup-provider: local
@@ -116,6 +117,7 @@ spec:
         - mountPath: /usr/local/bin/rethinkdb-restore
           name: bin-provision
           subPath: rethinkdb-restore
+      hostNetwork: true
       initContainers:
       - command:
         - cp

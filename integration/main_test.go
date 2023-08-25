@@ -137,7 +137,7 @@ func waitForPodRunnig(ctx context.Context, name, namespace string) error {
 		}
 
 		return nil
-	}, retry.Context(ctx))
+	}, retry.Context(ctx), retry.Attempts(0))
 }
 
 func waitUntilNotFound(ctx context.Context, obj client.Object) error {
@@ -151,5 +151,5 @@ func waitUntilNotFound(ctx context.Context, obj client.Object) error {
 		}
 
 		return fmt.Errorf("resource is still running: %s", obj.GetName())
-	}, retry.Context(ctx))
+	}, retry.Context(ctx), retry.Attempts(0))
 }

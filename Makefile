@@ -23,7 +23,7 @@ all:
 	strip bin/backup-restore-sidecar
 
 .PHONY: test-integration
-test-integration:
+test-integration: dockerimage
 	kind --name backup-restore-sidecar load docker-image ghcr.io/metal-stack/backup-restore-sidecar:latest
 	KUBECONFIG=$(KUBECONFIG) go test -v -p 1 -timeout 10m ./integration/...
 
@@ -71,6 +71,7 @@ kind-cluster-create: dockerimage
 	@if ! kind get clusters | grep backup-restore-sidecar > /dev/null; then \
 		kind create cluster \
 		--name backup-restore-sidecar \
+		--config kind.yaml \
 		--kubeconfig $(KUBECONFIG); fi
 
 .PHONY: cleanup

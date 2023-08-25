@@ -42,6 +42,8 @@ func Test_RethinkDB(t *testing.T) {
 	defer cancel()
 
 	cleanup := func() {
+		t.Log("running cleanup")
+
 		err := c.Delete(ctx, ns)
 		require.NoError(t, client.IgnoreNotFound(err), "cleanup did not succeed")
 
@@ -67,6 +69,7 @@ func Test_RethinkDB(t *testing.T) {
 				},
 				Data: map[string]string{
 					"config.yaml": `---
+bind-addr: 0.0.0.0
 db: rethinkdb
 db-data-directory: /data/rethinkdb/
 backup-provider: local
@@ -151,6 +154,7 @@ post-exec-cmds:
 							},
 						},
 						Spec: corev1.PodSpec{
+							HostNetwork: true,
 							Containers: []corev1.Container{
 								{
 									Name:    "rethinkdb",
@@ -345,6 +349,8 @@ post-exec-cmds:
 		}
 	)
 
+	t.Log("applying resource manifests")
+
 	objects := []client.Object{cm(), secret(), service(), sts()}
 	dumpToExamples(t, "rethinkdb-test.yaml", objects...)
 	for _, o := range objects {
@@ -356,104 +362,78 @@ post-exec-cmds:
 	err = waitForPodRunnig(ctx, rethinkdbPodName, ns.Name)
 	require.NoError(t, err)
 
-	// filling up the database
+	t.Log("adding test data to database")
 
-	runInPodForwarding(runInPodForwardingRequest{
-		RestConfig: restConfig,
-		Pod: corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      rethinkdbPodName,
-				Namespace: ns.Name,
-			},
-		},
-		LocalPort: 28015,
-		PodPort:   28015,
-	}, func() {
-		var session *r.Session
-		err = retry.Do(func() error {
-			var err error
-			session, err = r.Connect(r.ConnectOpts{
-				Addresses: []string{"localhost:28015"},
-				Database:  db,
-				Username:  "admin",
-				Password:  rethinkdbPassword,
-				MaxIdle:   10,
-				MaxOpen:   20,
-			})
-			if err != nil {
-				return fmt.Errorf("cannot connect to DB: %w", err)
-			}
-
-			return nil
-		}, retry.Context(ctx))
-		require.NoError(t, err)
-
-		_, _ = r.DBDrop(db).RunWrite(session)
-
-		_, err = r.DBCreate(db).RunWrite(session)
-		require.NoError(t, err)
-
-		_, err = r.DB(db).TableCreate(table).RunWrite(session)
-		require.NoError(t, err)
-
-		type testData struct {
-			ID   string `rethinkdb:"id"`
-			Data string `rethinkdb:"data"`
+	var session *r.Session
+	err = retry.Do(func() error {
+		var err error
+		session, err = r.Connect(r.ConnectOpts{
+			Addresses: []string{"localhost:28015"},
+			Database:  db,
+			Username:  "admin",
+			Password:  rethinkdbPassword,
+			MaxIdle:   10,
+			MaxOpen:   20,
+		})
+		if err != nil {
+			return fmt.Errorf("cannot connect to DB: %w", err)
 		}
 
-		_, err = r.DB(db).Table(table).Insert(testData{
-			ID:   "1",
-			Data: "i am precious",
-		}).RunWrite(session)
-		require.NoError(t, err)
+		return nil
+	}, retry.Context(ctx), retry.Attempts(0))
+	require.NoError(t, err)
 
-		cursor, err := r.DB(db).Table(table).Get("1").Run(session)
-		require.NoError(t, err)
+	_, _ = r.DBDrop(db).RunWrite(session)
 
-		var d testData
-		err = cursor.One(&d)
-		require.NoError(t, err)
-		require.Equal(t, "i am precious", d.Data)
-	})
+	_, err = r.DBCreate(db).RunWrite(session)
+	require.NoError(t, err)
 
-	// check backups are made
+	_, err = r.DB(db).TableCreate(table).RunWrite(session)
+	require.NoError(t, err)
 
-	runInPodForwarding(runInPodForwardingRequest{
-		RestConfig: restConfig,
-		Pod: corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      rethinkdbPodName,
-				Namespace: ns.Name,
-			},
-		},
-		LocalPort: 8000,
-		PodPort:   8000,
-	}, func() {
-		brsc, err := brsclient.New(ctx, "http://localhost:8000")
-		require.NoError(t, err)
+	type testData struct {
+		ID   string `rethinkdb:"id"`
+		Data string `rethinkdb:"data"`
+	}
 
-		var backup *v1.Backup
-		err = retry.Do(func() error {
-			backups, err := brsc.BackupServiceClient().ListBackups(ctx, &v1.Empty{})
-			if err != nil {
-				return err
-			}
+	_, err = r.DB(db).Table(table).Insert(testData{
+		ID:   "1",
+		Data: "i am precious",
+	}).RunWrite(session)
+	require.NoError(t, err)
 
-			if len(backups.Backups) == 0 {
-				return fmt.Errorf("no backups were made yet")
-			}
+	cursor, err := r.DB(db).Table(table).Get("1").Run(session)
+	require.NoError(t, err)
 
-			backup = backups.Backups[0]
+	var d1 testData
+	err = cursor.One(&d1)
+	require.NoError(t, err)
+	require.Equal(t, "i am precious", d1.Data)
 
-			return nil
-		}, retry.Context(ctx))
-		require.NoError(t, err)
-		require.NotNil(t, backup)
-	})
+	t.Log("waiting for backup to be created")
 
-	// delete sts and remove data pvc
+	brsc, err := brsclient.New(ctx, "http://localhost:8000")
+	require.NoError(t, err)
 
-	t.FailNow()
+	var backup *v1.Backup
+	err = retry.Do(func() error {
+		backups, err := brsc.BackupServiceClient().ListBackups(ctx, &v1.Empty{})
+		if err != nil {
+			return err
+		}
+
+		if len(backups.Backups) == 0 {
+			return fmt.Errorf("no backups were made yet")
+		}
+
+		backup = backups.Backups[0]
+
+		return nil
+	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
+	require.NoError(t, err)
+	require.NotNil(t, backup)
+
+	t.Log("remove sts and delete data volume")
 
 	err = c.Delete(ctx, sts())
 	require.NoError(t, err)
@@ -474,7 +454,7 @@ post-exec-cmds:
 	})
 	require.NoError(t, err)
 
-	// re-deploy sts
+	t.Log("recreate sts")
 
 	err = c.Create(ctx, sts())
 	require.NoError(t, err)
@@ -482,49 +462,13 @@ post-exec-cmds:
 	err = waitForPodRunnig(ctx, rethinkdbPodName, ns.Name)
 	require.NoError(t, err)
 
-	// check that restore is done
+	t.Log("verify that data gets restored")
 
-	runInPodForwarding(runInPodForwardingRequest{
-		RestConfig: restConfig,
-		Pod: corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      rethinkdbPodName,
-				Namespace: ns.Name,
-			},
-		},
-		LocalPort: 28015,
-		PodPort:   28015,
-	}, func() {
-		var session *r.Session
-		err = retry.Do(func() error {
-			var err error
-			session, err = r.Connect(r.ConnectOpts{
-				Addresses: []string{"localhost:28015"},
-				Database:  db,
-				Username:  "admin",
-				Password:  rethinkdbPassword,
-				MaxIdle:   10,
-				MaxOpen:   20,
-			})
-			if err != nil {
-				return fmt.Errorf("cannot connect to DB: %w", err)
-			}
+	cursor, err = r.DB(db).Table(table).Get("1").Run(session)
+	require.NoError(t, err)
 
-			return nil
-		}, retry.Context(ctx))
-		require.NoError(t, err)
-
-		type testData struct {
-			ID   string `rethinkdb:"id"`
-			Data string `rethinkdb:"data"`
-		}
-
-		cursor, err := r.DB(db).Table(table).Get("1").Run(session)
-		require.NoError(t, err)
-
-		var d testData
-		err = cursor.One(&d)
-		require.NoError(t, err)
-		require.Equal(t, "i am precious", d.Data)
-	})
+	var d2 testData
+	err = cursor.One(&d2)
+	require.NoError(t, err)
+	require.Equal(t, "i am precious", d2.Data)
 }
