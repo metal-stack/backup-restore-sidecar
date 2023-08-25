@@ -267,7 +267,7 @@ func (db *Meilisearch) moveDumpToBackupDir() error {
 
 	backupDst := path.Join(constants.BackupDir, latestStableDump)
 	db.log.Infow("move dump", "from", db.latestStableDumpDst, "to", backupDst)
-	copy := exec.Command("mv", "-v", db.latestStableDumpDst, backupDst)
+	copy := exec.Command("mv", "-v", db.latestStableDumpDst, backupDst) // nolint:gosec
 	copy.Stdout = os.Stdout
 	copy.Stderr = os.Stderr
 	err = copy.Run()
