@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -29,7 +30,7 @@ const (
 	meilisearchDBDir       = "data.ms"
 	meilisearchDumpDir     = "dumps"
 	dumpExtension          = ".dump"
-	latestStableDump       = "forupgrade.latestdump"
+	latestStableDump       = "latest.dump"
 )
 
 // Meilisearch implements the database interface
@@ -85,25 +86,17 @@ func (db *Meilisearch) Backup() error {
 		if err != nil {
 			return err
 		}
-		switch dumpTask.Status {
-		case meilisearch.TaskStatusFailed:
-			return fmt.Errorf("dump failed with:%s", dumpTask.Error.Message)
-		case meilisearch.TaskStatusProcessing:
+		if dumpTask.Status != meilisearch.TaskStatusSucceeded {
 			return fmt.Errorf("dump still processing")
-		case meilisearch.TaskStatusEnqueued:
-			return fmt.Errorf("dump enqueued")
-		case meilisearch.TaskStatusUnknown:
-			return fmt.Errorf("dump status unknown")
-		case meilisearch.TaskStatusSucceeded:
-			db.log.Infow("dump finished", "duration", dumpTask.Duration, "details", dumpTask.Details)
-			return nil
 		}
+
+		db.log.Infow("dump finished", "duration", dumpTask.Duration, "details", dumpTask.Details)
 		return nil
-	})
+	}, retry.Attempts(100))
 	if err != nil {
 		return err
 	}
-	err = db.moveDumpsToBackupDir()
+	err = db.moveDumpToBackupDir()
 	if err != nil {
 		return err
 	}
@@ -138,7 +131,22 @@ func (db *Meilisearch) Probe() error {
 
 // Recover implements database.Database.
 func (db *Meilisearch) Recover() error {
-	db.log.Error("recover is not yet implemented")
+	dump := path.Join(constants.RestoreDir, latestStableDump)
+	if _, err := os.Stat(dump); os.IsNotExist(err) {
+		return fmt.Errorf("restore file not present: %s", dump)
+	}
+	start := time.Now()
+
+	if err := utils.RemoveContents(db.dbdir); err != nil {
+		return fmt.Errorf("could not clean database data directory: %w", err)
+	}
+
+	err := db.importDump(dump)
+	if err != nil {
+		return fmt.Errorf("unable to recover %w", err)
+	}
+
+	db.log.Infow("recovery done", "duration", time.Since(start))
 	return nil
 }
 
@@ -179,13 +187,23 @@ func (db *Meilisearch) Upgrade() error {
 		return fmt.Errorf("unable to rename dbdir: %w", err)
 	}
 
+	err = db.importDump(db.latestStableDumpDst)
+	if err != nil {
+		return err
+	}
+	db.log.Infow("upgrade done and new data in place", "took", time.Since(start))
+	return nil
+}
+
+func (db *Meilisearch) importDump(dump string) error {
 	var (
+		err  error
 		cmd  *exec.Cmd
 		g, _ = errgroup.WithContext(context.Background())
 	)
 
 	g.Go(func() error {
-		args := []string{"--import-dump", path.Join(db.dumpdir, latestStableDump), "--master-key", db.apikey}
+		args := []string{"--import-dump", dump, "--master-key", db.apikey}
 		db.log.Infow("execute meilisearch", "args", args)
 
 		cmd = exec.Command(meilisearchCmd, args...) // nolint:gosec
@@ -193,7 +211,7 @@ func (db *Meilisearch) Upgrade() error {
 		cmd.Stderr = os.Stderr
 		err = cmd.Run()
 		if err != nil {
-			return fmt.Errorf("unable import latest dump, skipping upgrade %w", err)
+			return fmt.Errorf("unable import dump %w", err)
 		}
 		db.log.Info("import of dump finished")
 		return nil
@@ -210,7 +228,7 @@ func (db *Meilisearch) Upgrade() error {
 		if !healthy {
 			return fmt.Errorf("meilisearch does not report healthiness")
 		}
-		db.log.Infow("meilisearch started after upgrade, killing it", "version", v)
+		db.log.Infow("meilisearch started after importing the dump, killing it", "version", v)
 		return cmd.Process.Signal(syscall.SIGTERM)
 	}, retry.Attempts(100))
 	if err != nil {
@@ -219,48 +237,48 @@ func (db *Meilisearch) Upgrade() error {
 	err = g.Wait()
 	if err != nil {
 		// sending a TERM signal will always result in a error response.
-		db.log.Infow("upgrade database terminated but reported an error which can be ignored", "error", err)
+		db.log.Infow("importing dump terminated but reported an error which can be ignored", "error", err)
 	}
-
-	db.log.Infow("upgrade done and new data in place", "took", time.Since(start))
 	return nil
 }
 
-// moveDumpsToBackupDir move all dumps to the backupdir
+// moveDumpToBackupDir move all dumps to the backupdir
 // also create a stable last stable dump for later upgrades
-func (db *Meilisearch) moveDumpsToBackupDir() error {
-	return filepath.Walk(db.dumpdir, func(basepath string, d fs.FileInfo, err error) error {
-		if err != nil {
-			return err
+func (db *Meilisearch) moveDumpToBackupDir() error {
+	dumps, err := filepath.Glob(db.dumpdir + "/*.dump")
+	if err != nil {
+		return fmt.Errorf("unable to find dumps %w", err)
+	}
+	src := ""
+	// sort them an take only the latest dump
+	slices.Sort(dumps)
+	for _, dump := range dumps {
+		if strings.Contains(dump, latestStableDump) {
+			continue
 		}
-		if d.IsDir() {
-			return nil
-		}
+		src = dump
+	}
 
-		if !strings.HasSuffix(d.Name(), dumpExtension) {
-			return nil
-		}
+	db.log.Infow("create latest dump as link", "from", src, "to", db.latestStableDumpDst)
+	err = os.Remove(db.latestStableDumpDst)
+	if err != nil {
+		return fmt.Errorf("unable to remove old symlink %w", err)
+	}
+	err = os.Symlink(src, db.latestStableDumpDst)
+	if err != nil {
+		return fmt.Errorf("unable create latest stable dump: %w", err)
+	}
 
-		dst := path.Join(constants.BackupDir, d.Name())
-		src := basepath
-
-		db.log.Infow("create latest dump", "from", src, "to", db.latestStableDumpDst)
-		err = utils.Copy(src, db.latestStableDumpDst)
-		if err != nil {
-			return fmt.Errorf("unable create latest stable dump: %w", err)
-		}
-
-		db.log.Infow("move dump", "from", src, "to", dst)
-		copy := exec.Command("mv", "-v", src, dst)
-		copy.Stdout = os.Stdout
-		copy.Stderr = os.Stderr
-		err = copy.Run()
-		if err != nil {
-			return fmt.Errorf("unable move dump: %w", err)
-		}
-
-		return nil
-	})
+	backupDst := path.Join(constants.BackupDir, latestStableDump)
+	db.log.Infow("move dump", "from", src, "to", backupDst)
+	copy := exec.Command("mv", "-v", src, backupDst)
+	copy.Stdout = os.Stdout
+	copy.Stderr = os.Stderr
+	err = copy.Run()
+	if err != nil {
+		return fmt.Errorf("unable move dump: %w", err)
+	}
+	return nil
 }
 
 func (db *Meilisearch) getDatabaseVersion(versionFile string) (*semver.Version, error) {
