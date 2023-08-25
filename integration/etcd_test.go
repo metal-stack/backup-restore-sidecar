@@ -2,15 +2,15 @@ package integration_test
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
 	"testing"
+	"time"
 
 	"github.com/avast/retry-go/v4"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/metal-stack/metal-lib/pkg/pointer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	clientv3 "go.etcd.io/etcd/client/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -22,17 +22,10 @@ import (
 )
 
 const (
-	postgresContainerImage = "postgres:15-alpine"
+	etcdContainerImage = "quay.io/coreos/etcd:v3.5.7"
 )
 
-func Test_Postgres(t *testing.T) {
-	const (
-		postgresDB       = "postgres"
-		postgresPassword = "test123!"
-		postgresUser     = "test"
-		table            = "precioustestdata"
-	)
-
+func Test_ETCD(t *testing.T) {
 	var (
 		sts = func(namespace string) *appsv1.StatefulSet {
 			return &appsv1.StatefulSet{
@@ -41,104 +34,70 @@ func Test_Postgres(t *testing.T) {
 					APIVersion: appsv1.SchemeGroupVersion.String(),
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "postgres",
+					Name:      "etcd",
 					Namespace: namespace,
 					Labels: map[string]string{
-						"app": "postgres",
+						"app": "etcd",
 					},
 				},
 				Spec: appsv1.StatefulSetSpec{
-					ServiceName: "postgres",
+					ServiceName: "etcd",
 					Replicas:    pointer.Pointer(int32(1)),
 					Selector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
-							"app": "postgres",
+							"app": "etcd",
 						},
 					},
 					Template: corev1.PodTemplateSpec{
 						ObjectMeta: metav1.ObjectMeta{
 							Labels: map[string]string{
-								"app": "postgres",
+								"app": "etcd",
 							},
 						},
 						Spec: corev1.PodSpec{
 							HostNetwork: true,
 							Containers: []corev1.Container{
 								{
-									Name:    "postgres",
-									Image:   postgresContainerImage,
+									Name:    "etcd",
+									Image:   etcdContainerImage,
 									Command: []string{"backup-restore-sidecar", "wait"},
 									LivenessProbe: &corev1.Probe{
 										ProbeHandler: corev1.ProbeHandler{
 											Exec: &corev1.ExecAction{
-												Command: []string{"/bin/sh", "-c", "exec", "pg_isready", "-U", postgresUser, "-h", "127.0.0.1", "-p", "5432"},
+												Command: []string{"/usr/local/bin/etcdctl", "endpoint", "health", "--endpoints=127.0.0.1:32379"},
 											},
 										},
-										InitialDelaySeconds: 30,
-										TimeoutSeconds:      5,
-										PeriodSeconds:       10,
+										InitialDelaySeconds: 15,
+										TimeoutSeconds:      1,
+										PeriodSeconds:       5,
 										SuccessThreshold:    1,
-										FailureThreshold:    6,
+										FailureThreshold:    3,
 									},
 									ReadinessProbe: &corev1.Probe{
 										ProbeHandler: corev1.ProbeHandler{
-											Exec: &corev1.ExecAction{
-												Command: []string{"/bin/sh", "-c", "exec", "pg_isready", "-U", postgresUser, "-h", "127.0.0.1", "-p", "5432"},
+											HTTPGet: &corev1.HTTPGetAction{
+												Path:   "/health",
+												Port:   intstr.FromInt(32381),
+												Scheme: corev1.URISchemeHTTP,
 											},
 										},
-										InitialDelaySeconds: 5,
-										TimeoutSeconds:      5,
-										PeriodSeconds:       10,
-									},
-									Env: []corev1.EnvVar{
-										{
-											Name: "POSTGRES_DB",
-											ValueFrom: &corev1.EnvVarSource{
-												SecretKeyRef: &corev1.SecretKeySelector{
-													LocalObjectReference: corev1.LocalObjectReference{
-														Name: "postgres",
-													},
-													Key: "POSTGRES_DB",
-												},
-											},
-										},
-										{
-											Name: "POSTGRES_USER",
-											ValueFrom: &corev1.EnvVarSource{
-												SecretKeyRef: &corev1.SecretKeySelector{
-													LocalObjectReference: corev1.LocalObjectReference{
-														Name: "postgres",
-													},
-													Key: "POSTGRES_USER",
-												},
-											},
-										},
-										{
-											Name: "POSTGRES_PASSWORD",
-											ValueFrom: &corev1.EnvVarSource{
-												SecretKeyRef: &corev1.SecretKeySelector{
-													LocalObjectReference: corev1.LocalObjectReference{
-														Name: "postgres",
-													},
-													Key: "POSTGRES_PASSWORD",
-												},
-											},
-										},
-										{
-											Name: "PGDATA",
-											ValueFrom: &corev1.EnvVarSource{
-												SecretKeyRef: &corev1.SecretKeySelector{
-													LocalObjectReference: corev1.LocalObjectReference{
-														Name: "postgres",
-													},
-													Key: "POSTGRES_DATA",
-												},
-											},
-										},
+										InitialDelaySeconds: 15,
+										TimeoutSeconds:      1,
+										PeriodSeconds:       5,
+										SuccessThreshold:    1,
+										FailureThreshold:    3,
 									},
 									Ports: []corev1.ContainerPort{
+										// default ports are taken by kind etcd because running in host network
 										{
-											ContainerPort: 5432,
+											ContainerPort: 32379,
+											Name:          "client",
+											Protocol:      corev1.ProtocolTCP,
+										},
+										{
+											ContainerPort: 32380,
+											Name:          "server",
+											Protocol:      corev1.ProtocolTCP,
 										},
 									},
 									VolumeMounts: []corev1.VolumeMount{
@@ -159,32 +118,8 @@ func Test_Postgres(t *testing.T) {
 								},
 								{
 									Name:    "backup-restore-sidecar",
-									Image:   postgresContainerImage,
+									Image:   etcdContainerImage,
 									Command: []string{"backup-restore-sidecar", "start", "--log-level=debug"},
-									Env: []corev1.EnvVar{
-										{
-											Name: "BACKUP_RESTORE_SIDECAR_POSTGRES_PASSWORD",
-											ValueFrom: &corev1.EnvVarSource{
-												SecretKeyRef: &corev1.SecretKeySelector{
-													LocalObjectReference: corev1.LocalObjectReference{
-														Name: "postgres",
-													},
-													Key: "POSTGRES_PASSWORD",
-												},
-											},
-										},
-										{
-											Name: "BACKUP_RESTORE_SIDECAR_POSTGRES_USER",
-											ValueFrom: &corev1.EnvVarSource{
-												SecretKeyRef: &corev1.SecretKeySelector{
-													LocalObjectReference: corev1.LocalObjectReference{
-														Name: "postgres",
-													},
-													Key: "POSTGRES_USER",
-												},
-											},
-										},
-									},
 									Ports: []corev1.ContainerPort{
 										{
 											Name:          "grpc",
@@ -316,73 +251,29 @@ func Test_Postgres(t *testing.T) {
 					Data: map[string]string{
 						"config.yaml": `---
 bind-addr: 0.0.0.0
-db: postgres
-db-data-directory: /data/postgres/
+db: etcd
+db-data-directory: /data/etcd/
 backup-provider: local
 backup-cron-schedule: "*/1 * * * *"
-object-prefix: postgres-test
-compression-method: tar
+object-prefix: etcd-test
+etcd-endpoints: http://localhost:32379
 post-exec-cmds:
-- docker-entrypoint.sh postgres
+  - etcd --data-dir=/data/etcd --listen-client-urls http://0.0.0.0:32379 --advertise-client-urls http://0.0.0.0:32379 --listen-peer-urls http://0.0.0.0:32380 --initial-advertise-peer-urls http://0.0.0.0:32380 --initial-cluster default=http://0.0.0.0:32380 --listen-metrics-urls http://0.0.0.0:32381
 `,
-					},
-				},
-				&corev1.Secret{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "Secret",
-						APIVersion: corev1.SchemeGroupVersion.String(),
-					},
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "postgres",
-						Namespace: namespace,
-					},
-					StringData: map[string]string{
-						"POSTGRES_DB":       postgresDB,
-						"POSTGRES_USER":     postgresUser,
-						"POSTGRES_PASSWORD": postgresPassword,
-						"POSTGRES_DATA":     "/data/postgres/",
-					},
-				},
-				&corev1.Service{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       "Service",
-						APIVersion: corev1.SchemeGroupVersion.String(),
-					},
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "postgres",
-						Namespace: namespace,
-						Labels: map[string]string{
-							"app": "postgres",
-						},
-					},
-					Spec: corev1.ServiceSpec{
-						Selector: map[string]string{
-							"app": "postgres",
-						},
-						Ports: []corev1.ServicePort{
-							{
-								Name:       "5432",
-								Port:       5432,
-								TargetPort: intstr.FromInt32(5432),
-							},
-							{
-								Name:       "metrics",
-								Port:       2112,
-								TargetPort: intstr.FromInt32(2112),
-							},
-						},
 					},
 				},
 			}
 		}
 
-		newPostgresSession = func(t *testing.T, ctx context.Context) *sql.DB {
-			var db *sql.DB
-			err := retry.Do(func() error {
-				connString := fmt.Sprintf("host=127.0.0.1 port=5432 user=%s password=%s dbname=%s sslmode=disable", postgresUser, postgresPassword, postgresDB)
+		newEtcdClient = func(t *testing.T, ctx context.Context) *clientv3.Client {
+			var cli *clientv3.Client
 
+			err := retry.Do(func() error {
 				var err error
-				db, err = sql.Open("postgres", connString)
+				cli, err = clientv3.New(clientv3.Config{
+					Endpoints:   []string{"localhost:32379"},
+					DialTimeout: 5 * time.Second,
+				})
 				if err != nil {
 					return err
 				}
@@ -391,49 +282,33 @@ post-exec-cmds:
 			}, retry.Context(ctx))
 			require.NoError(t, err)
 
-			return db
+			return cli
 		}
 
 		addTestData = func(t *testing.T, ctx context.Context) {
-			db := newPostgresSession(t, ctx)
-			defer db.Close()
+			cli := newEtcdClient(t, ctx)
+			defer cli.Close()
 
-			var (
-				createStmt = `CREATE TABLE backuprestore (
-					data text NOT NULL
-				 );`
-				insertStmt = `INSERT INTO backuprestore("data") VALUES ('I am precious');`
-			)
-
-			_, err := db.Exec(createStmt)
-			require.NoError(t, err)
-
-			_, err = db.Exec(insertStmt)
+			_, err := cli.Put(ctx, "1", "I am precious")
 			require.NoError(t, err)
 		}
 
 		verifyTestData = func(t *testing.T, ctx context.Context) {
-			db := newPostgresSession(t, ctx)
-			defer db.Close()
+			cli := newEtcdClient(t, ctx)
+			defer cli.Close()
 
-			rows, err := db.Query(`SELECT "data" FROM backuprestore;`)
+			resp, err := cli.Get(ctx, "1")
 			require.NoError(t, err)
-			require.NoError(t, rows.Err())
-			defer rows.Close()
+			require.Len(t, resp.Kvs, 1)
 
-			require.True(t, rows.Next())
-			var data string
-
-			err = rows.Scan(&data)
-			require.NoError(t, err)
-
-			assert.Equal(t, "I am precious", data)
-			assert.False(t, rows.Next())
+			ev := resp.Kvs[0]
+			assert.Equal(t, "1", string(ev.Key))
+			assert.Equal(t, "I am precious", string(ev.Value))
 		}
 	)
 
 	restoreFlow(t, &flowSpec{
-		databaseType:     "postgres",
+		databaseType:     "etcd",
 		sts:              sts,
 		backingResources: backingResources,
 		addTestData:      addTestData,
