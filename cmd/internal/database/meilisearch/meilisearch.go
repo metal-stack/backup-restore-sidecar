@@ -34,12 +34,13 @@ const (
 
 // Meilisearch implements the database interface
 type Meilisearch struct {
-	dbdir    string
-	dumpdir  string
-	apikey   string
-	log      *zap.SugaredLogger
-	executor *utils.CmdExecutor
-	client   *meilisearch.Client
+	dbdir               string
+	dumpdir             string
+	apikey              string
+	latestStableDumpDst string
+	log                 *zap.SugaredLogger
+	executor            *utils.CmdExecutor
+	client              *meilisearch.Client
 }
 
 // New instantiates a new meilisearch database
@@ -48,13 +49,17 @@ func New(log *zap.SugaredLogger, datadir string, url string, apikey string) *Mei
 		Host:   url,
 		APIKey: apikey,
 	})
+	dbdir := path.Join(datadir, meilisearchDBDir)
+	dumpdir := path.Join(datadir, meilisearchDumpDir)
+	latestStableDumpDst := path.Join(dumpdir, latestStableDump)
 	return &Meilisearch{
-		log:      log,
-		dbdir:    path.Join(datadir, meilisearchDBDir),
-		dumpdir:  path.Join(datadir, meilisearchDumpDir),
-		apikey:   apikey,
-		executor: utils.NewExecutor(log),
-		client:   client,
+		log:                 log,
+		dbdir:               dbdir,
+		dumpdir:             dumpdir,
+		apikey:              apikey,
+		latestStableDumpDst: latestStableDumpDst,
+		executor:            utils.NewExecutor(log),
+		client:              client,
 	}
 }
 
@@ -163,6 +168,9 @@ func (db *Meilisearch) Upgrade() error {
 		db.log.Errorw("database is newer than meilisearch binary, aborting", "database-version", dbVersion, "binary-version", meilisearchVersion)
 		return fmt.Errorf("database is newer than meilisearch binary")
 	}
+	if _, err := os.Stat(db.latestStableDumpDst); errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("%q is not present, no upgrade possible, maybe no backup was running before", db.latestStableDumpDst)
+	}
 
 	db.log.Infow("start upgrade", "from", dbVersion, "to", meilisearchVersion)
 
@@ -231,9 +239,8 @@ func (db *Meilisearch) moveDumpsToBackupDir() error {
 		dst := path.Join(constants.BackupDir, d.Name())
 		src := basepath
 
-		latestStableDst := path.Join(db.dumpdir, latestStableDump)
-		db.log.Infow("create latest dump", "from", src, "to", latestStableDst)
-		err = utils.Copy(src, latestStableDst)
+		db.log.Infow("create latest dump", "from", src, "to", db.latestStableDumpDst)
+		err = utils.Copy(src, db.latestStableDumpDst)
 		if err != nil {
 			return fmt.Errorf("unable create latest stable dump: %w", err)
 		}
@@ -263,7 +270,6 @@ func (db *Meilisearch) getDatabaseVersion(versionFile string) (*semver.Version, 
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse postgres binary version in %q: %w", string(versionBytes), err)
 	}
-	// TODO check major
 	return v, nil
 }
 
@@ -286,6 +292,5 @@ func (db *Meilisearch) getBinaryVersion() (*semver.Version, error) {
 		return nil, fmt.Errorf("unable to parse meilisearch binary version in %q: %w", binaryVersionString, err)
 	}
 
-	// TODO check major
 	return v, nil
 }
