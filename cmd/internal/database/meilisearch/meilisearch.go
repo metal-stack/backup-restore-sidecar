@@ -259,12 +259,8 @@ func (db *Meilisearch) moveDumpToBackupDir() error {
 		src = dump
 	}
 
-	db.log.Infow("create latest dump as link", "from", src, "to", db.latestStableDumpDst)
-	err = os.Remove(db.latestStableDumpDst)
-	if err != nil {
-		return fmt.Errorf("unable to remove old symlink %w", err)
-	}
-	err = os.Symlink(src, db.latestStableDumpDst)
+	db.log.Infow("create latest dump rename", "from", src, "to", db.latestStableDumpDst)
+	err = os.Rename(src, db.latestStableDumpDst)
 	if err != nil {
 		return fmt.Errorf("unable create latest stable dump: %w", err)
 	}
