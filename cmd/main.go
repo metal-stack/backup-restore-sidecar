@@ -139,13 +139,33 @@ var startCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		initializer.New(logger.Named("initializer"), addr, db, bp, comp, viper.GetString(databaseDatadirFlg)).Start(stop)
+
+		metrics := metrics.New()
+		metrics.Start(logger.Named("metrics"))
+
+		initializer.New(logger.Named("initializer"), addr, db, bp, comp, metrics, viper.GetString(databaseDatadirFlg)).Start(stop)
 		if err := probe.Start(stop, logger.Named("probe"), db); err != nil {
 			return err
 		}
-		metrics := metrics.New()
-		metrics.Start(logger.Named("metrics"))
+
 		return backup.Start(stop, logger.Named("backup"), viper.GetString(backupCronScheduleFlg), db, bp, metrics, comp)
+	},
+}
+
+var createBackupCmd = &cobra.Command{
+	Use:   "create-backup",
+	Short: "create backup takes a database backup out of the regular time schedule",
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		return initBackupProvider()
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c, err := client.New(context.Background(), viper.GetString(serverAddrFlg))
+		if err != nil {
+			return fmt.Errorf("error creating client: %w", err)
+		}
+
+		_, err = c.DatabaseServiceClient().CreateBackup(context.Background(), &v1.Empty{})
+		return err
 	},
 }
 
@@ -233,7 +253,7 @@ func main() {
 }
 
 func init() {
-	rootCmd.AddCommand(startCmd, waitCmd, restoreCmd)
+	rootCmd.AddCommand(startCmd, waitCmd, restoreCmd, createBackupCmd)
 
 	rootCmd.PersistentFlags().StringP(logLevelFlg, "", "info", "sets the application log level")
 	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb|etcd]")

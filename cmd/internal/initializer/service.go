@@ -81,3 +81,22 @@ func (s *backupService) RestoreBackup(ctx context.Context, req *v1.RestoreBackup
 
 	return &v1.RestoreBackupResponse{}, nil
 }
+
+type databaseService struct {
+	backupFn func() error
+}
+
+func newDatabaseService(backupFn func() error) *databaseService {
+	return &databaseService{
+		backupFn: backupFn,
+	}
+}
+
+func (s *databaseService) CreateBackup(ctx context.Context, _ *v1.Empty) (*v1.CreateBackupResponse, error) {
+	err := s.backupFn()
+	if err != nil {
+		return nil, status.Error(codes.Internal, fmt.Sprintf("error creating backup: %s", err))
+	}
+
+	return &v1.CreateBackupResponse{}, nil
+}

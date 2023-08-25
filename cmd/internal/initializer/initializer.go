@@ -10,9 +10,11 @@ import (
 	"strings"
 
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"go.uber.org/zap"
 
@@ -31,10 +33,11 @@ type Initializer struct {
 	db            database.Database
 	bp            providers.BackupProvider
 	comp          *compress.Compressor
+	metrics       *metrics.Metrics
 	dbDataDir     string
 }
 
-func New(log *zap.SugaredLogger, addr string, db database.Database, bp providers.BackupProvider, comp *compress.Compressor, dbDataDir string) *Initializer {
+func New(log *zap.SugaredLogger, addr string, db database.Database, bp providers.BackupProvider, comp *compress.Compressor, metrics *metrics.Metrics, dbDataDir string) *Initializer {
 	return &Initializer{
 		currentStatus: &v1.StatusResponse{
 			Status:  v1.StatusResponse_CHECKING,
@@ -46,6 +49,7 @@ func New(log *zap.SugaredLogger, addr string, db database.Database, bp providers
 		bp:        bp,
 		comp:      comp,
 		dbDataDir: dbDataDir,
+		metrics:   metrics,
 	}
 }
 
@@ -68,9 +72,13 @@ func (i *Initializer) Start(ctx context.Context) {
 
 	initializerService := newInitializerService(i.currentStatus)
 	backupService := newBackupProviderService(i.bp, i.Restore)
+	databaseService := newDatabaseService(func() error {
+		return backup.CreateBackup(i.log, i.db, i.bp, i.metrics, i.comp)
+	})
 
 	v1.RegisterInitializerServiceServer(grpcServer, initializerService)
 	v1.RegisterBackupServiceServer(grpcServer, backupService)
+	v1.RegisterDatabaseServiceServer(grpcServer, databaseService)
 
 	i.log.Infow("start initializer server", "address", i.addr)
 

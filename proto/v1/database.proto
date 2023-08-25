@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package v1;
+
+import "v1/common.proto";
+
+service DatabaseService {
+  rpc CreateBackup(Empty) returns (CreateBackupResponse);
+}
+
+message CreateBackupResponse {}

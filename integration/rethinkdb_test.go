@@ -9,6 +9,7 @@ import (
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/metal-stack/metal-lib/pkg/pointer"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -55,7 +56,7 @@ func Test_RethinkDB(t *testing.T) {
 		require.NoError(t, err, "cleanup did not succeed")
 	}
 	cleanup()
-	// defer cleanup()
+	defer cleanup()
 
 	err := c.Create(ctx, ns)
 	require.NoError(t, client.IgnoreAlreadyExists(err))
@@ -352,7 +353,7 @@ post-exec-cmds:
 	t.Log("applying resource manifests")
 
 	objects := []client.Object{cm(), secret(), service(), sts()}
-	dumpToExamples(t, "rethinkdb-test.yaml", objects...)
+	dumpToExamples(t, "rethinkdb-local.yaml", objects...)
 	for _, o := range objects {
 		o := o
 		err = c.Create(ctx, o)
@@ -380,7 +381,7 @@ post-exec-cmds:
 		}
 
 		return nil
-	}, retry.Context(ctx), retry.Attempts(0))
+	}, retry.Context(ctx))
 	require.NoError(t, err)
 
 	_, _ = r.DBDrop(db).RunWrite(session)
@@ -410,10 +411,13 @@ post-exec-cmds:
 	require.NoError(t, err)
 	require.Equal(t, "i am precious", d1.Data)
 
-	t.Log("waiting for backup to be created")
+	t.Log("taking a backup")
 
 	brsc, err := brsclient.New(ctx, "http://localhost:8000")
 	require.NoError(t, err)
+
+	_, err = brsc.DatabaseServiceClient().CreateBackup(ctx, &v1.Empty{})
+	assert.NoError(t, err)
 
 	var backup *v1.Backup
 	err = retry.Do(func() error {
@@ -464,11 +468,21 @@ post-exec-cmds:
 
 	t.Log("verify that data gets restored")
 
-	cursor, err = r.DB(db).Table(table).Get("1").Run(session)
+	var d2 testData
+	err = retry.Do(func() error {
+		cursor, err := r.DB(db).Table(table).Get("1").Run(session)
+		if err != nil {
+			return err
+		}
+
+		err = cursor.One(&d2)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
 	require.NoError(t, err)
 
-	var d2 testData
-	err = cursor.One(&d2)
-	require.NoError(t, err)
 	require.Equal(t, "i am precious", d2.Data)
 }

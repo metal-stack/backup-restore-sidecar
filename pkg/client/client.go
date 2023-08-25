@@ -13,6 +13,7 @@ import (
 type Client interface {
 	InitializerServiceClient() v1.InitializerServiceClient
 	BackupServiceClient() v1.BackupServiceClient
+	DatabaseServiceClient() v1.DatabaseServiceClient
 }
 
 type client struct {
@@ -48,4 +49,8 @@ func (c *client) InitializerServiceClient() v1.InitializerServiceClient {
 
 func (c *client) BackupServiceClient() v1.BackupServiceClient {
 	return v1.NewBackupServiceClient(c.conn)
+}
+
+func (c *client) DatabaseServiceClient() v1.DatabaseServiceClient {
+	return v1.NewDatabaseServiceClient(c.conn)
 }
