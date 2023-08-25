@@ -1,6 +1,7 @@
 package meilisearch
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -15,6 +16,7 @@ import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/avast/retry-go/v4"
 	"github.com/meilisearch/meilisearch-go"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
@@ -169,8 +171,12 @@ func (db *Meilisearch) Upgrade() error {
 		return fmt.Errorf("unable to rename dbdir: %w", err)
 	}
 
-	var cmd *exec.Cmd
-	go func() {
+	var (
+		cmd  *exec.Cmd
+		g, _ = errgroup.WithContext(context.Background())
+	)
+
+	g.Go(func() error {
 		args := []string{"--import-dump", path.Join(db.dumpdir, latestStableDump), "--master-key", db.apikey}
 		db.log.Infow("execute meilisearch", "args", args)
 
@@ -179,10 +185,14 @@ func (db *Meilisearch) Upgrade() error {
 		cmd.Stderr = os.Stderr
 		err = cmd.Run()
 		if err != nil {
-			db.log.Errorw("unable import latest dump, skipping upgrade", "error", err)
+			return fmt.Errorf("unable import latest dump, skipping upgrade %w", err)
 		}
-	}()
+		db.log.Info("import of dump finished")
+		return nil
+	})
 
+	// TODO big databases might take longer, not sure if 100 attempts are enough
+	// must check how long it take max with backoff ?
 	err = retry.Do(func() error {
 		v, err := db.client.Version()
 		if err != nil {
@@ -190,9 +200,13 @@ func (db *Meilisearch) Upgrade() error {
 		}
 		db.log.Infow("meilisearch started after upgrade, killing it", "version", v)
 		return cmd.Process.Signal(syscall.SIGTERM)
-	})
+	}, retry.Attempts(100))
 	if err != nil {
 		return err
+	}
+	err = g.Wait()
+	if err != nil {
+		return fmt.Errorf("database upgrade failed with %w", err)
 	}
 
 	db.log.Infow("upgrade done and new data in place", "took", time.Since(start))
@@ -216,7 +230,6 @@ func (db *Meilisearch) moveDumpsToBackupDir() error {
 
 		dst := path.Join(constants.BackupDir, d.Name())
 		src := basepath
-		db.log.Infow("move dump", "from", src, "to", dst)
 
 		latestStableDst := path.Join(db.dumpdir, latestStableDump)
 		db.log.Infow("create latest dump", "from", src, "to", latestStableDst)
@@ -225,6 +238,7 @@ func (db *Meilisearch) moveDumpsToBackupDir() error {
 			return fmt.Errorf("unable create latest stable dump: %w", err)
 		}
 
+		db.log.Infow("move dump", "from", src, "to", dst)
 		copy := exec.Command("mv", "-v", src, dst)
 		copy.Stdout = os.Stdout
 		copy.Stderr = os.Stderr
