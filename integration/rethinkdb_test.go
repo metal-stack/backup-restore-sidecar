@@ -40,6 +40,10 @@ func Test_RethinkDB(t *testing.T) {
 	var (
 		sts = func(namespace string) *appsv1.StatefulSet {
 			return &appsv1.StatefulSet{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "StatefulSet",
+					APIVersion: appsv1.SchemeGroupVersion.String(),
+				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "rethinkdb",
 					Namespace: namespace,
@@ -259,6 +263,10 @@ func Test_RethinkDB(t *testing.T) {
 		backingResources = func(namespace string) []client.Object {
 			return []client.Object{
 				&corev1.ConfigMap{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "ConfigMap",
+						APIVersion: corev1.SchemeGroupVersion.String(),
+					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "backup-restore-sidecar-config-rethinkdb",
 						Namespace: namespace,
@@ -279,6 +287,10 @@ post-exec-cmds:
 					},
 				},
 				&corev1.Secret{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "Secret",
+						APIVersion: corev1.SchemeGroupVersion.String(),
+					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "rethinkdb",
 						Namespace: namespace,
@@ -288,6 +300,10 @@ post-exec-cmds:
 					},
 				},
 				&corev1.Service{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "Service",
+						APIVersion: corev1.SchemeGroupVersion.String(),
+					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "rethinkdb",
 						Namespace: namespace,
@@ -390,8 +406,6 @@ post-exec-cmds:
 			assert.Equal(t, "i am precious", d2.Data)
 		}
 	)
-
-	t.Log("verify that data gets restored")
 
 	restoreFlow(t, &flowSpec{
 		databaseType:     db,
