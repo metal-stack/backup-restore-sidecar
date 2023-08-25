@@ -12,8 +12,8 @@ import (
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"go.uber.org/zap"
 
 	"google.golang.org/grpc"
@@ -66,9 +66,11 @@ func (i *Initializer) Start(ctx context.Context) {
 
 	grpcServer := grpc.NewServer(opts...)
 
-	initializerService := newService(i.currentStatus)
+	initializerService := newInitializerService(i.currentStatus)
+	backupService := newBackupProviderService(i.bp)
 
 	v1.RegisterInitializerServiceServer(grpcServer, initializerService)
+	v1.RegisterBackupServiceServer(grpcServer, backupService)
 
 	i.log.Infow("start initializer server", "address", i.addr)
 

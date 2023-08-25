@@ -6,13 +6,21 @@ import (
 	"net/url"
 
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
-	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+type Client interface {
+	InitializerServiceClient() v1.InitializerServiceClient
+	BackupServiceClient() v1.BackupServiceClient
+}
+
+type client struct {
+	conn *grpc.ClientConn
+}
+
 // NewInitializerClient returns a new initializer client.
-func NewInitializerClient(ctx context.Context, rawurl string, log *zap.SugaredLogger) (v1.InitializerServiceClient, error) {
+func NewClient(ctx context.Context, rawurl string) (Client, error) {
 	parsedurl, err := url.Parse(rawurl)
 	if err != nil {
 		return nil, err
@@ -31,5 +39,13 @@ func NewInitializerClient(ctx context.Context, rawurl string, log *zap.SugaredLo
 		return nil, err
 	}
 
-	return v1.NewInitializerServiceClient(conn), nil
+	return &client{conn: conn}, nil
+}
+
+func (c *client) InitializerServiceClient() v1.InitializerServiceClient {
+	return v1.NewInitializerServiceClient(c.conn)
+}
+
+func (c *client) BackupServiceClient() v1.BackupServiceClient {
+	return v1.NewBackupServiceClient(c.conn)
 }

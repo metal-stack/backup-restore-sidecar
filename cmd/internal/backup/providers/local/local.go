@@ -9,14 +9,14 @@ import (
 	"errors"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 
 	"go.uber.org/zap"
 )
 
 const (
-	defaultLocalBackupPath = "/tmp/backup-restore-sidecar/local-provider"
+	defaultLocalBackupPath = constants.SidecarBaseDir + "/local-provider"
 )
 
 // BackupProviderLocal implements the backup provider interface for no backup provider (useful to disable sidecar functionality in development environments)

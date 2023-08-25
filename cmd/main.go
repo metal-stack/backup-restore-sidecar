@@ -9,13 +9,13 @@ import (
 	"os/signal"
 	"strings"
 
+	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/gcp"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/local"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/s3"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/etcd"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/postgres"
@@ -25,6 +25,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/probe"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/wait"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/metal-stack/v"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -181,18 +182,44 @@ var restoreListCmd = &cobra.Command{
 		return initBackupProvider()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		c, err := initializer.NewClient(context.Background(), viper.GetString(serverAddrFlg))
+		if err != nil {
+			return fmt.Errorf("error creating client: %w", err)
+		}
+
+		backups, err := c.BackupServiceClient().ListBackups(context.Background(), &v1.Empty{})
+		if err != nil {
+			return fmt.Errorf("error listing backups: %w", err)
+		}
+
+		var data [][]string
+		for _, b := range backups.Backups {
+			data = append(data, []string{b.Timestamp.String(), b.Name, b.Version})
+		}
+
+		p := utils.NewTablePrinter()
+		p.Print([]string{"Date", "Name", "Version"}, data)
+		return nil
+	},
+}
+
+var backupPresentCmd = &cobra.Command{
+	Use:   "is-backup-present",
+	Short: "returns true if a backup was already made",
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		return initBackupProvider()
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
 		versions, err := bp.ListBackups()
 		if err != nil {
 			return err
 		}
-		backups := versions.List()
-		versions.Sort(backups, false)
-		var data [][]string
-		for _, b := range backups {
-			data = append(data, []string{b.Date.String(), b.Name, b.Version})
+		if len(versions.List()) > 0 {
+			fmt.Println("true")
+		} else {
+			fmt.Println("true")
 		}
-		p := utils.NewTablePrinter()
-		p.Print([]string{"Data", "Name", "Version"}, data)
+
 		return nil
 	},
 }
@@ -295,6 +322,7 @@ func init() {
 	}
 
 	restoreCmd.AddCommand(restoreListCmd)
+	restoreCmd.AddCommand(backupPresentCmd)
 }
 
 func initConfig() {

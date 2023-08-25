@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package v1;
+
+import "google/protobuf/timestamp.proto";
+import "v1/common.proto";
+
+service BackupService {
+  rpc ListBackups(Empty) returns (BackupListResponse);
+  //   rpc RestoreBackup(RestoreBackupRequest) returns (RestoreBackupResponse);
+}
+
+message BackupListResponse {
+  repeated Backup backups = 1;
+}
+
+message Backup {
+  string name = 1;
+  string version = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}

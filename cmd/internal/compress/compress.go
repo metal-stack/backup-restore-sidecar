@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/mholt/archiver/v3"
 )
 

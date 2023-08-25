@@ -7,9 +7,9 @@ import (
 
 	backuproviders "github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	cron "github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 )

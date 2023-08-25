@@ -5,8 +5,8 @@ import (
 	"os"
 	"path"
 
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"go.uber.org/zap"
 )
 

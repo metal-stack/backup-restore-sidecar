@@ -14,7 +14,7 @@ import (
 	"errors"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 
 	"go.uber.org/zap"
 	"google.golang.org/api/googleapi"
