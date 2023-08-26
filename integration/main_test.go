@@ -295,7 +295,7 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 }
 
 func upgradeFlow(t *testing.T, spec *flowSpec) {
-	require.Len(t, spec.databaseImages, 2, "exactly 2 databaseimages must be specified for the upgrade test")
+	require.GreaterOrEqual(t, len(spec.databaseImages), 2, "at least 2 databaseimages must be specified for the upgrade test")
 
 	var (
 		ctx, cancel  = context.WithTimeout(context.Background(), 10*time.Minute)
@@ -332,8 +332,6 @@ func upgradeFlow(t *testing.T, spec *flowSpec) {
 		objects = append(objects, spec.backingResources(ns.Name)...)
 		return objects
 	}
-
-	dumpToExamples(t, spec.databaseType+"-local.yaml", objects()...)
 
 	for _, o := range objects() {
 		o := o
@@ -380,7 +378,7 @@ func upgradeFlow(t *testing.T, spec *flowSpec) {
 		nextImage := nextImage
 		t.Logf("deploy sts with next database version %q", *nextImage)
 
-		err = c.Create(ctx, spec.sts(ns.Name, nextImage))
+		err = c.Update(ctx, spec.sts(ns.Name, nextImage))
 		require.NoError(t, err)
 
 		err = waitForPodRunnig(ctx, podName, ns.Name)
