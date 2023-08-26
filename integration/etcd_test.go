@@ -23,13 +23,16 @@ import (
 	_ "github.com/lib/pq"
 )
 
-const (
+var (
 	etcdContainerImage = "quay.io/coreos/etcd:v3.5.7"
 )
 
 func Test_ETCD(t *testing.T) {
 	var (
-		sts = func(namespace string) *appsv1.StatefulSet {
+		sts = func(namespace string, image *string) *appsv1.StatefulSet {
+			if image == nil {
+				image = &etcdContainerImage
+			}
 			return &appsv1.StatefulSet{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "StatefulSet",
@@ -61,7 +64,7 @@ func Test_ETCD(t *testing.T) {
 							Containers: []corev1.Container{
 								{
 									Name:    "etcd",
-									Image:   etcdContainerImage,
+									Image:   *image,
 									Command: []string{"backup-restore-sidecar", "wait"},
 									LivenessProbe: &corev1.Probe{
 										ProbeHandler: corev1.ProbeHandler{
@@ -120,7 +123,7 @@ func Test_ETCD(t *testing.T) {
 								},
 								{
 									Name:    "backup-restore-sidecar",
-									Image:   etcdContainerImage,
+									Image:   *image,
 									Command: []string{"backup-restore-sidecar", "start", "--log-level=debug"},
 									Ports: []corev1.ContainerPort{
 										{

@@ -169,8 +169,10 @@ func waitUntilNotFound(ctx context.Context, obj client.Object) error {
 }
 
 type flowSpec struct {
-	databaseType     string
-	sts              func(namespace string) *appsv1.StatefulSet
+	databaseType string
+	// slice of images, executed in order during upgrade
+	databaseImages   []*string
+	sts              func(namespace string, image *string) *appsv1.StatefulSet
 	backingResources func(namespace string) []client.Object
 	addTestData      func(t *testing.T, ctx context.Context)
 	verifyTestData   func(t *testing.T, ctx context.Context)
@@ -180,7 +182,11 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 	var (
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
 		ns          = testNamespace(t)
+		image       *string
 	)
+	if len(spec.databaseImages) > 0 {
+		image = spec.databaseImages[0]
+	}
 
 	defer cancel()
 
@@ -206,7 +212,7 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 	t.Log("applying resource manifests")
 
 	objects := func() []client.Object {
-		objects := []client.Object{spec.sts(ns.Name)}
+		objects := []client.Object{spec.sts(ns.Name, image)}
 		objects = append(objects, spec.backingResources(ns.Name)...)
 		return objects
 	}
@@ -219,7 +225,7 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 		require.NoError(t, err)
 	}
 
-	podName := spec.sts(ns.Name).Name + "-0"
+	podName := spec.sts(ns.Name, image).Name + "-0"
 
 	err = waitForPodRunnig(ctx, podName, ns.Name)
 	require.NoError(t, err)
@@ -256,7 +262,7 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 
 	t.Log("remove sts and delete data volume")
 
-	err = c.Delete(ctx, spec.sts(ns.Name))
+	err = c.Delete(ctx, spec.sts(ns.Name, image))
 	require.NoError(t, err)
 
 	err = c.Delete(ctx, &corev1.PersistentVolumeClaim{
@@ -277,7 +283,7 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 
 	t.Log("recreate sts")
 
-	err = c.Create(ctx, spec.sts(ns.Name))
+	err = c.Create(ctx, spec.sts(ns.Name, image))
 	require.NoError(t, err)
 
 	err = waitForPodRunnig(ctx, podName, ns.Name)
@@ -286,4 +292,102 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 	t.Log("verify that data gets restored")
 
 	spec.verifyTestData(t, ctx)
+}
+
+func upgradeFlow(t *testing.T, spec *flowSpec) {
+	require.Len(t, spec.databaseImages, 2, "exactly 2 databaseimages must be specified for the upgrade test")
+
+	var (
+		ctx, cancel  = context.WithTimeout(context.Background(), 10*time.Minute)
+		ns           = testNamespace(t)
+		initialImage = spec.databaseImages[0]
+		nextImages   = spec.databaseImages[1:]
+	)
+
+	defer cancel()
+
+	cleanup := func() {
+		t.Log("running cleanup")
+
+		err := c.Delete(ctx, ns)
+		require.NoError(t, client.IgnoreNotFound(err), "cleanup did not succeed")
+
+		err = waitUntilNotFound(ctx, &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: ns.Name,
+			},
+		})
+		require.NoError(t, err, "cleanup did not succeed")
+	}
+	cleanup()
+	defer cleanup()
+
+	err := c.Create(ctx, ns)
+	require.NoError(t, client.IgnoreAlreadyExists(err))
+
+	t.Log("applying resource manifests")
+
+	objects := func() []client.Object {
+		objects := []client.Object{spec.sts(ns.Name, initialImage)}
+		objects = append(objects, spec.backingResources(ns.Name)...)
+		return objects
+	}
+
+	dumpToExamples(t, spec.databaseType+"-local.yaml", objects()...)
+
+	for _, o := range objects() {
+		o := o
+		err = c.Create(ctx, o)
+		require.NoError(t, err)
+	}
+
+	podName := spec.sts(ns.Name, initialImage).Name + "-0"
+
+	err = waitForPodRunnig(ctx, podName, ns.Name)
+	require.NoError(t, err)
+
+	t.Log("adding test data to database")
+
+	spec.addTestData(t, ctx)
+
+	t.Log("taking a backup")
+
+	brsc, err := brsclient.New(ctx, "http://localhost:8000")
+	require.NoError(t, err)
+
+	_, err = brsc.DatabaseServiceClient().CreateBackup(ctx, &v1.Empty{})
+	assert.NoError(t, err)
+
+	var backup *v1.Backup
+	err = retry.Do(func() error {
+		backups, err := brsc.BackupServiceClient().ListBackups(ctx, &v1.Empty{})
+		if err != nil {
+			return err
+		}
+
+		if len(backups.Backups) == 0 {
+			return fmt.Errorf("no backups were made yet")
+		}
+
+		backup = backups.Backups[0]
+
+		return nil
+	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
+	require.NoError(t, err)
+	require.NotNil(t, backup)
+
+	for _, nextImage := range nextImages {
+		nextImage := nextImage
+		t.Logf("deploy sts with next database version %q", *nextImage)
+
+		err = c.Create(ctx, spec.sts(ns.Name, nextImage))
+		require.NoError(t, err)
+
+		err = waitForPodRunnig(ctx, podName, ns.Name)
+		require.NoError(t, err)
+
+		t.Log("verify that data is still the same")
+
+		spec.verifyTestData(t, ctx)
+	}
 }
