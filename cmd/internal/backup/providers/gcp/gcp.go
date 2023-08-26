@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -15,10 +14,12 @@ import (
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
+	"github.com/spf13/afero"
 
 	"go.uber.org/zap"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 
 	"cloud.google.com/go/storage"
 )
@@ -29,6 +30,7 @@ const (
 
 // BackupProviderGCP implements the backup provider interface for GCP
 type BackupProviderGCP struct {
+	fs     afero.Fs
 	log    *zap.SugaredLogger
 	c      *storage.Client
 	config *BackupProviderConfigGCP
@@ -42,6 +44,8 @@ type BackupProviderConfigGCP struct {
 	ObjectPrefix   string
 	ObjectsToKeep  int64
 	ProjectID      string
+	FS             afero.Fs
+	ClientOpts     []option.ClientOption
 }
 
 func (c *BackupProviderConfigGCP) validate() error {
@@ -50,6 +54,11 @@ func (c *BackupProviderConfigGCP) validate() error {
 	}
 	if c.ProjectID == "" {
 		return errors.New("gcp project id must not be empty")
+	}
+	for _, opt := range c.ClientOpts {
+		if opt == nil {
+			return errors.New("option can not be nil")
+		}
 	}
 
 	return nil
@@ -69,13 +78,16 @@ func New(log *zap.SugaredLogger, config *BackupProviderConfigGCP) (*BackupProvid
 	if config.BackupName == "" {
 		config.BackupName = defaultBackupName
 	}
+	if config.FS == nil {
+		config.FS = afero.NewOsFs()
+	}
 
 	err := config.validate()
 	if err != nil {
 		return nil, err
 	}
 
-	client, err := storage.NewClient(ctx)
+	client, err := storage.NewClient(ctx, config.ClientOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +96,7 @@ func New(log *zap.SugaredLogger, config *BackupProviderConfigGCP) (*BackupProvid
 		c:      client,
 		config: config,
 		log:    log,
+		fs:     config.FS,
 	}, nil
 }
 
@@ -149,18 +162,21 @@ func (b *BackupProviderGCP) DownloadBackup(version *providers.BackupVersion) err
 
 	bucket := b.c.Bucket(b.config.BucketName)
 
+	downloadFileName := version.Name
+	if strings.Contains(downloadFileName, "/") {
+		downloadFileName = filepath.Base(downloadFileName)
+	}
+	backupFilePath := path.Join(constants.DownloadDir, downloadFileName)
+
+	b.log.Infow("downloading", "object", version.Name, "gen", gen, "to", backupFilePath)
+
 	r, err := bucket.Object(version.Name).Generation(gen).NewReader(ctx)
 	if err != nil {
 		return fmt.Errorf("backup not found: %w", err)
 	}
 	defer r.Close()
 
-	downloadFileName := version.Name
-	if strings.Contains(downloadFileName, "/") {
-		downloadFileName = filepath.Base(downloadFileName)
-	}
-	backupFilePath := path.Join(constants.DownloadDir, downloadFileName)
-	f, err := os.Create(backupFilePath)
+	f, err := b.fs.Create(backupFilePath)
 	if err != nil {
 		return err
 	}
@@ -179,7 +195,7 @@ func (b *BackupProviderGCP) UploadBackup(sourcePath string) error {
 	ctx := context.Background()
 	bucket := b.c.Bucket(b.config.BucketName)
 
-	r, err := os.Open(sourcePath)
+	r, err := b.fs.Open(sourcePath)
 	if err != nil {
 		return err
 	}

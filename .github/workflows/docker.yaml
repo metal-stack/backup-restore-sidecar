@@ -31,15 +31,10 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
 
-    - name: Set up Go 1.21
+    - name: Setup Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21.x'
-
-    - name: Lint
-      uses: golangci/golangci-lint-action@v3
-      with:
-        args: --build-tags integration -p bugs -p unused --timeout=3m
+        go-version-file: 'go.mod'
 
     - name: Make tag
       run: |
@@ -66,10 +61,20 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
 
-    - name: Set up Go 1.21
+    - name: Setup Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21.x'
+        go-version-file: 'go.mod'
+        cache: false
+
+    - name: Lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        args: --build-tags integration -p bugs -p unused --timeout=3m
+
+    - name: Test
+      run: |
+        make test
 
     - name: Create k8s Kind Cluster
       uses: helm/kind-action@v1.8.0
@@ -78,5 +83,4 @@ jobs:
 
     - name: Test
       run: |
-        make kind-cluster-create
         make test-integration

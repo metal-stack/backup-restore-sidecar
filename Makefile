@@ -20,23 +20,27 @@ ifneq ($(GO_RUN),)
 GO_RUN_ARG := -run $(GO_RUN)
 endif
 
-.PHONY: all
-all:
+.PHONY: build
+build:
 	go mod tidy
 	go build -ldflags "$(LINKMODE)" -tags 'osusergo netgo static_build' -o bin/backup-restore-sidecar github.com/metal-stack/backup-restore-sidecar/cmd
 	strip bin/backup-restore-sidecar
 
+.PHONY: test
+test: build
+	go test -cover ./...
+
 .PHONY: test-integration
-test-integration: dockerimage
+test-integration: kind-cluster-create
 	kind --name backup-restore-sidecar load docker-image ghcr.io/metal-stack/backup-restore-sidecar:latest
-	KUBECONFIG=$(KUBECONFIG) go test $(GO_RUN_ARG) -count 1 -v -p 1 -timeout 10m ./integration/...
+	KUBECONFIG=$(KUBECONFIG) go test $(GO_RUN_ARG) -tags=integration -count 1 -v -p 1 -timeout 10m ./...
 
 .PHONY: proto
 proto:
 	make -C proto protoc
 
 .PHONY: dockerimage
-dockerimage: all
+dockerimage: build
 	docker build -t ghcr.io/metal-stack/backup-restore-sidecar:${DOCKER_TAG} .
 
 # # #

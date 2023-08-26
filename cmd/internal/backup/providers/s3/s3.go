@@ -1,7 +1,6 @@
 package s3
 
 import (
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
+	"github.com/spf13/afero"
 
 	"go.uber.org/zap"
 
@@ -27,6 +27,7 @@ const (
 
 // BackupProviderS3 implements the backup provider interface for S3
 type BackupProviderS3 struct {
+	fs     afero.Fs
 	log    *zap.SugaredLogger
 	c      *s3.S3
 	sess   *session.Session
@@ -43,6 +44,7 @@ type BackupProviderConfigS3 struct {
 	BackupName    string
 	ObjectPrefix  string
 	ObjectsToKeep int64
+	FS            afero.Fs
 }
 
 func (c *BackupProviderConfigS3) validate() error {
@@ -64,7 +66,6 @@ func (c *BackupProviderConfigS3) validate() error {
 
 // New returns a S3 backup provider
 func New(log *zap.SugaredLogger, config *BackupProviderConfigS3) (*BackupProviderS3, error) {
-
 	if config == nil {
 		return nil, errors.New("s3 backup provider requires a provider config")
 	}
@@ -74,6 +75,9 @@ func New(log *zap.SugaredLogger, config *BackupProviderConfigS3) (*BackupProvide
 	}
 	if config.BackupName == "" {
 		config.BackupName = defaultBackupName
+	}
+	if config.FS == nil {
+		config.FS = afero.NewOsFs()
 	}
 
 	err := config.validate()
@@ -100,6 +104,7 @@ func New(log *zap.SugaredLogger, config *BackupProviderConfigS3) (*BackupProvide
 		sess:   newSession,
 		config: config,
 		log:    log,
+		fs:     config.FS,
 	}, nil
 }
 
@@ -195,8 +200,10 @@ func (b *BackupProviderS3) DownloadBackup(version *providers.BackupVersion) erro
 	if strings.Contains(downloadFileName, "/") {
 		downloadFileName = filepath.Base(downloadFileName)
 	}
+
 	backupFilePath := path.Join(constants.DownloadDir, downloadFileName)
-	f, err := os.Create(backupFilePath)
+
+	f, err := b.fs.Create(backupFilePath)
 	if err != nil {
 		return err
 	}
@@ -221,7 +228,7 @@ func (b *BackupProviderS3) DownloadBackup(version *providers.BackupVersion) erro
 func (b *BackupProviderS3) UploadBackup(sourcePath string) error {
 	bucket := aws.String(b.config.BucketName)
 
-	r, err := os.Open(sourcePath)
+	r, err := b.fs.Open(sourcePath)
 	if err != nil {
 		return err
 	}
@@ -264,6 +271,7 @@ func (b *BackupProviderS3) ListBackups() (providers.BackupVersions, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return BackupVersionsS3{
 		objectAttrs: it.Versions,
 	}, nil
