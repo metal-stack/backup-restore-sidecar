@@ -388,6 +388,7 @@ func upgradeFlow(t *testing.T, spec *flowSpec) {
 		err = c.Update(ctx, nextSts, &client.UpdateOptions{})
 		require.NoError(t, err)
 
+		// FIXME This immediately returns, dunno why
 		err = waitForPodRunnig(ctx, podName, ns.Name)
 		require.NoError(t, err)
 
