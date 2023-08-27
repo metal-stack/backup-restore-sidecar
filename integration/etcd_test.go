@@ -29,9 +29,9 @@ var (
 
 func Test_ETCD(t *testing.T) {
 	var (
-		sts = func(namespace string, image *string) *appsv1.StatefulSet {
-			if image == nil {
-				image = &etcdContainerImage
+		sts = func(namespace string, image string) *appsv1.StatefulSet {
+			if image == "" {
+				image = etcdContainerImage
 			}
 			return &appsv1.StatefulSet{
 				TypeMeta: metav1.TypeMeta{
@@ -64,7 +64,7 @@ func Test_ETCD(t *testing.T) {
 							Containers: []corev1.Container{
 								{
 									Name:    "etcd",
-									Image:   *image,
+									Image:   image,
 									Command: []string{"backup-restore-sidecar", "wait"},
 									LivenessProbe: &corev1.Probe{
 										ProbeHandler: corev1.ProbeHandler{
@@ -123,7 +123,7 @@ func Test_ETCD(t *testing.T) {
 								},
 								{
 									Name:    "backup-restore-sidecar",
-									Image:   *image,
+									Image:   image,
 									Command: []string{"backup-restore-sidecar", "start", "--log-level=debug"},
 									Ports: []corev1.ContainerPort{
 										{

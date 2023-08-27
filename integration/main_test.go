@@ -171,18 +171,19 @@ func waitUntilNotFound(ctx context.Context, obj client.Object) error {
 type flowSpec struct {
 	databaseType string
 	// slice of images, executed in order during upgrade
-	databaseImages   []*string
-	sts              func(namespace string, image *string) *appsv1.StatefulSet
+	databaseImages   []string
+	sts              func(namespace, image string) *appsv1.StatefulSet
 	backingResources func(namespace string) []client.Object
 	addTestData      func(t *testing.T, ctx context.Context)
 	verifyTestData   func(t *testing.T, ctx context.Context)
 }
 
 func restoreFlow(t *testing.T, spec *flowSpec) {
+	t.Log("running restore flow")
 	var (
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
 		ns          = testNamespace(t)
-		image       *string
+		image       string
 	)
 	if len(spec.databaseImages) > 0 {
 		image = spec.databaseImages[0]
@@ -295,6 +296,7 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 }
 
 func upgradeFlow(t *testing.T, spec *flowSpec) {
+	t.Log("running upgrade flow")
 	require.GreaterOrEqual(t, len(spec.databaseImages), 2, "at least 2 databaseimages must be specified for the upgrade test")
 
 	var (
@@ -374,11 +376,16 @@ func upgradeFlow(t *testing.T, spec *flowSpec) {
 	require.NoError(t, err)
 	require.NotNil(t, backup)
 
-	for _, nextImage := range nextImages {
-		nextImage := nextImage
-		t.Logf("deploy sts with next database version %q", *nextImage)
+	for _, image := range nextImages {
+		image := image
+		nextSts := spec.sts(ns.Name, image).DeepCopy()
+		t.Logf("deploy sts with next database version %q, container %q", image, nextSts.Spec.Template.Spec.Containers[0].Image)
 
-		err = c.Update(ctx, spec.sts(ns.Name, nextImage))
+		// controllerutil.CreateOrUpdate(ctx, c, nextSts, func() error {
+		// 	t.Logf("create or update the sts: %q", nextSts.Name)
+		// 	return nil
+		// })
+		err = c.Update(ctx, nextSts, &client.UpdateOptions{})
 		require.NoError(t, err)
 
 		err = waitForPodRunnig(ctx, podName, ns.Name)

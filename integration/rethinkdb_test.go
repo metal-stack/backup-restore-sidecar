@@ -39,9 +39,9 @@ func Test_RethinkDB(t *testing.T) {
 	)
 
 	var (
-		sts = func(namespace string, image *string) *appsv1.StatefulSet {
-			if image == nil {
-				image = &rethinkDbContainerImage
+		sts = func(namespace, image string) *appsv1.StatefulSet {
+			if image == "" {
+				image = rethinkDbContainerImage
 			}
 			return &appsv1.StatefulSet{
 				TypeMeta: metav1.TypeMeta{
@@ -74,7 +74,7 @@ func Test_RethinkDB(t *testing.T) {
 							Containers: []corev1.Container{
 								{
 									Name:    "rethinkdb",
-									Image:   *image,
+									Image:   image,
 									Command: []string{"backup-restore-sidecar", "wait"},
 									Env: []corev1.EnvVar{
 										{
@@ -115,7 +115,7 @@ func Test_RethinkDB(t *testing.T) {
 								},
 								{
 									Name:    "backup-restore-sidecar",
-									Image:   *image,
+									Image:   image,
 									Command: []string{"backup-restore-sidecar", "start", "--log-level=debug"},
 									Ports: []corev1.ContainerPort{
 										{

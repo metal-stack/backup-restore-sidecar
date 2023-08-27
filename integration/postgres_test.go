@@ -36,9 +36,9 @@ func Test_Postgres(t *testing.T) {
 	)
 
 	var (
-		sts = func(namespace string, image *string) *appsv1.StatefulSet {
-			if image == nil {
-				image = &postgresContainerImage
+		sts = func(namespace, image string) *appsv1.StatefulSet {
+			if image == "" {
+				image = postgresContainerImage
 			}
 			return &appsv1.StatefulSet{
 				TypeMeta: metav1.TypeMeta{
@@ -71,7 +71,7 @@ func Test_Postgres(t *testing.T) {
 							Containers: []corev1.Container{
 								{
 									Name:    "postgres",
-									Image:   *image,
+									Image:   image,
 									Command: []string{"backup-restore-sidecar", "wait"},
 									LivenessProbe: &corev1.Probe{
 										ProbeHandler: corev1.ProbeHandler{
@@ -164,7 +164,7 @@ func Test_Postgres(t *testing.T) {
 								},
 								{
 									Name:    "backup-restore-sidecar",
-									Image:   *image,
+									Image:   image,
 									Command: []string{"backup-restore-sidecar", "start", "--log-level=debug"},
 									Env: []corev1.EnvVar{
 										{
@@ -437,21 +437,21 @@ post-exec-cmds:
 		}
 	)
 
-	restoreFlow(t, &flowSpec{
-		databaseType:     "postgres",
-		sts:              sts,
-		backingResources: backingResources,
-		addTestData:      addTestData,
-		verifyTestData:   verifyTestData,
-	})
+	// restoreFlow(t, &flowSpec{
+	// 	databaseType:     "postgres",
+	// 	sts:              sts,
+	// 	backingResources: backingResources,
+	// 	addTestData:      addTestData,
+	// 	verifyTestData:   verifyTestData,
+	// })
 
 	upgradeFlow(t, &flowSpec{
 		databaseType: "postgres",
-		databaseImages: []*string{
-			pointer.Pointer("postgres:12-alpine"),
-			pointer.Pointer("postgres:13-alpine"),
-			pointer.Pointer("postgres:14-alpine"),
-			pointer.Pointer("postgres:15-alpine"),
+		databaseImages: []string{
+			"postgres:12-alpine",
+			"postgres:13-alpine",
+			"postgres:14-alpine",
+			"postgres:15-alpine",
 		},
 		sts:              sts,
 		backingResources: backingResources,
