@@ -401,7 +401,6 @@ func initDatabase() error {
 		)
 	case "rethinkdb":
 		db = rethinkdb.New(
-			stop,
 			logger.Named("rethinkdb"),
 			datadir,
 			viper.GetString(rethinkDBURLFlg),

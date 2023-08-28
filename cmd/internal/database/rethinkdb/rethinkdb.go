@@ -42,13 +42,11 @@ type RethinkDB struct {
 	passwordFile string
 	log          *zap.SugaredLogger
 	executor     *utils.CmdExecutor
-	ctx          context.Context
 }
 
 // New instantiates a new rethinkdb database
-func New(ctx context.Context, log *zap.SugaredLogger, datadir string, url string, passwordFile string) *RethinkDB {
+func New(log *zap.SugaredLogger, datadir string, url string, passwordFile string) *RethinkDB {
 	return &RethinkDB{
-		ctx:          ctx,
 		log:          log,
 		datadir:      datadir,
 		url:          url,
@@ -178,10 +176,10 @@ func (db *RethinkDB) Recover(ctx context.Context) error {
 
 	db.log.Infow("waiting for rethinkdb database to come up")
 
-	probeCtx, probeCancel := context.WithTimeout(context.Background(), restoreDatabaseStartupTimeout)
+	probeCtx, probeCancel := context.WithTimeout(ctx, restoreDatabaseStartupTimeout)
 	defer probeCancel()
 
-	restoreDB := New(db.ctx, db.log, db.datadir, "localhost:1", db.passwordFile)
+	restoreDB := New(db.log, db.datadir, "localhost:1", db.passwordFile)
 	err = probe.Start(probeCtx, restoreDB.log, restoreDB)
 	if err != nil {
 		return handleFailedRecovery(fmt.Errorf("rethinkdb did not come up: %w", err))
@@ -243,6 +241,6 @@ func (db *RethinkDB) Probe(ctx context.Context) error {
 }
 
 // Upgrade performs an upgrade of the database in case a newer version of the database is detected.
-func (db *RethinkDB) Upgrade(ctx context.Context) error {
+func (db *RethinkDB) Upgrade(_ context.Context) error {
 	return nil
 }
