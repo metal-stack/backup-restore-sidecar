@@ -1,6 +1,7 @@
 package local
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -68,7 +69,7 @@ func New(log *zap.SugaredLogger, config *BackupProviderConfigLocal) (*BackupProv
 }
 
 // EnsureBackupBucket ensures a backup bucket at the backup provider
-func (b *BackupProviderLocal) EnsureBackupBucket() error {
+func (b *BackupProviderLocal) EnsureBackupBucket(_ context.Context) error {
 	b.log.Infow("ensuring backup bucket called for provider local")
 
 	if err := b.fs.MkdirAll(b.config.LocalBackupPath, 0777); err != nil {
@@ -79,14 +80,14 @@ func (b *BackupProviderLocal) EnsureBackupBucket() error {
 }
 
 // CleanupBackups cleans up backups according to the given backup cleanup policy at the backup provider
-func (b *BackupProviderLocal) CleanupBackups() error {
+func (b *BackupProviderLocal) CleanupBackups(_ context.Context) error {
 	b.log.Infow("cleanup backups called for provider local")
 
 	return nil
 }
 
 // DownloadBackup downloads the given backup version to the restoration folder
-func (b *BackupProviderLocal) DownloadBackup(version *providers.BackupVersion) error {
+func (b *BackupProviderLocal) DownloadBackup(_ context.Context, version *providers.BackupVersion) error {
 	b.log.Infow("download backup called for provider local")
 
 	source := filepath.Join(b.config.LocalBackupPath, version.Name)
@@ -101,7 +102,7 @@ func (b *BackupProviderLocal) DownloadBackup(version *providers.BackupVersion) e
 }
 
 // UploadBackup uploads a backup to the backup provider
-func (b *BackupProviderLocal) UploadBackup(sourcePath string) error {
+func (b *BackupProviderLocal) UploadBackup(_ context.Context, sourcePath string) error {
 	b.log.Infow("upload backups called for provider local")
 
 	destination := filepath.Join(b.config.LocalBackupPath, filepath.Base(sourcePath))
@@ -115,7 +116,7 @@ func (b *BackupProviderLocal) UploadBackup(sourcePath string) error {
 }
 
 // GetNextBackupName returns a name for the next backup archive that is going to be uploaded
-func (b *BackupProviderLocal) GetNextBackupName() string {
+func (b *BackupProviderLocal) GetNextBackupName(_ context.Context) string {
 	name := strconv.FormatInt(b.nextBackupCount, 10)
 	b.nextBackupCount++
 	b.nextBackupCount = b.nextBackupCount % b.config.ObjectsToKeep
@@ -123,7 +124,7 @@ func (b *BackupProviderLocal) GetNextBackupName() string {
 }
 
 // ListBackups lists the available backups of the backup provider
-func (b *BackupProviderLocal) ListBackups() (providers.BackupVersions, error) {
+func (b *BackupProviderLocal) ListBackups(_ context.Context) (providers.BackupVersions, error) {
 	b.log.Infow("listing backups called for provider local")
 
 	d, err := b.fs.Open(b.config.LocalBackupPath)

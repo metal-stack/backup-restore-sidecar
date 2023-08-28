@@ -13,6 +13,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	cron "github.com/robfig/cron/v3"
 	"go.uber.org/zap"
+	"golang.org/x/sync/semaphore"
 )
 
 // Start starts the backup component, which is periodically taking backups of the database
@@ -22,7 +23,7 @@ func Start(ctx context.Context, log *zap.SugaredLogger, backupSchedule string, d
 	c := cron.New()
 
 	id, err := c.AddFunc(backupSchedule, func() {
-		err := CreateBackup(log, db, bp, metrics, comp)
+		err := CreateBackup(ctx, log, db, bp, metrics, comp)
 		if err != nil {
 			log.Errorw("error creating backup", "error", err)
 		}
@@ -42,8 +43,18 @@ func Start(ctx context.Context, log *zap.SugaredLogger, backupSchedule string, d
 	return nil
 }
 
-func CreateBackup(log *zap.SugaredLogger, db database.DatabaseProber, bp backuproviders.BackupProvider, metrics *metrics.Metrics, comp *compress.Compressor) error {
-	err := db.Backup()
+var (
+	// sem guards backups to be taken concurrently
+	sem = semaphore.NewWeighted(1)
+)
+
+func CreateBackup(ctx context.Context, log *zap.SugaredLogger, db database.DatabaseProber, bp backuproviders.BackupProvider, metrics *metrics.Metrics, comp *compress.Compressor) error {
+	if !sem.TryAcquire(1) {
+		return fmt.Errorf("a backup is already in progress")
+	}
+	defer sem.Release(1)
+
+	err := db.Backup(ctx)
 	if err != nil {
 		metrics.CountError("create")
 		return fmt.Errorf("database backup failed: %w", err)
@@ -51,7 +62,7 @@ func CreateBackup(log *zap.SugaredLogger, db database.DatabaseProber, bp backupr
 
 	log.Infow("successfully backed up database")
 
-	backupArchiveName := bp.GetNextBackupName()
+	backupArchiveName := bp.GetNextBackupName(ctx)
 
 	backupFilePath := path.Join(constants.BackupDir, backupArchiveName)
 	if err := os.RemoveAll(backupFilePath + comp.Extension()); err != nil {
@@ -66,7 +77,7 @@ func CreateBackup(log *zap.SugaredLogger, db database.DatabaseProber, bp backupr
 	}
 	log.Info("compressed backup")
 
-	err = bp.UploadBackup(filename)
+	err = bp.UploadBackup(ctx, filename)
 	if err != nil {
 		metrics.CountError("upload")
 		return fmt.Errorf("error uploading backup: %w", err)
@@ -75,7 +86,7 @@ func CreateBackup(log *zap.SugaredLogger, db database.DatabaseProber, bp backupr
 
 	metrics.CountBackup(filename)
 
-	err = bp.CleanupBackups()
+	err = bp.CleanupBackups(ctx)
 	if err != nil {
 		metrics.CountError("cleanup")
 		log.Errorw("cleaning up backups failed", "error", err)

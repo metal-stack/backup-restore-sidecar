@@ -1,6 +1,7 @@
 package s3
 
 import (
+	"context"
 	"path"
 	"path/filepath"
 	"strings"
@@ -109,7 +110,7 @@ func New(log *zap.SugaredLogger, config *BackupProviderConfigS3) (*BackupProvide
 }
 
 // EnsureBackupBucket ensures a backup bucket at the backup provider
-func (b *BackupProviderS3) EnsureBackupBucket() error {
+func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 	bucket := aws.String(b.config.BucketName)
 
 	// create bucket
@@ -117,7 +118,7 @@ func (b *BackupProviderS3) EnsureBackupBucket() error {
 		Bucket: bucket,
 	}
 
-	_, err := b.c.CreateBucket(cparams)
+	_, err := b.c.CreateBucketWithContext(ctx, cparams)
 	if err != nil {
 		// FIXME check how to migrate to errors.As
 		//nolint
@@ -140,7 +141,7 @@ func (b *BackupProviderS3) EnsureBackupBucket() error {
 			Status: aws.String("Enabled"),
 		},
 	}
-	_, err = b.c.PutBucketVersioning(versioning)
+	_, err = b.c.PutBucketVersioningWithContext(ctx, versioning)
 	if err != nil {
 		// FIXME check how to migrate to errors.As
 		//nolint
@@ -170,7 +171,7 @@ func (b *BackupProviderS3) EnsureBackupBucket() error {
 			},
 		},
 	}
-	_, err = b.c.PutBucketLifecycleConfiguration(lifecycle)
+	_, err = b.c.PutBucketLifecycleConfigurationWithContext(ctx, lifecycle)
 	if err != nil {
 		// FIXME check how to migrate to errors.As
 		//nolint
@@ -187,13 +188,13 @@ func (b *BackupProviderS3) EnsureBackupBucket() error {
 }
 
 // CleanupBackups cleans up backups according to the given backup cleanup policy at the backup provider
-func (b *BackupProviderS3) CleanupBackups() error {
+func (b *BackupProviderS3) CleanupBackups(_ context.Context) error {
 	// nothing to do here, done with lifecycle rules
 	return nil
 }
 
 // DownloadBackup downloads the given backup version to the restoration folder
-func (b *BackupProviderS3) DownloadBackup(version *providers.BackupVersion) error {
+func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *providers.BackupVersion) error {
 	bucket := aws.String(b.config.BucketName)
 
 	downloadFileName := version.Name
@@ -211,7 +212,9 @@ func (b *BackupProviderS3) DownloadBackup(version *providers.BackupVersion) erro
 
 	downloader := s3manager.NewDownloader(b.sess)
 
-	_, err = downloader.Download(f,
+	_, err = downloader.DownloadWithContext(
+		ctx,
+		f,
 		&s3.GetObjectInput{
 			Bucket:    bucket,
 			Key:       &version.Name,
@@ -225,7 +228,7 @@ func (b *BackupProviderS3) DownloadBackup(version *providers.BackupVersion) erro
 }
 
 // UploadBackup uploads a backup to the backup provider
-func (b *BackupProviderS3) UploadBackup(sourcePath string) error {
+func (b *BackupProviderS3) UploadBackup(ctx context.Context, sourcePath string) error {
 	bucket := aws.String(b.config.BucketName)
 
 	r, err := b.fs.Open(sourcePath)
@@ -242,7 +245,7 @@ func (b *BackupProviderS3) UploadBackup(sourcePath string) error {
 	b.log.Debugw("uploading object", "src", sourcePath, "dest", destination)
 
 	uploader := s3manager.NewUploader(b.sess)
-	_, err = uploader.Upload(&s3manager.UploadInput{
+	_, err = uploader.UploadWithContext(ctx, &s3manager.UploadInput{
 		Bucket: bucket,
 		Key:    aws.String(destination),
 		Body:   r,
@@ -255,16 +258,16 @@ func (b *BackupProviderS3) UploadBackup(sourcePath string) error {
 }
 
 // GetNextBackupName returns a name for the next backup archive that is going to be uploaded
-func (b *BackupProviderS3) GetNextBackupName() string {
+func (b *BackupProviderS3) GetNextBackupName(_ context.Context) string {
 	// name is constant because we use lifecycle rule to cleanup
 	return b.config.BackupName
 }
 
 // ListBackups lists the available backups of the backup provider
-func (b *BackupProviderS3) ListBackups() (providers.BackupVersions, error) {
+func (b *BackupProviderS3) ListBackups(ctx context.Context) (providers.BackupVersions, error) {
 	bucket := aws.String(b.config.BucketName)
 
-	it, err := b.c.ListObjectVersions(&s3.ListObjectVersionsInput{
+	it, err := b.c.ListObjectVersionsWithContext(ctx, &s3.ListObjectVersionsInput{
 		Bucket: bucket,
 		Prefix: &b.config.ObjectPrefix,
 	})

@@ -27,7 +27,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BackupServiceClient interface {
-	ListBackups(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*BackupListResponse, error)
+	ListBackups(ctx context.Context, in *ListBackupsRequest, opts ...grpc.CallOption) (*BackupListResponse, error)
 	RestoreBackup(ctx context.Context, in *RestoreBackupRequest, opts ...grpc.CallOption) (*RestoreBackupResponse, error)
 }
 
@@ -39,7 +39,7 @@ func NewBackupServiceClient(cc grpc.ClientConnInterface) BackupServiceClient {
 	return &backupServiceClient{cc}
 }
 
-func (c *backupServiceClient) ListBackups(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*BackupListResponse, error) {
+func (c *backupServiceClient) ListBackups(ctx context.Context, in *ListBackupsRequest, opts ...grpc.CallOption) (*BackupListResponse, error) {
 	out := new(BackupListResponse)
 	err := c.cc.Invoke(ctx, BackupService_ListBackups_FullMethodName, in, out, opts...)
 	if err != nil {
@@ -61,7 +61,7 @@ func (c *backupServiceClient) RestoreBackup(ctx context.Context, in *RestoreBack
 // All implementations should embed UnimplementedBackupServiceServer
 // for forward compatibility
 type BackupServiceServer interface {
-	ListBackups(context.Context, *Empty) (*BackupListResponse, error)
+	ListBackups(context.Context, *ListBackupsRequest) (*BackupListResponse, error)
 	RestoreBackup(context.Context, *RestoreBackupRequest) (*RestoreBackupResponse, error)
 }
 
@@ -69,7 +69,7 @@ type BackupServiceServer interface {
 type UnimplementedBackupServiceServer struct {
 }
 
-func (UnimplementedBackupServiceServer) ListBackups(context.Context, *Empty) (*BackupListResponse, error) {
+func (UnimplementedBackupServiceServer) ListBackups(context.Context, *ListBackupsRequest) (*BackupListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListBackups not implemented")
 }
 func (UnimplementedBackupServiceServer) RestoreBackup(context.Context, *RestoreBackupRequest) (*RestoreBackupResponse, error) {
@@ -88,7 +88,7 @@ func RegisterBackupServiceServer(s grpc.ServiceRegistrar, srv BackupServiceServe
 }
 
 func _BackupService_ListBackups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Empty)
+	in := new(ListBackupsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func _BackupService_ListBackups_Handler(srv interface{}, ctx context.Context, de
 		FullMethod: BackupService_ListBackups_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BackupServiceServer).ListBackups(ctx, req.(*Empty))
+		return srv.(BackupServiceServer).ListBackups(ctx, req.(*ListBackupsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

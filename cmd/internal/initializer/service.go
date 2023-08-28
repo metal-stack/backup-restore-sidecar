@@ -21,24 +21,24 @@ func newInitializerService(currentStatus *v1.StatusResponse) *initializerService
 	}
 }
 
-func (s *initializerService) Status(context.Context, *v1.Empty) (*v1.StatusResponse, error) {
+func (s *initializerService) Status(context.Context, *v1.StatusRequest) (*v1.StatusResponse, error) {
 	return s.currentStatus, nil
 }
 
 type backupService struct {
 	bp        providers.BackupProvider
-	restoreFn func(version *providers.BackupVersion) error
+	restoreFn func(ctx context.Context, version *providers.BackupVersion) error
 }
 
-func newBackupProviderService(bp providers.BackupProvider, restoreFn func(version *providers.BackupVersion) error) *backupService {
+func newBackupProviderService(bp providers.BackupProvider, restoreFn func(ctx context.Context, version *providers.BackupVersion) error) *backupService {
 	return &backupService{
 		bp:        bp,
 		restoreFn: restoreFn,
 	}
 }
 
-func (s *backupService) ListBackups(context.Context, *v1.Empty) (*v1.BackupListResponse, error) {
-	versions, err := s.bp.ListBackups()
+func (s *backupService) ListBackups(ctx context.Context, _ *v1.ListBackupsRequest) (*v1.BackupListResponse, error) {
+	versions, err := s.bp.ListBackups(ctx)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -64,7 +64,7 @@ func (s *backupService) RestoreBackup(ctx context.Context, req *v1.RestoreBackup
 		return nil, status.Error(codes.InvalidArgument, "version to restore must be defined explicitly")
 	}
 
-	versions, err := s.bp.ListBackups()
+	versions, err := s.bp.ListBackups(ctx)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -74,7 +74,7 @@ func (s *backupService) RestoreBackup(ctx context.Context, req *v1.RestoreBackup
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	err = s.restoreFn(version)
+	err = s.restoreFn(ctx, version)
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("error restoring backup: %s", err))
 	}
@@ -92,7 +92,7 @@ func newDatabaseService(backupFn func() error) *databaseService {
 	}
 }
 
-func (s *databaseService) CreateBackup(ctx context.Context, _ *v1.Empty) (*v1.CreateBackupResponse, error) {
+func (s *databaseService) CreateBackup(ctx context.Context, _ *v1.CreateBackupRequest) (*v1.CreateBackupResponse, error) {
 	err := s.backupFn()
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("error creating backup: %s", err))

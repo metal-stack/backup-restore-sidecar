@@ -42,13 +42,11 @@ type RethinkDB struct {
 	passwordFile string
 	log          *zap.SugaredLogger
 	executor     *utils.CmdExecutor
-	ctx          context.Context
 }
 
 // New instantiates a new rethinkdb database
-func New(ctx context.Context, log *zap.SugaredLogger, datadir string, url string, passwordFile string) *RethinkDB {
+func New(log *zap.SugaredLogger, datadir string, url string, passwordFile string) *RethinkDB {
 	return &RethinkDB{
-		ctx:          ctx,
 		log:          log,
 		datadir:      datadir,
 		url:          url,
@@ -58,7 +56,7 @@ func New(ctx context.Context, log *zap.SugaredLogger, datadir string, url string
 }
 
 // Check checks whether a backup needs to be restored or not, returns true if it needs a backup
-func (db *RethinkDB) Check() (bool, error) {
+func (db *RethinkDB) Check(_ context.Context) (bool, error) {
 	empty, err := utils.IsEmpty(db.datadir)
 	if err != nil {
 		return false, err
@@ -72,7 +70,7 @@ func (db *RethinkDB) Check() (bool, error) {
 }
 
 // Backup takes a backup of the database
-func (db *RethinkDB) Backup() error {
+func (db *RethinkDB) Backup(ctx context.Context) error {
 	if err := os.RemoveAll(constants.BackupDir); err != nil {
 		return fmt.Errorf("could not clean backup directory: %w", err)
 	}
@@ -89,7 +87,7 @@ func (db *RethinkDB) Backup() error {
 		args = append(args, "--connect="+db.url)
 	}
 
-	out, err := db.executor.ExecuteCommandWithOutput(rethinkDBDumpCmd, nil, args...)
+	out, err := db.executor.ExecuteCommandWithOutput(ctx, rethinkDBDumpCmd, nil, args...)
 	fmt.Println(out)
 	if err != nil {
 		return fmt.Errorf("error running backup command: %w", err)
@@ -109,7 +107,7 @@ func (db *RethinkDB) Backup() error {
 }
 
 // Recover restores a database backup
-func (db *RethinkDB) Recover() error {
+func (db *RethinkDB) Recover(ctx context.Context) error {
 	if _, err := os.Stat(rethinkDBRestoreFilePath); os.IsNotExist(err) {
 		return fmt.Errorf("restore file not present: %s", rethinkDBRestoreFilePath)
 	}
@@ -126,8 +124,8 @@ func (db *RethinkDB) Recover() error {
 
 	var (
 		cmd                           *exec.Cmd
-		g, _                          = errgroup.WithContext(context.Background())
-		rethinkdbCtx, cancelRethinkdb = context.WithCancel(context.Background()) // cancel sends a KILL signal to the process
+		g, _                          = errgroup.WithContext(ctx)
+		rethinkdbCtx, cancelRethinkdb = context.WithCancel(ctx) // cancel sends a KILL signal to the process
 
 		// IMPORTANT: when the recovery goes wrong, the database directory MUST be cleaned up
 		// otherwise on pod restart the database directory is not empty anymore and
@@ -178,10 +176,10 @@ func (db *RethinkDB) Recover() error {
 
 	db.log.Infow("waiting for rethinkdb database to come up")
 
-	probeCtx, probeCancel := context.WithTimeout(context.Background(), restoreDatabaseStartupTimeout)
+	probeCtx, probeCancel := context.WithTimeout(ctx, restoreDatabaseStartupTimeout)
 	defer probeCancel()
 
-	restoreDB := New(db.ctx, db.log, db.datadir, "localhost:1", db.passwordFile)
+	restoreDB := New(db.log, db.datadir, "localhost:1", db.passwordFile)
 	err = probe.Start(probeCtx, restoreDB.log, restoreDB)
 	if err != nil {
 		return handleFailedRecovery(fmt.Errorf("rethinkdb did not come up: %w", err))
@@ -196,7 +194,7 @@ func (db *RethinkDB) Recover() error {
 	}
 	args = append(args, rethinkDBRestoreFilePath)
 
-	out, err := db.executor.ExecuteCommandWithOutput(rethinkDBRestoreCmd, nil, args...)
+	out, err := db.executor.ExecuteCommandWithOutput(ctx, rethinkDBRestoreCmd, nil, args...)
 	fmt.Println(out)
 	if err != nil {
 		return handleFailedRecovery(fmt.Errorf("error running restore command: %w", err))
@@ -217,7 +215,7 @@ func (db *RethinkDB) Recover() error {
 }
 
 // Probe figures out if the database is running and available for taking backups.
-func (db *RethinkDB) Probe() error {
+func (db *RethinkDB) Probe(ctx context.Context) error {
 	passwordRaw, err := os.ReadFile(db.passwordFile)
 	if err != nil {
 		return fmt.Errorf("unable to read rethinkdb password file at %s: %w", db.passwordFile, err)
@@ -243,6 +241,6 @@ func (db *RethinkDB) Probe() error {
 }
 
 // Upgrade performs an upgrade of the database in case a newer version of the database is detected.
-func (db *RethinkDB) Upgrade() error {
+func (db *RethinkDB) Upgrade(_ context.Context) error {
 	return nil
 }

@@ -2,11 +2,11 @@ syntax = "proto3";
 
 package v1;
 
-import "v1/common.proto";
-
 service InitializerService {
-  rpc Status(Empty) returns (StatusResponse);
+  rpc Status(StatusRequest) returns (StatusResponse);
 }
+
+message StatusRequest {}
 
 message StatusResponse {
   enum InitializerStatus {
