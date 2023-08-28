@@ -355,12 +355,12 @@ func upgradeFlow(t *testing.T, spec *flowSpec) {
 	brsc, err := brsclient.New(ctx, "http://localhost:8000")
 	require.NoError(t, err)
 
-	_, err = brsc.DatabaseServiceClient().CreateBackup(ctx, &v1.Empty{})
+	_, err = brsc.DatabaseServiceClient().CreateBackup(ctx, &v1.CreateBackupRequest{})
 	assert.NoError(t, err)
 
 	var backup *v1.Backup
 	err = retry.Do(func() error {
-		backups, err := brsc.BackupServiceClient().ListBackups(ctx, &v1.Empty{})
+		backups, err := brsc.BackupServiceClient().ListBackups(ctx, &v1.ListBackupsRequest{})
 		if err != nil {
 			return err
 		}
@@ -387,6 +387,8 @@ func upgradeFlow(t *testing.T, spec *flowSpec) {
 		// })
 		err = c.Update(ctx, nextSts, &client.UpdateOptions{})
 		require.NoError(t, err)
+
+		time.Sleep(10 * time.Second)
 
 		// FIXME This immediately returns, dunno why
 		err = waitForPodRunnig(ctx, podName, ns.Name)
