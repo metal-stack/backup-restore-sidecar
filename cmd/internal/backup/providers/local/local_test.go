@@ -4,7 +4,6 @@ import (
 	"fmt"
 	iofs "io/fs"
 	"path"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -138,11 +137,7 @@ func Test_BackupProviderLocal(t *testing.T) {
 				gotContent, err := afero.ReadFile(fs, downloadPath)
 				require.NoError(t, err)
 
-				originalIndex, err := strconv.Atoi(strings.TrimSuffix(latestVersion.Name, ".tar.gz"))
-				require.NoError(t, err)
-				rounds := backupAmount / constants.DefaultObjectsToKeep
-				backupContent := fmt.Sprintf("precious data %d", originalIndex+(constants.DefaultObjectsToKeep*(rounds)))
-				require.Equal(t, backupContent, string(gotContent))
+				require.Equal(t, fmt.Sprintf("precious data %d", backupAmount-1), string(gotContent))
 
 				// cleaning up after test
 				err = fs.Remove(downloadPath)
