@@ -164,7 +164,7 @@ var createBackupCmd = &cobra.Command{
 			return fmt.Errorf("error creating client: %w", err)
 		}
 
-		_, err = c.DatabaseServiceClient().CreateBackup(context.Background(), &v1.Empty{})
+		_, err = c.DatabaseServiceClient().CreateBackup(context.Background(), &v1.CreateBackupRequest{})
 		return err
 	},
 }
@@ -202,7 +202,7 @@ var restoreListCmd = &cobra.Command{
 			return fmt.Errorf("error creating client: %w", err)
 		}
 
-		backups, err := c.BackupServiceClient().ListBackups(context.Background(), &v1.Empty{})
+		backups, err := c.BackupServiceClient().ListBackups(context.Background(), &v1.ListBackupsRequest{})
 		if err != nil {
 			return fmt.Errorf("error listing backups: %w", err)
 		}
@@ -432,6 +432,7 @@ func initBackupProvider() error {
 	switch bpString {
 	case "gcp":
 		bp, err = gcp.New(
+			context.Background(),
 			logger.Named("backup"),
 			&gcp.BackupProviderConfigGCP{
 				ObjectPrefix:   viper.GetString(objectPrefixFlg),

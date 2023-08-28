@@ -64,7 +64,7 @@ func Test_BackupProviderGCP(t *testing.T) {
 		httpClient = &http.Client{Transport: transCfg}
 	)
 
-	p, err := New(log, &BackupProviderConfigGCP{
+	p, err := New(ctx, log, &BackupProviderConfigGCP{
 		BucketName:     "test",
 		BucketLocation: "europe-west3",
 		ObjectPrefix:   prefix,
@@ -76,7 +76,7 @@ func Test_BackupProviderGCP(t *testing.T) {
 	require.NotNil(t, p)
 
 	t.Run("ensure backup bucket", func(t *testing.T) {
-		err := p.EnsureBackupBucket()
+		err := p.EnsureBackupBucket(ctx)
 		require.NoError(t, err)
 	})
 
@@ -86,7 +86,7 @@ func Test_BackupProviderGCP(t *testing.T) {
 
 	t.Run("verify upload", func(t *testing.T) {
 		for i := 0; i < backupAmount; i++ {
-			backupName := p.GetNextBackupName() + ".tar.gz"
+			backupName := p.GetNextBackupName(ctx) + ".tar.gz"
 			assert.Equal(t, expectedBackupName, backupName)
 
 			backupPath := path.Join(constants.UploadDir, backupName)
@@ -95,7 +95,7 @@ func Test_BackupProviderGCP(t *testing.T) {
 			err = afero.WriteFile(fs, backupPath, []byte(backupContent), 0600)
 			require.NoError(t, err)
 
-			err = p.UploadBackup(backupPath)
+			err = p.UploadBackup(ctx, backupPath)
 			require.NoError(t, err)
 
 			// cleaning up after test
@@ -109,7 +109,7 @@ func Test_BackupProviderGCP(t *testing.T) {
 	}
 
 	t.Run("list backups", func(t *testing.T) {
-		versions, err := p.ListBackups()
+		versions, err := p.ListBackups(ctx)
 		require.NoError(t, err)
 
 		_, err = versions.Get("foo")
@@ -147,13 +147,13 @@ func Test_BackupProviderGCP(t *testing.T) {
 	}
 
 	t.Run("verify download", func(t *testing.T) {
-		versions, err := p.ListBackups()
+		versions, err := p.ListBackups(ctx)
 		require.NoError(t, err)
 
 		latestVersion := versions.Latest()
 		require.NotNil(t, latestVersion)
 
-		err = p.DownloadBackup(latestVersion)
+		err = p.DownloadBackup(ctx, latestVersion)
 		require.NoError(t, err)
 
 		downloadPath := path.Join(constants.DownloadDir, expectedBackupName)
@@ -173,7 +173,7 @@ func Test_BackupProviderGCP(t *testing.T) {
 	}
 
 	t.Run("verify cleanup", func(t *testing.T) {
-		err := p.CleanupBackups()
+		err := p.CleanupBackups(ctx)
 		require.NoError(t, err)
 	})
 

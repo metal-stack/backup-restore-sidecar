@@ -28,7 +28,7 @@ func Start(ctx context.Context, log *zap.SugaredLogger, addr string) error {
 			log.Info("received stop signal, shutting down")
 			return nil
 		case <-time.After(waitInterval):
-			resp, err := client.InitializerServiceClient().Status(ctx, &v1.Empty{})
+			resp, err := client.InitializerServiceClient().Status(ctx, &v1.StatusRequest{})
 			if err != nil {
 				log.Errorw("error retrieving initializer server response", "error", err)
 				continue

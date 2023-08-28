@@ -73,7 +73,7 @@ func (i *Initializer) Start(ctx context.Context) {
 	initializerService := newInitializerService(i.currentStatus)
 	backupService := newBackupProviderService(i.bp, i.Restore)
 	databaseService := newDatabaseService(func() error {
-		return backup.CreateBackup(i.log, i.db, i.bp, i.metrics, i.comp)
+		return backup.CreateBackup(ctx, i.log, i.db, i.bp, i.metrics, i.comp)
 	})
 
 	v1.RegisterInitializerServiceServer(grpcServer, initializerService)
@@ -99,14 +99,14 @@ func (i *Initializer) Start(ctx context.Context) {
 		}
 	}()
 
-	err = i.initialize()
+	err = i.initialize(ctx)
 	if err != nil {
 		i.log.Fatalw("error initializing database, shutting down", "error", err)
 	}
 
 	i.currentStatus.Status = v1.StatusResponse_UPGRADING
 	i.currentStatus.Message = "start upgrading database"
-	err = i.db.Upgrade()
+	err = i.db.Upgrade(ctx)
 	if err != nil {
 		i.log.Fatalw("upgrade database failed", "error", err)
 	}
@@ -116,7 +116,7 @@ func (i *Initializer) Start(ctx context.Context) {
 	i.currentStatus.Message = "done"
 }
 
-func (i *Initializer) initialize() error {
+func (i *Initializer) initialize(ctx context.Context) error {
 	i.log.Info("start running initializer")
 
 	i.log.Info("ensuring database data directory")
@@ -127,7 +127,7 @@ func (i *Initializer) initialize() error {
 
 	i.log.Info("ensuring backup bucket")
 	i.currentStatus.Message = "ensuring backup bucket"
-	err = i.bp.EnsureBackupBucket()
+	err = i.bp.EnsureBackupBucket(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to ensure backup bucket: %w", err)
 	}
@@ -136,7 +136,7 @@ func (i *Initializer) initialize() error {
 	i.currentStatus.Status = v1.StatusResponse_CHECKING
 	i.currentStatus.Message = "checking database"
 
-	needsBackup, err := i.db.Check()
+	needsBackup, err := i.db.Check(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to check data of database: %w", err)
 	}
@@ -148,7 +148,7 @@ func (i *Initializer) initialize() error {
 
 	i.log.Info("database potentially needs to be restored, looking for backup")
 
-	versions, err := i.bp.ListBackups()
+	versions, err := i.bp.ListBackups(ctx)
 	if err != nil {
 		return fmt.Errorf("unable retrieve backup versions: %w", err)
 	}
@@ -159,7 +159,7 @@ func (i *Initializer) initialize() error {
 		return nil
 	}
 
-	err = i.Restore(latestBackup)
+	err = i.Restore(ctx, latestBackup)
 	if err != nil {
 		return fmt.Errorf("unable to restore database: %w", err)
 	}
@@ -168,7 +168,7 @@ func (i *Initializer) initialize() error {
 }
 
 // Restore restores the database with the given backup version
-func (i *Initializer) Restore(version *providers.BackupVersion) error {
+func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVersion) error {
 	i.log.Infow("restoring backup", "version", version.Version, "date", version.Date.String())
 
 	i.currentStatus.Status = v1.StatusResponse_RESTORING
@@ -193,7 +193,7 @@ func (i *Initializer) Restore(version *providers.BackupVersion) error {
 		return fmt.Errorf("could not delete priorly downloaded file: %w", err)
 	}
 
-	err := i.bp.DownloadBackup(version)
+	err := i.bp.DownloadBackup(ctx, version)
 	if err != nil {
 		return fmt.Errorf("unable to download backup: %w", err)
 	}
@@ -205,7 +205,7 @@ func (i *Initializer) Restore(version *providers.BackupVersion) error {
 	}
 
 	i.currentStatus.Message = "restoring backup"
-	err = i.db.Recover()
+	err = i.db.Recover(ctx)
 	if err != nil {
 		return fmt.Errorf("restoring database was not successful: %w", err)
 	}

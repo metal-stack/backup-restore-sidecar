@@ -1,6 +1,7 @@
 package etcd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -43,7 +44,7 @@ func New(log *zap.SugaredLogger, datadir, caCert, cert, key, endpoints, name str
 }
 
 // Check checks whether a backup needs to be restored or not, returns true if it needs a backup
-func (db *Etcd) Check() (bool, error) {
+func (db *Etcd) Check(_ context.Context) (bool, error) {
 	empty, err := utils.IsEmpty(db.datadir)
 	if err != nil {
 		return false, err
@@ -57,7 +58,7 @@ func (db *Etcd) Check() (bool, error) {
 }
 
 // Backup takes a full Backup of etcd with etcdctl.
-func (db *Etcd) Backup() error {
+func (db *Etcd) Backup(ctx context.Context) error {
 	snapshotFileName := path.Join(constants.BackupDir, "snapshot.db")
 	if err := os.RemoveAll(constants.BackupDir); err != nil {
 		return fmt.Errorf("could not clean backup directory %w", err)
@@ -68,7 +69,7 @@ func (db *Etcd) Backup() error {
 	}
 
 	// Create a etcd snapshot.
-	out, err := db.etcdctl(true, "snapshot", "save", snapshotFileName)
+	out, err := db.etcdctl(ctx, true, "snapshot", "save", snapshotFileName)
 	if err != nil {
 		return fmt.Errorf("error running backup command: %s", out)
 	}
@@ -79,7 +80,7 @@ func (db *Etcd) Backup() error {
 		return fmt.Errorf("backup file was not created: %s", snapshotFileName)
 	}
 
-	out, err = db.etcdctl(false, "snapshot", "status", "--write-out", "json", snapshotFileName)
+	out, err = db.etcdctl(ctx, false, "snapshot", "status", "--write-out", "json", snapshotFileName)
 	if err != nil {
 		return fmt.Errorf("backup was not created correct: %s", out)
 	}
@@ -90,13 +91,13 @@ func (db *Etcd) Backup() error {
 }
 
 // Recover restores a database backup
-func (db *Etcd) Recover() error {
+func (db *Etcd) Recover(ctx context.Context) error {
 	snapshotFileName := path.Join(constants.RestoreDir, "snapshot.db")
 	if _, err := os.Stat(snapshotFileName); os.IsNotExist(err) {
 		return fmt.Errorf("restore file is not present: %s", snapshotFileName)
 	}
 
-	out, err := db.etcdutl("snapshot", "status", "--write-out", "json", snapshotFileName)
+	out, err := db.etcdutl(ctx, "snapshot", "status", "--write-out", "json", snapshotFileName)
 	if err != nil {
 		return fmt.Errorf("restored backup file was not created correct: %s", out)
 	}
@@ -111,7 +112,7 @@ func (db *Etcd) Recover() error {
 		return fmt.Errorf("could not remove database data directory %w", err)
 	}
 
-	out, err = db.etcdutl("snapshot", "restore", "--data-dir", db.datadir, snapshotFileName)
+	out, err = db.etcdutl(ctx, "snapshot", "restore", "--data-dir", db.datadir, snapshotFileName)
 	if err != nil {
 		return fmt.Errorf("unable to restore:%w", err)
 	}
@@ -128,8 +129,8 @@ func (db *Etcd) Recover() error {
 }
 
 // Probe figures out if the database is running and available for taking backups.
-func (db *Etcd) Probe() error {
-	out, err := db.etcdctl(true, "get", "foo")
+func (db *Etcd) Probe(ctx context.Context) error {
+	out, err := db.etcdctl(ctx, true, "get", "foo")
 	if err != nil {
 		return fmt.Errorf("unable to retrieve key:%s %w", out, err)
 	}
@@ -137,11 +138,11 @@ func (db *Etcd) Probe() error {
 }
 
 // Upgrade performs an upgrade of the database in case a newer version of the database is detected.
-func (db *Etcd) Upgrade() error {
+func (db *Etcd) Upgrade(ctx context.Context) error {
 	return nil
 }
 
-func (db *Etcd) etcdctl(withConnectionArgs bool, args ...string) (string, error) {
+func (db *Etcd) etcdctl(ctx context.Context, withConnectionArgs bool, args ...string) (string, error) {
 	var (
 		etcdctlEnvs []string
 		etcdctlArgs []string
@@ -153,14 +154,14 @@ func (db *Etcd) etcdctl(withConnectionArgs bool, args ...string) (string, error)
 		etcdctlArgs = append(etcdctlArgs, db.connectionArgs()...)
 	}
 
-	out, err := db.executor.ExecuteCommandWithOutput(etcdctlCommand, etcdctlEnvs, etcdctlArgs...)
+	out, err := db.executor.ExecuteCommandWithOutput(ctx, etcdctlCommand, etcdctlEnvs, etcdctlArgs...)
 	if err != nil {
 		return out, fmt.Errorf("error running etcdctl command: %s", out)
 	}
 	return out, nil
 }
 
-func (db *Etcd) etcdutl(args ...string) (string, error) {
+func (db *Etcd) etcdutl(ctx context.Context, args ...string) (string, error) {
 	var (
 		etcdutlEnvs []string
 		etcdutlArgs []string
@@ -168,7 +169,7 @@ func (db *Etcd) etcdutl(args ...string) (string, error) {
 
 	etcdutlArgs = append(etcdutlArgs, args...)
 
-	out, err := db.executor.ExecuteCommandWithOutput(etcdutlCommand, etcdutlEnvs, etcdutlArgs...)
+	out, err := db.executor.ExecuteCommandWithOutput(ctx, etcdutlCommand, etcdutlEnvs, etcdutlArgs...)
 	if err != nil {
 		return out, fmt.Errorf("error running etcdutl command: %s", out)
 	}

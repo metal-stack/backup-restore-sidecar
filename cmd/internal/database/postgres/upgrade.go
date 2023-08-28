@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -32,7 +33,7 @@ var (
 )
 
 // Upgrade performs an upgrade of the database in case a newer version of the database is detected.
-func (db *Postgres) Upgrade() error {
+func (db *Postgres) Upgrade(ctx context.Context) error {
 	start := time.Now()
 
 	// First check if there are data already present
@@ -43,7 +44,7 @@ func (db *Postgres) Upgrade() error {
 	}
 
 	// If this is a database directory, save actual postgres binaries for a later major upgrade
-	err := db.copyPostgresBinaries(true)
+	err := db.copyPostgresBinaries(ctx, true)
 	if err != nil {
 		return err
 	}
@@ -64,7 +65,7 @@ func (db *Postgres) Upgrade() error {
 	}
 
 	// Now check the version of the actual postgres binaries
-	binaryVersionMajor, err := db.getBinaryVersion(postgresConfigCmd)
+	binaryVersionMajor, err := db.getBinaryVersion(ctx, postgresConfigCmd)
 	if err != nil {
 		db.log.Errorw("unable to get binary version, skipping upgrade", "error", err)
 		return nil
@@ -89,7 +90,7 @@ func (db *Postgres) Upgrade() error {
 	}
 
 	// We need to upgrade, therefore old binaries are required
-	oldBinaryVersionMajor, err := db.getBinaryVersion(oldPostgresConfigCmd)
+	oldBinaryVersionMajor, err := db.getBinaryVersion(ctx, oldPostgresConfigCmd)
 	if err != nil {
 		db.log.Errorw("unable to get old binary version, skipping upgrade", "error", err)
 		return nil
@@ -156,7 +157,7 @@ func (db *Postgres) Upgrade() error {
 		return err
 	}
 
-	newPostgresBinDir, err := db.getBinDir(postgresConfigCmd)
+	newPostgresBinDir, err := db.getBinDir(ctx, postgresConfigCmd)
 	if err != nil {
 		return fmt.Errorf("unable to detect bin dir of actual postgres %w", err)
 	}
@@ -168,7 +169,7 @@ func (db *Postgres) Upgrade() error {
 		"--new-bindir", newPostgresBinDir,
 		"--link",
 	}
-	cmd = exec.Command(postgresUpgradeCmd, pgUpgradeArgs...) //nolint:gosec
+	cmd = exec.CommandContext(ctx, postgresUpgradeCmd, pgUpgradeArgs...) //nolint:gosec
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{
@@ -203,10 +204,10 @@ func (db *Postgres) Upgrade() error {
 
 // Helpers
 
-func (db *Postgres) getBinaryVersion(pgConfigCmd string) (int, error) {
+func (db *Postgres) getBinaryVersion(ctx context.Context, pgConfigCmd string) (int, error) {
 	// pg_config  --version
 	// PostgreSQL 12.16
-	cmd := exec.Command(pgConfigCmd, "--version")
+	cmd := exec.CommandContext(ctx, pgConfigCmd, "--version")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return 0, fmt.Errorf("unable to detect postgres binary version: %w", err)
@@ -254,8 +255,8 @@ func (db *Postgres) isCommandPresent(command string) bool {
 	return true
 }
 
-func (db *Postgres) getBinDir(pgConfigCmd string) (string, error) {
-	cmd := exec.Command(pgConfigCmd, "--bindir")
+func (db *Postgres) getBinDir(ctx context.Context, pgConfigCmd string) (string, error) {
+	cmd := exec.CommandContext(ctx, pgConfigCmd, "--bindir")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", err
@@ -265,13 +266,13 @@ func (db *Postgres) getBinDir(pgConfigCmd string) (string, error) {
 }
 
 // copyPostgresBinaries is needed to save old postgres binaries for a later major upgrade
-func (db *Postgres) copyPostgresBinaries(override bool) error {
-	binDir, err := db.getBinDir(postgresConfigCmd)
+func (db *Postgres) copyPostgresBinaries(ctx context.Context, override bool) error {
+	binDir, err := db.getBinDir(ctx, postgresConfigCmd)
 	if err != nil {
 		return err
 	}
 
-	version, err := db.getBinaryVersion(postgresConfigCmd)
+	version, err := db.getBinaryVersion(ctx, postgresConfigCmd)
 	if err != nil {
 		return err
 	}
@@ -291,7 +292,7 @@ func (db *Postgres) copyPostgresBinaries(override bool) error {
 	}
 
 	db.log.Infow("copying postgres binaries for later upgrades", "from", binDir, "to", pgBinDir)
-	copy := exec.Command("cp", "-av", binDir, pgBinDir)
+	copy := exec.CommandContext(ctx, "cp", "-av", binDir, pgBinDir)
 	copy.Stdout = os.Stdout
 	copy.Stderr = os.Stderr
 	err = copy.Run()

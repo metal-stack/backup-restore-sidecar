@@ -26,7 +26,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DatabaseServiceClient interface {
-	CreateBackup(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*CreateBackupResponse, error)
+	CreateBackup(ctx context.Context, in *CreateBackupRequest, opts ...grpc.CallOption) (*CreateBackupResponse, error)
 }
 
 type databaseServiceClient struct {
@@ -37,7 +37,7 @@ func NewDatabaseServiceClient(cc grpc.ClientConnInterface) DatabaseServiceClient
 	return &databaseServiceClient{cc}
 }
 
-func (c *databaseServiceClient) CreateBackup(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*CreateBackupResponse, error) {
+func (c *databaseServiceClient) CreateBackup(ctx context.Context, in *CreateBackupRequest, opts ...grpc.CallOption) (*CreateBackupResponse, error) {
 	out := new(CreateBackupResponse)
 	err := c.cc.Invoke(ctx, DatabaseService_CreateBackup_FullMethodName, in, out, opts...)
 	if err != nil {
@@ -50,14 +50,14 @@ func (c *databaseServiceClient) CreateBackup(ctx context.Context, in *Empty, opt
 // All implementations should embed UnimplementedDatabaseServiceServer
 // for forward compatibility
 type DatabaseServiceServer interface {
-	CreateBackup(context.Context, *Empty) (*CreateBackupResponse, error)
+	CreateBackup(context.Context, *CreateBackupRequest) (*CreateBackupResponse, error)
 }
 
 // UnimplementedDatabaseServiceServer should be embedded to have forward compatible implementations.
 type UnimplementedDatabaseServiceServer struct {
 }
 
-func (UnimplementedDatabaseServiceServer) CreateBackup(context.Context, *Empty) (*CreateBackupResponse, error) {
+func (UnimplementedDatabaseServiceServer) CreateBackup(context.Context, *CreateBackupRequest) (*CreateBackupResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateBackup not implemented")
 }
 
@@ -73,7 +73,7 @@ func RegisterDatabaseServiceServer(s grpc.ServiceRegistrar, srv DatabaseServiceS
 }
 
 func _DatabaseService_CreateBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Empty)
+	in := new(CreateBackupRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func _DatabaseService_CreateBackup_Handler(srv interface{}, ctx context.Context,
 		FullMethod: DatabaseService_CreateBackup_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DatabaseServiceServer).CreateBackup(ctx, req.(*Empty))
+		return srv.(DatabaseServiceServer).CreateBackup(ctx, req.(*CreateBackupRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

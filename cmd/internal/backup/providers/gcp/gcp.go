@@ -65,9 +65,7 @@ func (c *BackupProviderConfigGCP) validate() error {
 }
 
 // New returns a GCP backup provider
-func New(log *zap.SugaredLogger, config *BackupProviderConfigGCP) (*BackupProviderGCP, error) {
-	ctx := context.Background()
-
+func New(ctx context.Context, log *zap.SugaredLogger, config *BackupProviderConfigGCP) (*BackupProviderGCP, error) {
 	if config == nil {
 		return nil, errors.New("gcp backup provider requires a provider config")
 	}
@@ -101,9 +99,7 @@ func New(log *zap.SugaredLogger, config *BackupProviderConfigGCP) (*BackupProvid
 }
 
 // EnsureBackupBucket ensures a backup bucket at the backup provider
-func (b *BackupProviderGCP) EnsureBackupBucket() error {
-	ctx := context.Background()
-
+func (b *BackupProviderGCP) EnsureBackupBucket(ctx context.Context) error {
 	bucket := b.c.Bucket(b.config.BucketName)
 	lifecycle := storage.Lifecycle{
 		Rules: []storage.LifecycleRule{
@@ -146,19 +142,17 @@ func (b *BackupProviderGCP) EnsureBackupBucket() error {
 }
 
 // CleanupBackups cleans up backups according to the given backup cleanup policy at the backup provider
-func (b *BackupProviderGCP) CleanupBackups() error {
+func (b *BackupProviderGCP) CleanupBackups(_ context.Context) error {
 	// nothing to do here, done with lifecycle rules
 	return nil
 }
 
 // DownloadBackup downloads the given backup version to the restoration folder
-func (b *BackupProviderGCP) DownloadBackup(version *providers.BackupVersion) error {
+func (b *BackupProviderGCP) DownloadBackup(ctx context.Context, version *providers.BackupVersion) error {
 	gen, err := strconv.ParseInt(version.Version, 10, 64)
 	if err != nil {
 		return err
 	}
-
-	ctx := context.Background()
 
 	bucket := b.c.Bucket(b.config.BucketName)
 
@@ -191,8 +185,7 @@ func (b *BackupProviderGCP) DownloadBackup(version *providers.BackupVersion) err
 }
 
 // UploadBackup uploads a backup to the backup provider
-func (b *BackupProviderGCP) UploadBackup(sourcePath string) error {
-	ctx := context.Background()
+func (b *BackupProviderGCP) UploadBackup(ctx context.Context, sourcePath string) error {
 	bucket := b.c.Bucket(b.config.BucketName)
 
 	r, err := b.fs.Open(sourcePath)
@@ -219,15 +212,13 @@ func (b *BackupProviderGCP) UploadBackup(sourcePath string) error {
 }
 
 // GetNextBackupName returns a name for the next backup archive that is going to be uploaded
-func (b *BackupProviderGCP) GetNextBackupName() string {
+func (b *BackupProviderGCP) GetNextBackupName(_ context.Context) string {
 	// name is constant because we use lifecycle rule to cleanup
 	return b.config.BackupName
 }
 
 // ListBackups lists the available backups of the backup provider
-func (b *BackupProviderGCP) ListBackups() (providers.BackupVersions, error) {
-	ctx := context.Background()
-
+func (b *BackupProviderGCP) ListBackups(ctx context.Context) (providers.BackupVersions, error) {
 	bucket := b.c.Bucket(b.config.BucketName)
 
 	query := &storage.Query{
