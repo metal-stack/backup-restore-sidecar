@@ -381,16 +381,12 @@ func upgradeFlow(t *testing.T, spec *flowSpec) {
 		nextSts := spec.sts(ns.Name, image).DeepCopy()
 		t.Logf("deploy sts with next database version %q, container %q", image, nextSts.Spec.Template.Spec.Containers[0].Image)
 
-		// controllerutil.CreateOrUpdate(ctx, c, nextSts, func() error {
-		// 	t.Logf("create or update the sts: %q", nextSts.Name)
-		// 	return nil
-		// })
 		err = c.Update(ctx, nextSts, &client.UpdateOptions{})
 		require.NoError(t, err)
 
-		time.Sleep(20 * time.Second)
+		time.Sleep(10 * time.Second)
 
-		// FIXME This immediately returns, dunno why
+		// TODO maybe better wait for generation changed
 		err = waitForPodRunnig(ctx, podName, ns.Name)
 		require.NoError(t, err)
 
