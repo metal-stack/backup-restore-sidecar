@@ -24,14 +24,14 @@ import (
 )
 
 var (
-	postgresContainerImage = "postgres:15-alpine"
+	postgresContainerImage = "postgres:12-alpine"
 )
 
 func Test_Postgres(t *testing.T) {
 	const (
 		postgresDB       = "postgres"
 		postgresPassword = "test123!"
-		postgresUser     = "test"
+		postgresUser     = "postgres"
 		table            = "precioustestdata"
 	)
 
@@ -437,19 +437,19 @@ post-exec-cmds:
 		}
 	)
 
-	// restoreFlow(t, &flowSpec{
-	// 	databaseType:     "postgres",
-	// 	sts:              sts,
-	// 	backingResources: backingResources,
-	// 	addTestData:      addTestData,
-	// 	verifyTestData:   verifyTestData,
-	// })
+	restoreFlow(t, &flowSpec{
+		databaseType:     "postgres",
+		sts:              sts,
+		backingResources: backingResources,
+		addTestData:      addTestData,
+		verifyTestData:   verifyTestData,
+	})
 
 	upgradeFlow(t, &flowSpec{
 		databaseType: "postgres",
 		databaseImages: []string{
 			"postgres:12-alpine",
-			"postgres:13-alpine",
+			// "postgres:13-alpine", commented to test if two versions upgrade also work
 			"postgres:14-alpine",
 			"postgres:15-alpine",
 		},

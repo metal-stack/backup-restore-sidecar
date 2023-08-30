@@ -126,6 +126,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	cmd := exec.Command(postgresInitDBCmd, "-D", newDataDirTemp)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Credential: &syscall.Credential{Uid: uint32(uid)},
 	}
@@ -172,6 +173,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	cmd = exec.CommandContext(ctx, postgresUpgradeCmd, pgUpgradeArgs...) //nolint:gosec
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Credential: &syscall.Credential{Uid: uint32(uid)},
 	}
