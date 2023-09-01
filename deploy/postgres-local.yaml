@@ -44,7 +44,7 @@ spec:
             secretKeyRef:
               key: POSTGRES_DATA
               name: postgres
-        image: postgres:15-alpine
+        image: postgres:12-alpine
         livenessProbe:
           exec:
             command:
@@ -53,7 +53,7 @@ spec:
             - exec
             - pg_isready
             - -U
-            - test
+            - postgres
             - -h
             - 127.0.0.1
             - -p
@@ -74,7 +74,7 @@ spec:
             - exec
             - pg_isready
             - -U
-            - test
+            - postgres
             - -h
             - 127.0.0.1
             - -p
@@ -106,7 +106,7 @@ spec:
             secretKeyRef:
               key: POSTGRES_USER
               name: postgres
-        image: postgres:15-alpine
+        image: postgres:12-alpine
         name: backup-restore-sidecar
         ports:
         - containerPort: 8000
@@ -199,7 +199,7 @@ stringData:
   POSTGRES_DATA: /data/postgres/
   POSTGRES_DB: postgres
   POSTGRES_PASSWORD: test123!
-  POSTGRES_USER: test
+  POSTGRES_USER: postgres
 ---
 apiVersion: v1
 kind: Service
