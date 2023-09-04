@@ -392,6 +392,11 @@ post-exec-cmds:
 					return err
 				}
 
+				err = db.PingContext(ctx)
+				if err != nil {
+					return err
+				}
+
 				return nil
 			}, retry.Context(ctx))
 			require.NoError(t, err)
