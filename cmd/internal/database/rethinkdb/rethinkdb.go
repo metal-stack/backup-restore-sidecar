@@ -201,7 +201,8 @@ func (db *RethinkDB) Recover(ctx context.Context) error {
 	}
 
 	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		return handleFailedRecovery(fmt.Errorf("failed to send sigterm signal to rethinkdb: %w", err))
+		db.log.Errorw("failed to send sigterm signal to rethinkdb, killing it", "error", err)
+		cancelRethinkdb()
 	}
 
 	err = g.Wait()
