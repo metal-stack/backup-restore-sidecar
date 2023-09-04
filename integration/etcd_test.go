@@ -27,7 +27,7 @@ var (
 	etcdContainerImage = "quay.io/coreos/etcd:v3.5.7"
 )
 
-func Test_ETCD(t *testing.T) {
+func Test_ETCD_Restore(t *testing.T) {
 	restoreFlow(t, &flowSpec{
 		databaseType:     "etcd",
 		sts:              etcdSts,
