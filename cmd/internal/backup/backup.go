@@ -2,7 +2,6 @@ package backup
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -15,10 +14,6 @@ import (
 	cron "github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
-)
-
-var (
-	ErrBackupAlreadyInProgress = errors.New("a backup is already in progress")
 )
 
 // Start starts the backup component, which is periodically taking backups of the database
@@ -55,7 +50,7 @@ var (
 
 func CreateBackup(ctx context.Context, log *zap.SugaredLogger, db database.DatabaseProber, bp backuproviders.BackupProvider, metrics *metrics.Metrics, comp *compress.Compressor) error {
 	if !sem.TryAcquire(1) {
-		return ErrBackupAlreadyInProgress
+		return constants.ErrBackupAlreadyInProgress
 	}
 	defer sem.Release(1)
 
