@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -15,6 +16,7 @@ import (
 	"github.com/avast/retry-go/v4"
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	brsclient "github.com/metal-stack/backup-restore-sidecar/pkg/client"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -121,7 +123,9 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 	require.NoError(t, err)
 
 	_, err = brsc.DatabaseServiceClient().CreateBackup(ctx, &v1.CreateBackupRequest{})
-	assert.NoError(t, err)
+	if err != nil && !errors.Is(err, constants.ErrBackupAlreadyInProgress) {
+		require.NoError(t, err)
+	}
 
 	var backup *v1.Backup
 	err = retry.Do(func() error {
