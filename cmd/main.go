@@ -148,7 +148,16 @@ var startCmd = &cobra.Command{
 			return err
 		}
 
-		return backup.Start(stop, logger.Named("backup"), viper.GetString(backupCronScheduleFlg), db, bp, metrics, comp)
+		backuper := backup.New(&backup.BackuperConfig{
+			Log:            logger.Named("backup"),
+			BackupSchedule: viper.GetString(backupCronScheduleFlg),
+			DatabaseProber: db,
+			BackupProvider: bp,
+			Metrics:        metrics,
+			Compressor:     comp,
+		})
+
+		return backuper.Start(stop)
 	},
 }
 

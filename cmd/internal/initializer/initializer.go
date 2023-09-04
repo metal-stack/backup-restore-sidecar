@@ -73,7 +73,15 @@ func (i *Initializer) Start(ctx context.Context) {
 	initializerService := newInitializerService(i.currentStatus)
 	backupService := newBackupProviderService(i.bp, i.Restore)
 	databaseService := newDatabaseService(func() error {
-		return backup.CreateBackup(ctx, i.log, i.db, i.bp, i.metrics, i.comp)
+		backuper := backup.New(&backup.BackuperConfig{
+			Log:            i.log,
+			DatabaseProber: i.db,
+			BackupProvider: i.bp,
+			Metrics:        i.metrics,
+			Compressor:     i.comp,
+		})
+
+		return backuper.CreateBackup(ctx)
 	})
 
 	v1.RegisterInitializerServiceServer(grpcServer, initializerService)
