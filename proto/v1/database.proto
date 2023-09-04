@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package v1;
+
+service DatabaseService {
+  rpc CreateBackup(CreateBackupRequest) returns (CreateBackupResponse);
+}
+
+message CreateBackupRequest {}
+
+message CreateBackupResponse {}

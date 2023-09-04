@@ -3,7 +3,6 @@ package rethinkdb
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,16 +12,18 @@ import (
 
 	"errors"
 
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/probe"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
+
+	r "gopkg.in/rethinkdb/rethinkdb-go.v6"
 )
 
 const (
-	connectionTimeout              = 1 * time.Second
-	restoreDatabaseStartupTimeout  = 30 * time.Second
-	restoreDatabaseShutdownTimeout = 10 * time.Second
+	connectionTimeout             = 1 * time.Second
+	restoreDatabaseStartupTimeout = 30 * time.Second
 
 	rethinkDBCmd        = "rethinkdb"
 	rethinkDBDumpCmd    = "rethinkdb-dump"
@@ -41,13 +42,11 @@ type RethinkDB struct {
 	passwordFile string
 	log          *zap.SugaredLogger
 	executor     *utils.CmdExecutor
-	ctx          context.Context
 }
 
 // New instantiates a new rethinkdb database
-func New(ctx context.Context, log *zap.SugaredLogger, datadir string, url string, passwordFile string) *RethinkDB {
+func New(log *zap.SugaredLogger, datadir string, url string, passwordFile string) *RethinkDB {
 	return &RethinkDB{
-		ctx:          ctx,
 		log:          log,
 		datadir:      datadir,
 		url:          url,
@@ -57,7 +56,7 @@ func New(ctx context.Context, log *zap.SugaredLogger, datadir string, url string
 }
 
 // Check checks whether a backup needs to be restored or not, returns true if it needs a backup
-func (db *RethinkDB) Check() (bool, error) {
+func (db *RethinkDB) Check(_ context.Context) (bool, error) {
 	empty, err := utils.IsEmpty(db.datadir)
 	if err != nil {
 		return false, err
@@ -71,7 +70,7 @@ func (db *RethinkDB) Check() (bool, error) {
 }
 
 // Backup takes a backup of the database
-func (db *RethinkDB) Backup() error {
+func (db *RethinkDB) Backup(ctx context.Context) error {
 	if err := os.RemoveAll(constants.BackupDir); err != nil {
 		return fmt.Errorf("could not clean backup directory: %w", err)
 	}
@@ -88,9 +87,10 @@ func (db *RethinkDB) Backup() error {
 		args = append(args, "--connect="+db.url)
 	}
 
-	out, err := db.executor.ExecuteCommandWithOutput(rethinkDBDumpCmd, nil, args...)
+	out, err := db.executor.ExecuteCommandWithOutput(ctx, rethinkDBDumpCmd, nil, args...)
+	fmt.Println(out)
 	if err != nil {
-		return fmt.Errorf("error running backup command: %s %w", out, err)
+		return fmt.Errorf("error running backup command: %w", err)
 	}
 
 	if strings.Contains(out, "0 rows exported from 0 tables, with 0 secondary indexes, and 0 hook functions") {
@@ -101,15 +101,20 @@ func (db *RethinkDB) Backup() error {
 		return fmt.Errorf("backup file was not created: %s", rethinkDBBackupFilePath)
 	}
 
-	db.log.Debugw("successfully took backup of rethinkdb database", "output", out)
+	db.log.Debugw("successfully took backup of rethinkdb database")
 
 	return nil
 }
 
 // Recover restores a database backup
-func (db *RethinkDB) Recover() error {
+func (db *RethinkDB) Recover(ctx context.Context) error {
 	if _, err := os.Stat(rethinkDBRestoreFilePath); os.IsNotExist(err) {
 		return fmt.Errorf("restore file not present: %s", rethinkDBRestoreFilePath)
+	}
+
+	passwordRaw, err := os.ReadFile(db.passwordFile)
+	if err != nil {
+		return fmt.Errorf("unable to read rethinkdb password file at %s: %w", db.passwordFile, err)
 	}
 
 	// rethinkdb requires to be running when restoring a backup.
@@ -117,39 +122,67 @@ func (db *RethinkDB) Recover() error {
 	// an issue occurs during the restoration. therefore, we spin up an own instance of rethinkdb
 	// inside the sidecar against which we can restore.
 
-	db.log.Infow("starting rethinkdb database within sidecar for restore")
-	//nolint
-	cmd := exec.Command(rethinkDBCmd, "--bind", "all", "--driver-port", "1", "--directory", db.datadir)
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("unable to start database within sidecar for restore: %w", err)
-	}
-	defer func() {
-		_ = cmd.Process.Kill()
-	}()
+	var (
+		cmd                           *exec.Cmd
+		g, _                          = errgroup.WithContext(ctx)
+		rethinkdbCtx, cancelRethinkdb = context.WithCancel(ctx) // cancel sends a KILL signal to the process
+
+		// IMPORTANT: when the recovery goes wrong, the database directory MUST be cleaned up
+		// otherwise on pod restart the database directory is not empty anymore and
+		// the backup-restore-sidecar will assume it's a fresh database and let the
+		// database start without restored data, which can mess up things big time
+
+		handleFailedRecovery = func(restoreErr error) error {
+			db.log.Errorw("trying to handle failed database recovery", "error", restoreErr)
+
+			// kill the rethinkdb process
+			cancelRethinkdb()
+
+			db.log.Info("waiting for async rethinkdb go routine to stop")
+
+			err := g.Wait()
+			if err != nil {
+				db.log.Errorw("rethinkdb go routine finished with error", "error", err)
+			}
+
+			if err := os.RemoveAll(db.datadir); err != nil {
+				db.log.Errorw("unable to cleanup database data directory after failed recovery attempt, high risk of starting with fresh database on container restart", "err", err)
+			} else {
+				db.log.Info("cleaned up database data directory after failed recovery attempt to prevent start of fresh database")
+			}
+
+			return restoreErr
+		}
+	)
+
+	defer cancelRethinkdb()
+
+	g.Go(func() error {
+		args := []string{"--bind", "all", "--driver-port", "1", "--directory", db.datadir, "--initial-password", strings.TrimSpace(string(passwordRaw))}
+		db.log.Debugw("execute rethinkdb", "args", args)
+
+		cmd = exec.CommandContext(rethinkdbCtx, rethinkDBCmd, args...) // nolint:gosec
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err := cmd.Run()
+		if err != nil {
+			return fmt.Errorf("unable to run rethinkdb: %w", err)
+		}
+
+		db.log.Info("rethinkdb process finished")
+
+		return nil
+	})
 
 	db.log.Infow("waiting for rethinkdb database to come up")
 
-	restoreDB := New(db.ctx, db.log, db.datadir, "localhost:1", "")
-
-	done := make(chan bool)
-	defer close(done)
-
-	probeCtx, probeCancel := context.WithTimeout(context.Background(), restoreDatabaseStartupTimeout)
+	probeCtx, probeCancel := context.WithTimeout(ctx, restoreDatabaseStartupTimeout)
 	defer probeCancel()
 
-	var err error
-	go func() {
-		err = probe.Start(probeCtx, restoreDB.log, restoreDB)
-		done <- true
-	}()
-	select {
-	case <-done:
-		if err != nil {
-			return fmt.Errorf("error while probing: %w", err)
-		}
-		db.log.Infow("rethinkdb in sidecar is now available, now triggering restore commands...")
-	case <-probeCtx.Done():
-		return errors.New("rethinkdb database did not come up in time")
+	restoreDB := New(db.log, db.datadir, "localhost:1", db.passwordFile)
+	err = probe.Start(probeCtx, restoreDB.log, restoreDB)
+	if err != nil {
+		return handleFailedRecovery(fmt.Errorf("rethinkdb did not come up: %w", err))
 	}
 
 	args := []string{}
@@ -161,41 +194,54 @@ func (db *RethinkDB) Recover() error {
 	}
 	args = append(args, rethinkDBRestoreFilePath)
 
-	out, err := db.executor.ExecuteCommandWithOutput(rethinkDBRestoreCmd, nil, args...)
+	out, err := db.executor.ExecuteCommandWithOutput(ctx, rethinkDBRestoreCmd, nil, args...)
+	fmt.Println(out)
 	if err != nil {
-		return fmt.Errorf("error running restore command: %s %w", out, err)
+		return handleFailedRecovery(fmt.Errorf("error running restore command: %w", err))
 	}
 
 	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		return fmt.Errorf("failed to send sigterm signal to rethinkdb: %w", err)
+		db.log.Errorw("failed to send sigterm signal to rethinkdb, killing it", "error", err)
+		cancelRethinkdb()
 	}
 
-	wait := make(chan error)
-	go func() { wait <- cmd.Wait() }()
-	select {
-	case err := <-wait:
-		if err != nil {
-			return fmt.Errorf("rethinkdb did not shutdown cleanly: %w", err)
-		}
-		db.log.Infow("successfully restored rethinkdb database", "output", out)
-	case <-time.After(restoreDatabaseShutdownTimeout):
-		return fmt.Errorf("rethinkdb did not shutdown cleanly after %s", restoreDatabaseShutdownTimeout)
+	err = g.Wait()
+	if err != nil {
+		db.log.Errorw("rethinkdb process not properly terminated, but restore was successful", "error", err)
+	} else {
+		db.log.Infow("successfully restored rethinkdb database")
 	}
 
 	return nil
 }
 
 // Probe figures out if the database is running and available for taking backups.
-func (db *RethinkDB) Probe() error {
-	conn, err := net.DialTimeout("tcp", db.url, connectionTimeout)
+func (db *RethinkDB) Probe(ctx context.Context) error {
+	passwordRaw, err := os.ReadFile(db.passwordFile)
 	if err != nil {
-		return fmt.Errorf("connection error: %w", err)
+		return fmt.Errorf("unable to read rethinkdb password file at %s: %w", db.passwordFile, err)
 	}
-	defer conn.Close()
+
+	session, err := r.Connect(r.ConnectOpts{
+		Addresses: []string{db.url},
+		Username:  "admin",
+		Password:  strings.TrimSpace(string(passwordRaw)),
+		MaxIdle:   10,
+		MaxOpen:   20,
+	})
+	if err != nil {
+		return fmt.Errorf("cannot create rethinkdb client: %w", err)
+	}
+
+	_, err = r.DB("rethinkdb").Table("server_status").Run(session)
+	if err != nil {
+		return fmt.Errorf("error retrieving rethinkdb server status: %w", err)
+	}
+
 	return nil
 }
 
 // Upgrade performs an upgrade of the database in case a newer version of the database is detected.
-func (db *RethinkDB) Upgrade() error {
+func (db *RethinkDB) Upgrade(_ context.Context) error {
 	return nil
 }

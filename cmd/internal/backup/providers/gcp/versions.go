@@ -18,7 +18,6 @@ func (b BackupVersionsGCP) Latest() *providers.BackupVersion {
 	if len(result) == 0 {
 		return nil
 	}
-	b.Sort(result, false)
 	return result[0]
 }
 
@@ -37,6 +36,8 @@ func (b BackupVersionsGCP) List() []*providers.BackupVersion {
 			})
 		}
 	}
+
+	b.Sort(result, false)
 
 	return result
 }

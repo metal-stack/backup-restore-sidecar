@@ -31,15 +31,10 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
 
-    - name: Set up Go 1.21
+    - name: Setup Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21.x'
-
-    - name: Lint
-      uses: golangci/golangci-lint-action@v3
-      with:
-        args: --build-tags integration -p bugs -p unused --timeout=3m
+        go-version-file: 'go.mod'
 
     - name: Make tag
       run: |
@@ -49,7 +44,7 @@ jobs:
 
     - name: Build
       run:
-        make all
+        make build
 
     - name: Build and push image
       uses: docker/build-push-action@v4
@@ -57,3 +52,35 @@ jobs:
         context: .
         push: true
         tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.tag }}
+
+  integration:
+    name: Integration Test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version-file: 'go.mod'
+        cache: false
+
+    - name: Lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        args: --build-tags integration -p bugs -p unused --timeout=3m
+
+    - name: Test
+      run: |
+        make test
+
+    - name: Create k8s Kind Cluster
+      uses: helm/kind-action@v1.8.0
+      with:
+        install_only: true
+
+    - name: Test
+      run: |
+        make test-integration

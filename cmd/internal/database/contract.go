@@ -1,11 +1,13 @@
 package database
 
+import "context"
+
 type DatabaseInitializer interface {
 	// Check indicates whether a restore of the database is required or not.
-	Check() (bool, error)
+	Check(ctx context.Context) (bool, error)
 
 	// Recover performs a restore of the database.
-	Recover() error
+	Recover(ctx context.Context) error
 
 	// Upgrade performs an upgrade of the database in case a newer version of the database is detected.
 	//
@@ -13,15 +15,15 @@ type DatabaseInitializer interface {
 	// This behavior is intended to reduce unnecessary downtime caused by misconfigurations.
 	//
 	// Once the upgrade was made, any error condition will require to recover the database from backup.
-	Upgrade() error
+	Upgrade(ctx context.Context) error
 }
 
 type DatabaseProber interface {
 	// Probe figures out if the database is running and available for taking backups.
-	Probe() error
+	Probe(ctx context.Context) error
 
 	// Backup creates a backup of the database.
-	Backup() error
+	Backup(ctx context.Context) error
 }
 
 type Database interface {
