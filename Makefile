@@ -14,29 +14,38 @@ LINKMODE := -extldflags '-static -s -w' \
 	-X 'github.com/metal-stack/v.GitSHA1=$(SHA)' \
 	-X 'github.com/metal-stack/v.BuildDate=$(BUILDDATE)'
 
-.PHONY: all
-all:
+KUBECONFIG := $(shell pwd)/.kubeconfig
+GO_RUN := $(or $(GO_RUN),)
+ifneq ($(GO_RUN),)
+GO_RUN_ARG := -run $(GO_RUN)
+endif
+
+.PHONY: build
+build:
 	go mod tidy
 	go build -ldflags "$(LINKMODE)" -tags 'osusergo netgo static_build' -o bin/backup-restore-sidecar github.com/metal-stack/backup-restore-sidecar/cmd
 	strip bin/backup-restore-sidecar
+
+.PHONY: test
+test: build
+	go test -cover ./...
+
+.PHONY: test-integration
+test-integration: kind-cluster-create
+	kind --name backup-restore-sidecar load docker-image ghcr.io/metal-stack/backup-restore-sidecar:latest
+	KUBECONFIG=$(KUBECONFIG) go test $(GO_RUN_ARG) -tags=integration -count 1 -v -p 1 -timeout 10m ./...
 
 .PHONY: proto
 proto:
 	make -C proto protoc
 
 .PHONY: dockerimage
-dockerimage: all
+dockerimage: build
 	docker build -t ghcr.io/metal-stack/backup-restore-sidecar:${DOCKER_TAG} .
-
-.PHONY: dockerpush
-dockerpush:
-	docker push ghcr.io/metal-stack/backup-restore-sidecar:${DOCKER_TAG}
 
 # # #
 # the following tasks can be used to set up a development environment
 # # #
-
-KUBECONFIG := $(shell pwd)/.kubeconfig
 
 .PHONY: start-postgres
 start-postgres:
@@ -70,6 +79,7 @@ kind-cluster-create: dockerimage
 	@if ! kind get clusters | grep backup-restore-sidecar > /dev/null; then \
 		kind create cluster \
 		--name backup-restore-sidecar \
+		--config kind.yaml \
 		--kubeconfig $(KUBECONFIG); fi
 
 .PHONY: cleanup

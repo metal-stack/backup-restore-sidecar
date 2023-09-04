@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -8,8 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"go.uber.org/zap"
 )
 
@@ -46,7 +47,7 @@ func New(log *zap.SugaredLogger, datadir string, host string, port int, user str
 }
 
 // Check checks whether a backup needs to be restored or not, returns true if it needs a backup
-func (db *Postgres) Check() (bool, error) {
+func (db *Postgres) Check(_ context.Context) (bool, error) {
 	empty, err := utils.IsEmpty(db.datadir)
 	if err != nil {
 		return false, err
@@ -60,12 +61,12 @@ func (db *Postgres) Check() (bool, error) {
 }
 
 // Backup takes a backup of the database
-func (db *Postgres) Backup() error {
+func (db *Postgres) Backup(ctx context.Context) error {
 	// for new databases the postgres binaries required for Upgrade() cannot be copied before the database is running
 	// therefore this happens in the backup task where the database is already available
 	//
 	// implication: one backup has to be taken before an upgrade can be made
-	err := db.copyPostgresBinaries(false)
+	err := db.copyPostgresBinaries(ctx, false)
 	if err != nil {
 		return err
 	}
@@ -94,7 +95,7 @@ func (db *Postgres) Backup() error {
 		env = append(env, "PGPASSWORD="+db.password)
 	}
 
-	out, err := db.executor.ExecuteCommandWithOutput(postgresBackupCmd, env, args...)
+	out, err := db.executor.ExecuteCommandWithOutput(ctx, postgresBackupCmd, env, args...)
 	if err != nil {
 		return fmt.Errorf("error running backup command: %s %w", out, err)
 	}
@@ -112,7 +113,7 @@ func (db *Postgres) Backup() error {
 }
 
 // Recover restores a database backup
-func (db *Postgres) Recover() error {
+func (db *Postgres) Recover(ctx context.Context) error {
 	for _, p := range []string{postgresBaseTar, postgresWalTar} {
 		fullPath := path.Join(constants.RestoreDir, p)
 		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
@@ -124,7 +125,7 @@ func (db *Postgres) Recover() error {
 		return fmt.Errorf("could not clean database data directory: %w", err)
 	}
 
-	out, err := db.executor.ExecuteCommandWithOutput("tar", nil, "-xzvf", path.Join(constants.RestoreDir, postgresBaseTar), "-C", db.datadir)
+	out, err := db.executor.ExecuteCommandWithOutput(ctx, "tar", nil, "-xzvf", path.Join(constants.RestoreDir, postgresBaseTar), "-C", db.datadir)
 	if err != nil {
 		return fmt.Errorf("error untaring base backup: %s %w", out, err)
 	}
@@ -139,7 +140,7 @@ func (db *Postgres) Recover() error {
 		return fmt.Errorf("could not create pg_wal directory: %w", err)
 	}
 
-	out, err = db.executor.ExecuteCommandWithOutput("tar", nil, "-xzvf", path.Join(constants.RestoreDir, postgresWalTar), "-C", path.Join(db.datadir, "pg_wal"))
+	out, err = db.executor.ExecuteCommandWithOutput(ctx, "tar", nil, "-xzvf", path.Join(constants.RestoreDir, postgresWalTar), "-C", path.Join(db.datadir, "pg_wal"))
 	if err != nil {
 		return fmt.Errorf("error untaring wal backup: %s %w", out, err)
 	}
@@ -152,7 +153,8 @@ func (db *Postgres) Recover() error {
 }
 
 // Probe figures out if the database is running and available for taking backups.
-func (db *Postgres) Probe() error {
+func (db *Postgres) Probe(ctx context.Context) error {
+	// TODO: use postgres client to connect
 	conn, err := net.DialTimeout("tcp", net.JoinHostPort(db.host, strconv.Itoa(db.port)), connectionTimeout)
 	if err != nil {
 		return fmt.Errorf("connection error:%w", err)

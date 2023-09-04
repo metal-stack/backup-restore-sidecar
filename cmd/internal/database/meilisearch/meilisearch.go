@@ -19,8 +19,8 @@ import (
 	"github.com/meilisearch/meilisearch-go"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"go.uber.org/zap"
 )
 
@@ -65,7 +65,7 @@ func New(log *zap.SugaredLogger, datadir string, url string, apikey string) *Mei
 }
 
 // Backup implements database.Database.
-func (db *Meilisearch) Backup() error {
+func (db *Meilisearch) Backup(ctx context.Context) error {
 	if err := os.RemoveAll(constants.BackupDir); err != nil {
 		return fmt.Errorf("could not clean backup directory: %w", err)
 	}
@@ -92,11 +92,11 @@ func (db *Meilisearch) Backup() error {
 
 		db.log.Infow("dump finished", "duration", dumpTask.Duration, "details", dumpTask.Details)
 		return nil
-	}, retry.Attempts(100))
+	}, retry.Attempts(100), retry.Context(ctx))
 	if err != nil {
 		return err
 	}
-	err = db.moveDumpToBackupDir()
+	err = db.moveDumpToBackupDir(ctx)
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func (db *Meilisearch) Backup() error {
 }
 
 // Check implements database.Database.
-func (db *Meilisearch) Check() (bool, error) {
+func (db *Meilisearch) Check(_ context.Context) (bool, error) {
 	empty, err := utils.IsEmpty(db.dbdir)
 	if err != nil {
 		return false, err
@@ -121,7 +121,7 @@ func (db *Meilisearch) Check() (bool, error) {
 }
 
 // Probe implements database.Database.
-func (db *Meilisearch) Probe() error {
+func (db *Meilisearch) Probe(_ context.Context) error {
 	_, err := db.client.Version()
 	if err != nil {
 		return fmt.Errorf("connection error:%w", err)
@@ -130,7 +130,7 @@ func (db *Meilisearch) Probe() error {
 }
 
 // Recover implements database.Database.
-func (db *Meilisearch) Recover() error {
+func (db *Meilisearch) Recover(ctx context.Context) error {
 	dump := path.Join(constants.RestoreDir, latestStableDump)
 	if _, err := os.Stat(dump); os.IsNotExist(err) {
 		return fmt.Errorf("restore file not present: %s", dump)
@@ -141,7 +141,7 @@ func (db *Meilisearch) Recover() error {
 		return fmt.Errorf("could not clean database data directory: %w", err)
 	}
 
-	err := db.importDump(dump)
+	err := db.importDump(ctx, dump)
 	if err != nil {
 		return fmt.Errorf("unable to recover %w", err)
 	}
@@ -151,7 +151,7 @@ func (db *Meilisearch) Recover() error {
 }
 
 // Upgrade implements database.Database.
-func (db *Meilisearch) Upgrade() error {
+func (db *Meilisearch) Upgrade(ctx context.Context) error {
 	start := time.Now()
 
 	versionFile := path.Join(db.dbdir, meilisearchVersionFile)
@@ -164,7 +164,7 @@ func (db *Meilisearch) Upgrade() error {
 	if err != nil {
 		return err
 	}
-	meilisearchVersion, err := db.getBinaryVersion()
+	meilisearchVersion, err := db.getBinaryVersion(ctx)
 	if err != nil {
 		return err
 	}
@@ -187,7 +187,7 @@ func (db *Meilisearch) Upgrade() error {
 		return fmt.Errorf("unable to rename dbdir: %w", err)
 	}
 
-	err = db.importDump(db.latestStableDumpDst)
+	err = db.importDump(ctx, db.latestStableDumpDst)
 	if err != nil {
 		return err
 	}
@@ -195,18 +195,18 @@ func (db *Meilisearch) Upgrade() error {
 	return nil
 }
 
-func (db *Meilisearch) importDump(dump string) error {
+func (db *Meilisearch) importDump(ctx context.Context, dump string) error {
 	var (
 		err  error
 		cmd  *exec.Cmd
-		g, _ = errgroup.WithContext(context.Background())
+		g, _ = errgroup.WithContext(ctx)
 	)
 
 	g.Go(func() error {
 		args := []string{"--import-dump", dump, "--master-key", db.apikey}
 		db.log.Infow("execute meilisearch", "args", args)
 
-		cmd = exec.Command(meilisearchCmd, args...) // nolint:gosec
+		cmd = exec.CommandContext(ctx, meilisearchCmd, args...) // nolint:gosec
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		err = cmd.Run()
@@ -230,7 +230,7 @@ func (db *Meilisearch) importDump(dump string) error {
 		}
 		db.log.Infow("meilisearch started after importing the dump, killing it", "version", v)
 		return cmd.Process.Signal(syscall.SIGTERM)
-	}, retry.Attempts(100))
+	}, retry.Attempts(100), retry.Context(ctx))
 	if err != nil {
 		return err
 	}
@@ -244,7 +244,7 @@ func (db *Meilisearch) importDump(dump string) error {
 
 // moveDumpToBackupDir move all dumps to the backupdir
 // also create a stable last stable dump for later upgrades
-func (db *Meilisearch) moveDumpToBackupDir() error {
+func (db *Meilisearch) moveDumpToBackupDir(ctx context.Context) error {
 	dumps, err := filepath.Glob(db.dumpdir + "/*.dump")
 	if err != nil {
 		return fmt.Errorf("unable to find dumps %w", err)
@@ -267,7 +267,7 @@ func (db *Meilisearch) moveDumpToBackupDir() error {
 
 	backupDst := path.Join(constants.BackupDir, latestStableDump)
 	db.log.Infow("copy dump", "from", db.latestStableDumpDst, "to", backupDst)
-	copy := exec.Command("cp", "-v", db.latestStableDumpDst, backupDst) // nolint:gosec
+	copy := exec.CommandContext(ctx, "cp", "-v", db.latestStableDumpDst, backupDst) // nolint:gosec
 	copy.Stdout = os.Stdout
 	copy.Stderr = os.Stderr
 	err = copy.Run()
@@ -292,10 +292,10 @@ func (db *Meilisearch) getDatabaseVersion(versionFile string) (*semver.Version, 
 	return v, nil
 }
 
-func (db *Meilisearch) getBinaryVersion() (*semver.Version, error) {
+func (db *Meilisearch) getBinaryVersion(ctx context.Context) (*semver.Version, error) {
 	// meilisearch  --version
 	// 1.2.0
-	cmd := exec.Command(meilisearchCmd, "--version")
+	cmd := exec.CommandContext(ctx, meilisearchCmd, "--version")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("unable to detect meilisearch binary version: %w", err)

@@ -19,7 +19,6 @@ func (b BackupVersionsS3) Latest() *providers.BackupVersion {
 	if len(result) == 0 {
 		return nil
 	}
-	b.Sort(result, false)
 	return result[0]
 }
 
@@ -27,18 +26,15 @@ func (b BackupVersionsS3) Latest() *providers.BackupVersion {
 func (b BackupVersionsS3) List() []*providers.BackupVersion {
 	var result []*providers.BackupVersion
 
-	tmp := make(map[int64]bool)
 	for _, attr := range b.objectAttrs {
-		ok := tmp[attr.LastModified.Unix()]
-		if !ok {
-			tmp[attr.LastModified.Unix()] = true
-			result = append(result, &providers.BackupVersion{
-				Name:    *attr.Key,
-				Version: *attr.VersionId,
-				Date:    *attr.LastModified,
-			})
-		}
+		result = append(result, &providers.BackupVersion{
+			Name:    *attr.Key,
+			Version: *attr.VersionId,
+			Date:    *attr.LastModified,
+		})
 	}
+
+	b.Sort(result, false)
 
 	return result
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -14,11 +13,13 @@ import (
 	"errors"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
+	"github.com/spf13/afero"
 
 	"go.uber.org/zap"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 
 	"cloud.google.com/go/storage"
 )
@@ -29,6 +30,7 @@ const (
 
 // BackupProviderGCP implements the backup provider interface for GCP
 type BackupProviderGCP struct {
+	fs     afero.Fs
 	log    *zap.SugaredLogger
 	c      *storage.Client
 	config *BackupProviderConfigGCP
@@ -42,6 +44,8 @@ type BackupProviderConfigGCP struct {
 	ObjectPrefix   string
 	ObjectsToKeep  int64
 	ProjectID      string
+	FS             afero.Fs
+	ClientOpts     []option.ClientOption
 }
 
 func (c *BackupProviderConfigGCP) validate() error {
@@ -51,14 +55,17 @@ func (c *BackupProviderConfigGCP) validate() error {
 	if c.ProjectID == "" {
 		return errors.New("gcp project id must not be empty")
 	}
+	for _, opt := range c.ClientOpts {
+		if opt == nil {
+			return errors.New("option can not be nil")
+		}
+	}
 
 	return nil
 }
 
 // New returns a GCP backup provider
-func New(log *zap.SugaredLogger, config *BackupProviderConfigGCP) (*BackupProviderGCP, error) {
-	ctx := context.Background()
-
+func New(ctx context.Context, log *zap.SugaredLogger, config *BackupProviderConfigGCP) (*BackupProviderGCP, error) {
 	if config == nil {
 		return nil, errors.New("gcp backup provider requires a provider config")
 	}
@@ -69,13 +76,16 @@ func New(log *zap.SugaredLogger, config *BackupProviderConfigGCP) (*BackupProvid
 	if config.BackupName == "" {
 		config.BackupName = defaultBackupName
 	}
+	if config.FS == nil {
+		config.FS = afero.NewOsFs()
+	}
 
 	err := config.validate()
 	if err != nil {
 		return nil, err
 	}
 
-	client, err := storage.NewClient(ctx)
+	client, err := storage.NewClient(ctx, config.ClientOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -84,13 +94,12 @@ func New(log *zap.SugaredLogger, config *BackupProviderConfigGCP) (*BackupProvid
 		c:      client,
 		config: config,
 		log:    log,
+		fs:     config.FS,
 	}, nil
 }
 
 // EnsureBackupBucket ensures a backup bucket at the backup provider
-func (b *BackupProviderGCP) EnsureBackupBucket() error {
-	ctx := context.Background()
-
+func (b *BackupProviderGCP) EnsureBackupBucket(ctx context.Context) error {
 	bucket := b.c.Bucket(b.config.BucketName)
 	lifecycle := storage.Lifecycle{
 		Rules: []storage.LifecycleRule{
@@ -133,21 +142,27 @@ func (b *BackupProviderGCP) EnsureBackupBucket() error {
 }
 
 // CleanupBackups cleans up backups according to the given backup cleanup policy at the backup provider
-func (b *BackupProviderGCP) CleanupBackups() error {
+func (b *BackupProviderGCP) CleanupBackups(_ context.Context) error {
 	// nothing to do here, done with lifecycle rules
 	return nil
 }
 
 // DownloadBackup downloads the given backup version to the restoration folder
-func (b *BackupProviderGCP) DownloadBackup(version *providers.BackupVersion) error {
+func (b *BackupProviderGCP) DownloadBackup(ctx context.Context, version *providers.BackupVersion) error {
 	gen, err := strconv.ParseInt(version.Version, 10, 64)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
-
 	bucket := b.c.Bucket(b.config.BucketName)
+
+	downloadFileName := version.Name
+	if strings.Contains(downloadFileName, "/") {
+		downloadFileName = filepath.Base(downloadFileName)
+	}
+	backupFilePath := path.Join(constants.DownloadDir, downloadFileName)
+
+	b.log.Infow("downloading", "object", version.Name, "gen", gen, "to", backupFilePath)
 
 	r, err := bucket.Object(version.Name).Generation(gen).NewReader(ctx)
 	if err != nil {
@@ -155,12 +170,7 @@ func (b *BackupProviderGCP) DownloadBackup(version *providers.BackupVersion) err
 	}
 	defer r.Close()
 
-	downloadFileName := version.Name
-	if strings.Contains(downloadFileName, "/") {
-		downloadFileName = filepath.Base(downloadFileName)
-	}
-	backupFilePath := path.Join(constants.DownloadDir, downloadFileName)
-	f, err := os.Create(backupFilePath)
+	f, err := b.fs.Create(backupFilePath)
 	if err != nil {
 		return err
 	}
@@ -175,11 +185,10 @@ func (b *BackupProviderGCP) DownloadBackup(version *providers.BackupVersion) err
 }
 
 // UploadBackup uploads a backup to the backup provider
-func (b *BackupProviderGCP) UploadBackup(sourcePath string) error {
-	ctx := context.Background()
+func (b *BackupProviderGCP) UploadBackup(ctx context.Context, sourcePath string) error {
 	bucket := b.c.Bucket(b.config.BucketName)
 
-	r, err := os.Open(sourcePath)
+	r, err := b.fs.Open(sourcePath)
 	if err != nil {
 		return err
 	}
@@ -203,15 +212,13 @@ func (b *BackupProviderGCP) UploadBackup(sourcePath string) error {
 }
 
 // GetNextBackupName returns a name for the next backup archive that is going to be uploaded
-func (b *BackupProviderGCP) GetNextBackupName() string {
+func (b *BackupProviderGCP) GetNextBackupName(_ context.Context) string {
 	// name is constant because we use lifecycle rule to cleanup
 	return b.config.BackupName
 }
 
 // ListBackups lists the available backups of the backup provider
-func (b *BackupProviderGCP) ListBackups() (providers.BackupVersions, error) {
-	ctx := context.Background()
-
+func (b *BackupProviderGCP) ListBackups(ctx context.Context) (providers.BackupVersions, error) {
 	bucket := b.c.Bucket(b.config.BucketName)
 
 	query := &storage.Query{

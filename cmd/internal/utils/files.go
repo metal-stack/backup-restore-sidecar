@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/spf13/afero"
 )
 
 // IsEmpty returns whether a directory is empty or not
@@ -43,14 +45,14 @@ func RemoveContents(dir string) error {
 }
 
 // Copy copies a file from source to a destination
-func Copy(src, dst string) error {
-	in, err := os.Open(src)
+func Copy(fs afero.Fs, src, dst string) error {
+	in, err := fs.Open(src)
 	if err != nil {
 		return err
 	}
 	defer in.Close()
 
-	out, err := os.Create(dst)
+	out, err := fs.Create(dst)
 	if err != nil {
 		return err
 	}
@@ -60,5 +62,6 @@ func Copy(src, dst string) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }

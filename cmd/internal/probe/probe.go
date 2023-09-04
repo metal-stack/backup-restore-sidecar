@@ -22,7 +22,7 @@ func Start(ctx context.Context, log *zap.SugaredLogger, db database.DatabaseProb
 		case <-ctx.Done():
 			return errors.New("received stop signal, stop probing")
 		case <-time.After(probeInterval):
-			err := db.Probe()
+			err := db.Probe(ctx)
 			if err == nil {
 				return nil
 			}

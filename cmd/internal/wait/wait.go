@@ -5,7 +5,7 @@ import (
 	"time"
 
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/initializer"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/client"
 	"go.uber.org/zap"
 )
 
@@ -15,7 +15,7 @@ const (
 
 // Start starts a wait component that will return when the initializer server has done its job
 func Start(ctx context.Context, log *zap.SugaredLogger, addr string) error {
-	client, err := initializer.NewInitializerClient(ctx, addr, log)
+	client, err := client.New(ctx, addr)
 	if err != nil {
 		return err
 	}
@@ -28,7 +28,7 @@ func Start(ctx context.Context, log *zap.SugaredLogger, addr string) error {
 			log.Info("received stop signal, shutting down")
 			return nil
 		case <-time.After(waitInterval):
-			resp, err := client.Status(ctx, &v1.Empty{})
+			resp, err := client.InitializerServiceClient().Status(ctx, &v1.StatusRequest{})
 			if err != nil {
 				log.Errorw("error retrieving initializer server response", "error", err)
 				continue

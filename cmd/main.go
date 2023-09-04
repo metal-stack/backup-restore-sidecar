@@ -9,13 +9,13 @@ import (
 	"os/signal"
 	"strings"
 
+	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/gcp"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/local"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/s3"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/constants"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/etcd"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/meilisearch"
@@ -26,6 +26,8 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/probe"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/wait"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/client"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/metal-stack/v"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -106,10 +108,6 @@ var rootCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		initLogging()
 		initConfig()
-		initSignalHandlers()
-		if err := initDatabase(); err != nil {
-			return err
-		}
 		return nil
 	},
 }
@@ -119,6 +117,10 @@ var startCmd = &cobra.Command{
 	Short: "starts the sidecar",
 	Long:  "the initializer will prepare starting the database. if there is no data or corrupt data, it checks whether there is a backup available and restore it prior to running allow running the database. The sidecar will then wait until the database is available and then take backups periodically",
 	PreRunE: func(cmd *cobra.Command, args []string) error {
+		initSignalHandlers()
+		if err := initDatabase(); err != nil {
+			return err
+		}
 		return initBackupProvider()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -141,13 +143,42 @@ var startCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		initializer.New(logger.Named("initializer"), addr, db, bp, comp, viper.GetString(databaseDatadirFlg)).Start(stop)
+
+		metrics := metrics.New()
+		metrics.Start(logger.Named("metrics"))
+
+		initializer.New(logger.Named("initializer"), addr, db, bp, comp, metrics, viper.GetString(databaseDatadirFlg)).Start(stop)
 		if err := probe.Start(stop, logger.Named("probe"), db); err != nil {
 			return err
 		}
-		metrics := metrics.New()
-		metrics.Start(logger.Named("metrics"))
-		return backup.Start(stop, logger.Named("backup"), viper.GetString(backupCronScheduleFlg), db, bp, metrics, comp)
+
+		backuper := backup.New(&backup.BackuperConfig{
+			Log:            logger.Named("backup"),
+			BackupSchedule: viper.GetString(backupCronScheduleFlg),
+			DatabaseProber: db,
+			BackupProvider: bp,
+			Metrics:        metrics,
+			Compressor:     comp,
+		})
+
+		return backuper.Start(stop)
+	},
+}
+
+var createBackupCmd = &cobra.Command{
+	Use:   "create-backup",
+	Short: "create backup takes a database backup out of the regular time schedule",
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		return initBackupProvider()
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c, err := client.New(context.Background(), viper.GetString(serverAddrFlg))
+		if err != nil {
+			return fmt.Errorf("error creating client: %w", err)
+		}
+
+		_, err = c.DatabaseServiceClient().CreateBackup(context.Background(), &v1.CreateBackupRequest{})
+		return err
 	},
 }
 
@@ -161,19 +192,16 @@ var restoreCmd = &cobra.Command{
 		if len(args) == 0 {
 			return errors.New("no version argument given")
 		}
-		versions, err := bp.ListBackups()
+
+		c, err := client.New(context.Background(), viper.GetString(serverAddrFlg))
 		if err != nil {
-			return err
+			return fmt.Errorf("error creating client: %w", err)
 		}
-		version, err := versions.Get(args[0])
-		if err != nil {
-			return err
-		}
-		comp, err := compress.New(viper.GetString(compressionMethod))
-		if err != nil {
-			return err
-		}
-		return initializer.New(logger.Named("initializer"), "", db, bp, comp, viper.GetString(databaseDatadirFlg)).Restore(version)
+
+		_, err = c.BackupServiceClient().RestoreBackup(context.Background(), &v1.RestoreBackupRequest{
+			Version: args[0],
+		})
+		return err
 	},
 }
 
@@ -181,22 +209,24 @@ var restoreListCmd = &cobra.Command{
 	Use:     "list-versions",
 	Aliases: []string{"ls"},
 	Short:   "lists available backups",
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		return initBackupProvider()
-	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		versions, err := bp.ListBackups()
+		c, err := client.New(context.Background(), viper.GetString(serverAddrFlg))
 		if err != nil {
-			return err
+			return fmt.Errorf("error creating client: %w", err)
 		}
-		backups := versions.List()
-		versions.Sort(backups, false)
+
+		backups, err := c.BackupServiceClient().ListBackups(context.Background(), &v1.ListBackupsRequest{})
+		if err != nil {
+			return fmt.Errorf("error listing backups: %w", err)
+		}
+
 		var data [][]string
-		for _, b := range backups {
-			data = append(data, []string{b.Date.String(), b.Name, b.Version})
+		for _, b := range backups.Backups {
+			data = append(data, []string{b.Timestamp.AsTime().String(), b.Name, b.Version})
 		}
+
 		p := utils.NewTablePrinter()
-		p.Print([]string{"Data", "Name", "Version"}, data)
+		p.Print([]string{"Date", "Name", "Version"}, data)
 		return nil
 	},
 }
@@ -204,6 +234,9 @@ var restoreListCmd = &cobra.Command{
 var waitCmd = &cobra.Command{
 	Use:   "wait",
 	Short: "waits for the initializer to be done",
+	PreRun: func(cmd *cobra.Command, args []string) {
+		initSignalHandlers()
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := wait.Start(stop, logger.Named("wait"), viper.GetString(serverAddrFlg)); err != nil {
 			return err
@@ -233,7 +266,7 @@ func main() {
 }
 
 func init() {
-	rootCmd.AddCommand(startCmd, waitCmd, restoreCmd)
+	rootCmd.AddCommand(startCmd, waitCmd, restoreCmd, createBackupCmd)
 
 	rootCmd.PersistentFlags().StringP(logLevelFlg, "", "info", "sets the application log level")
 	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb|etcd|meilisearch]")
@@ -381,7 +414,6 @@ func initDatabase() error {
 		)
 	case "rethinkdb":
 		db = rethinkdb.New(
-			stop,
 			logger.Named("rethinkdb"),
 			datadir,
 			viper.GetString(rethinkDBURLFlg),
@@ -419,6 +451,7 @@ func initBackupProvider() error {
 	switch bpString {
 	case "gcp":
 		bp, err = gcp.New(
+			context.Background(),
 			logger.Named("backup"),
 			&gcp.BackupProviderConfigGCP{
 				ObjectPrefix:   viper.GetString(objectPrefixFlg),

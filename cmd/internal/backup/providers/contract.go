@@ -1,14 +1,17 @@
 package providers
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type BackupProvider interface {
-	EnsureBackupBucket() error
-	ListBackups() (BackupVersions, error)
-	CleanupBackups() error
-	GetNextBackupName() string
-	DownloadBackup(version *BackupVersion) error
-	UploadBackup(sourcePath string) error
+	EnsureBackupBucket(ctx context.Context) error
+	ListBackups(ctx context.Context) (BackupVersions, error)
+	CleanupBackups(ctx context.Context) error
+	GetNextBackupName(ctx context.Context) string
+	DownloadBackup(ctx context.Context, version *BackupVersion) error
+	UploadBackup(ctx context.Context, sourcePath string) error
 }
 
 type BackupVersions interface {

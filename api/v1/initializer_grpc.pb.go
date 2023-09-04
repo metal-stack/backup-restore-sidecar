@@ -26,7 +26,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type InitializerServiceClient interface {
-	Status(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*StatusResponse, error)
+	Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
 }
 
 type initializerServiceClient struct {
@@ -37,7 +37,7 @@ func NewInitializerServiceClient(cc grpc.ClientConnInterface) InitializerService
 	return &initializerServiceClient{cc}
 }
 
-func (c *initializerServiceClient) Status(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*StatusResponse, error) {
+func (c *initializerServiceClient) Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
 	out := new(StatusResponse)
 	err := c.cc.Invoke(ctx, InitializerService_Status_FullMethodName, in, out, opts...)
 	if err != nil {
@@ -50,14 +50,14 @@ func (c *initializerServiceClient) Status(ctx context.Context, in *Empty, opts .
 // All implementations should embed UnimplementedInitializerServiceServer
 // for forward compatibility
 type InitializerServiceServer interface {
-	Status(context.Context, *Empty) (*StatusResponse, error)
+	Status(context.Context, *StatusRequest) (*StatusResponse, error)
 }
 
 // UnimplementedInitializerServiceServer should be embedded to have forward compatible implementations.
 type UnimplementedInitializerServiceServer struct {
 }
 
-func (UnimplementedInitializerServiceServer) Status(context.Context, *Empty) (*StatusResponse, error) {
+func (UnimplementedInitializerServiceServer) Status(context.Context, *StatusRequest) (*StatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Status not implemented")
 }
 
@@ -73,7 +73,7 @@ func RegisterInitializerServiceServer(s grpc.ServiceRegistrar, srv InitializerSe
 }
 
 func _InitializerService_Status_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Empty)
+	in := new(StatusRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func _InitializerService_Status_Handler(srv interface{}, ctx context.Context, de
 		FullMethod: InitializerService_Status_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InitializerServiceServer).Status(ctx, req.(*Empty))
+		return srv.(InitializerServiceServer).Status(ctx, req.(*StatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
