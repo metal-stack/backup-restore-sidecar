@@ -45,13 +45,27 @@ type Meilisearch struct {
 }
 
 // New instantiates a new meilisearch database
-func New(log *zap.SugaredLogger, datadir string, url string, apikey string) *Meilisearch {
+func New(log *zap.SugaredLogger, datadir string, url string, apikey string) (*Meilisearch, error) {
 	client := meilisearch.NewClient(meilisearch.ClientConfig{
 		Host:   url,
 		APIKey: apikey,
 	})
 	dbdir := path.Join(datadir, meilisearchDBDir)
+	if _, err := os.Stat(dbdir); os.IsNotExist(err) {
+		err := os.MkdirAll(dbdir, 0700)
+		if err != nil {
+			return nil, fmt.Errorf("dbdir %q does not exist but creation failed %w", dbdir, err)
+		}
+	}
+
 	dumpdir := path.Join(datadir, meilisearchDumpDir)
+	if _, err := os.Stat(dbdir); os.IsNotExist(err) {
+		err := os.MkdirAll(dumpdir, 0700)
+		if err != nil {
+			return nil, fmt.Errorf("dumpdir %q does not exist but creation failed %w", dumpdir, err)
+		}
+	}
+
 	latestStableDumpDst := path.Join(dumpdir, latestStableDump)
 	return &Meilisearch{
 		log:                 log,
@@ -61,7 +75,7 @@ func New(log *zap.SugaredLogger, datadir string, url string, apikey string) *Mei
 		latestStableDumpDst: latestStableDumpDst,
 		executor:            utils.NewExecutor(log),
 		client:              client,
-	}
+	}, nil
 }
 
 // Backup implements database.Database.

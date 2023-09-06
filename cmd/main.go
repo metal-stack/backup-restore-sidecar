@@ -430,12 +430,16 @@ func initDatabase() error {
 			viper.GetString(etcdName),
 		)
 	case "meilisearch":
-		db = meilisearch.New(
+		var err error
+		db, err = meilisearch.New(
 			logger.Named("meilisearch"),
 			datadir,
 			viper.GetString(meilisearchURLFlg),
 			viper.GetString(meilisearchAPIKeyFlg),
 		)
+		if err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unsupported database type: %s", dbString)
 	}

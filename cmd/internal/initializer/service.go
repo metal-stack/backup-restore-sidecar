@@ -6,6 +6,7 @@ import (
 
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -26,12 +27,14 @@ func (s *initializerService) Status(context.Context, *v1.StatusRequest) (*v1.Sta
 }
 
 type backupService struct {
+	log       *zap.SugaredLogger
 	bp        providers.BackupProvider
 	restoreFn func(ctx context.Context, version *providers.BackupVersion) error
 }
 
-func newBackupProviderService(bp providers.BackupProvider, restoreFn func(ctx context.Context, version *providers.BackupVersion) error) *backupService {
+func newBackupProviderService(log *zap.SugaredLogger, bp providers.BackupProvider, restoreFn func(ctx context.Context, version *providers.BackupVersion) error) *backupService {
 	return &backupService{
+		log:       log,
 		bp:        bp,
 		restoreFn: restoreFn,
 	}
@@ -43,6 +46,7 @@ func (s *backupService) ListBackups(ctx context.Context, _ *v1.ListBackupsReques
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	s.log.Infow("listbackups called")
 	backups := versions.List()
 	versions.Sort(backups, false)
 
@@ -55,6 +59,7 @@ func (s *backupService) ListBackups(ctx context.Context, _ *v1.ListBackupsReques
 			Timestamp: timestamppb.New(b.Date),
 		})
 	}
+	s.log.Infow("listbackups called", "response", response)
 
 	return response, nil
 }
@@ -83,20 +88,24 @@ func (s *backupService) RestoreBackup(ctx context.Context, req *v1.RestoreBackup
 }
 
 type databaseService struct {
+	log      *zap.SugaredLogger
 	backupFn func() error
 }
 
-func newDatabaseService(backupFn func() error) *databaseService {
+func newDatabaseService(log *zap.SugaredLogger, backupFn func() error) *databaseService {
 	return &databaseService{
+		log:      log,
 		backupFn: backupFn,
 	}
 }
 
 func (s *databaseService) CreateBackup(ctx context.Context, _ *v1.CreateBackupRequest) (*v1.CreateBackupResponse, error) {
+	s.log.Infow("createbackup called")
 	err := s.backupFn()
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("error creating backup: %s", err))
 	}
+	s.log.Infow("createbackup finished")
 
 	return &v1.CreateBackupResponse{}, nil
 }

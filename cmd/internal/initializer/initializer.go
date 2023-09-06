@@ -71,8 +71,8 @@ func (i *Initializer) Start(ctx context.Context) {
 	grpcServer := grpc.NewServer(opts...)
 
 	initializerService := newInitializerService(i.currentStatus)
-	backupService := newBackupProviderService(i.bp, i.Restore)
-	databaseService := newDatabaseService(func() error {
+	backupService := newBackupProviderService(i.log, i.bp, i.Restore)
+	databaseService := newDatabaseService(i.log, func() error {
 		backuper := backup.New(&backup.BackuperConfig{
 			Log:            i.log,
 			DatabaseProber: i.db,
