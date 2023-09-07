@@ -411,6 +411,7 @@ func addMeilisearchTestData(t *testing.T, ctx context.Context) {
 	indexTask, err := index.AddDocuments(testdata, "id")
 	require.NoError(t, err)
 	_, err = client.WaitForTask(indexTask.TaskUID)
+	require.NoError(t, err)
 }
 
 func verifyMeilisearchTestData(t *testing.T, ctx context.Context) {
