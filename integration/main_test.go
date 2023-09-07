@@ -269,7 +269,7 @@ func upgradeFlow(t *testing.T, spec *flowSpec) {
 		err = c.Update(ctx, nextSts, &client.UpdateOptions{})
 		require.NoError(t, err)
 
-		time.Sleep(10 * time.Second)
+		time.Sleep(20 * time.Second)
 
 		// TODO maybe better wait for generation changed
 		err = waitForPodRunnig(ctx, podName, ns.Name)
