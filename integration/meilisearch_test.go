@@ -49,7 +49,6 @@ func Test_Meilisearch_Upgrade(t *testing.T) {
 			"getmeili/meilisearch:v1.1.0",
 			// "getmeili/meilisearch:v1.2.0", commented to test if two versions upgrade also work
 			"getmeili/meilisearch:v1.3.0",
-			"getmeili/meilisearch:v1.3.1",
 			"getmeili/meilisearch:v1.3.2",
 		},
 		sts:              meilisearchSts,

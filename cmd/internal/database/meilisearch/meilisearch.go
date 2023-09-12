@@ -93,23 +93,14 @@ func (db *Meilisearch) Backup(ctx context.Context) error {
 		return fmt.Errorf("could not create a dump: %w", err)
 	}
 
-	db.log.Infow("dump creation triggered", "response", dumpResponse)
+	db.log.Infow("dump creation triggered", "taskUUID", dumpResponse.TaskUID)
 
-	err = retry.Do(func() error {
-		dumpTask, err := db.client.GetTask(dumpResponse.TaskUID)
-		if err != nil {
-			return err
-		}
-		if dumpTask.Status != meilisearch.TaskStatusSucceeded {
-			return fmt.Errorf("dump still processing")
-		}
-
-		db.log.Infow("dump finished", "duration", dumpTask.Duration, "details", dumpTask.Details)
-		return nil
-	}, retry.Attempts(100), retry.Context(ctx))
+	dumpTask, err := db.client.WaitForTask(dumpResponse.TaskUID, meilisearch.WaitParams{Context: ctx})
 	if err != nil {
 		return err
 	}
+	db.log.Infow("dump finished", "duration", dumpTask.Duration, "details", dumpTask.Details)
+
 	err = db.moveDumpToBackupDir(ctx)
 	if err != nil {
 		return err
@@ -139,6 +130,10 @@ func (db *Meilisearch) Probe(_ context.Context) error {
 	_, err := db.client.Version()
 	if err != nil {
 		return fmt.Errorf("connection error:%w", err)
+	}
+	healthy := db.client.IsHealthy()
+	if !healthy {
+		return fmt.Errorf("meilisearch does not report healthiness")
 	}
 	return nil
 }
@@ -225,7 +220,7 @@ func (db *Meilisearch) importDump(ctx context.Context, dump string) error {
 		cmd.Stderr = os.Stderr
 		err = cmd.Run()
 		if err != nil {
-			return fmt.Errorf("unable import dump %w", err)
+			return fmt.Errorf("unable to import dump %w", err)
 		}
 		db.log.Info("import of dump finished")
 		return nil
@@ -234,15 +229,11 @@ func (db *Meilisearch) importDump(ctx context.Context, dump string) error {
 	// TODO big databases might take longer, not sure if 100 attempts are enough
 	// must check how long it take max with backoff ?
 	err = retry.Do(func() error {
-		v, err := db.client.Version()
+		err := db.Probe(ctx)
 		if err != nil {
 			return err
 		}
-		healthy := db.client.IsHealthy()
-		if !healthy {
-			return fmt.Errorf("meilisearch does not report healthiness")
-		}
-		db.log.Infow("meilisearch started after importing the dump, killing it", "version", v)
+		db.log.Infow("meilisearch started after importing the dump, killing it")
 		return cmd.Process.Signal(syscall.SIGTERM)
 	}, retry.Attempts(100), retry.Context(ctx))
 	if err != nil {
@@ -262,6 +253,9 @@ func (db *Meilisearch) moveDumpToBackupDir(ctx context.Context) error {
 	dumps, err := filepath.Glob(db.dumpdir + "/*.dump")
 	if err != nil {
 		return fmt.Errorf("unable to find dumps %w", err)
+	}
+	if len(dumps) == 0 {
+		return fmt.Errorf("no dumps found")
 	}
 	src := ""
 	// sort them an take only the latest dump
@@ -301,7 +295,7 @@ func (db *Meilisearch) getDatabaseVersion(versionFile string) (*semver.Version, 
 
 	v, err := semver.NewVersion(strings.TrimSpace(string(versionBytes)))
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse postgres binary version in %q: %w", string(versionBytes), err)
+		return nil, fmt.Errorf("unable to parse meilisearch binary version in %q: %w", string(versionBytes), err)
 	}
 	return v, nil
 }
