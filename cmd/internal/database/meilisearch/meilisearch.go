@@ -186,7 +186,7 @@ func (db *Meilisearch) Upgrade(ctx context.Context) error {
 		return fmt.Errorf("database is newer than meilisearch binary")
 	}
 	if _, err := os.Stat(db.latestStableDumpDst); errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("%q is not present, no upgrade possible, maybe no backup was running before", db.latestStableDumpDst)
+		return fmt.Errorf("%q is not present, no upgrade possible, please go back to the previous meilisearch version and try again", db.latestStableDumpDst)
 	}
 
 	db.log.Infow("start upgrade", "from", dbVersion, "to", meilisearchVersion)
