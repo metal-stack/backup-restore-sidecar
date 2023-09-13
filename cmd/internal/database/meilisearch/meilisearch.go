@@ -267,7 +267,7 @@ func (db *Meilisearch) moveDumpToBackupDir(ctx context.Context) error {
 		src = dump
 	}
 
-	db.log.Infow("create latest dump rename", "from", src, "to", db.latestStableDumpDst)
+	db.log.Infow("create latest dump, rename", "from", src, "to", db.latestStableDumpDst)
 	err = os.Rename(src, db.latestStableDumpDst)
 	if err != nil {
 		return fmt.Errorf("unable create latest stable dump: %w", err)

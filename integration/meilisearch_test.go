@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/avast/retry-go/v4"
 	"github.com/meilisearch/meilisearch-go"
@@ -46,8 +47,7 @@ func Test_Meilisearch_Upgrade(t *testing.T) {
 	upgradeFlow(t, &flowSpec{
 		databaseType: "meilisearch",
 		databaseImages: []string{
-			"getmeili/meilisearch:v1.1.0",
-			// "getmeili/meilisearch:v1.2.0", commented to test if two versions upgrade also work
+			"getmeili/meilisearch:v1.2.0",
 			"getmeili/meilisearch:v1.3.0",
 			"getmeili/meilisearch:v1.3.2",
 		},
@@ -55,6 +55,7 @@ func Test_Meilisearch_Upgrade(t *testing.T) {
 		backingResources: meilisearchBackingResources,
 		addTestData:      addMeilisearchTestData,
 		verifyTestData:   verifyMeilisearchTestData,
+		stsUpdateTimeout: pointer.Pointer(20 * time.Second),
 	})
 }
 

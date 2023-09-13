@@ -38,6 +38,7 @@ type flowSpec struct {
 	backingResources func(namespace string) []client.Object
 	addTestData      func(t *testing.T, ctx context.Context)
 	verifyTestData   func(t *testing.T, ctx context.Context)
+	stsUpdateTimeout *time.Duration
 }
 
 const (
@@ -190,6 +191,10 @@ func upgradeFlow(t *testing.T, spec *flowSpec) {
 		initialImage = spec.databaseImages[0]
 		nextImages   = spec.databaseImages[1:]
 	)
+	stsUpdateTimeout := 10 * time.Second
+	if spec.stsUpdateTimeout != nil {
+		stsUpdateTimeout = *spec.stsUpdateTimeout
+	}
 
 	defer cancel()
 
@@ -269,7 +274,7 @@ func upgradeFlow(t *testing.T, spec *flowSpec) {
 		err = c.Update(ctx, nextSts, &client.UpdateOptions{})
 		require.NoError(t, err)
 
-		time.Sleep(20 * time.Second)
+		time.Sleep(stsUpdateTimeout)
 
 		// TODO maybe better wait for generation changed
 		err = waitForPodRunnig(ctx, podName, ns.Name)
