@@ -102,7 +102,7 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 
 	podName := spec.sts(ns.Name).Name + "-0"
 
-	err = waitForPodRunnig(ctx, podName, ns.Name)
+	err = waitForPodRunning(ctx, podName, ns.Name)
 	require.NoError(t, err)
 
 	t.Log("adding test data to database")
@@ -163,7 +163,7 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 	err = c.Create(ctx, spec.sts(ns.Name))
 	require.NoError(t, err)
 
-	err = waitForPodRunnig(ctx, podName, ns.Name)
+	err = waitForPodRunning(ctx, podName, ns.Name)
 	require.NoError(t, err)
 
 	t.Log("verify that data gets restored")
@@ -225,7 +225,7 @@ func upgradeFlow(t *testing.T, spec *upgradeFlowSpec) {
 
 	podName := spec.sts(ns.Name).Name + "-0"
 
-	err = waitForPodRunnig(ctx, podName, ns.Name)
+	err = waitForPodRunning(ctx, podName, ns.Name)
 	require.NoError(t, err)
 
 	t.Log("adding test data to database")
@@ -273,10 +273,10 @@ func upgradeFlow(t *testing.T, spec *upgradeFlowSpec) {
 
 		time.Sleep(1 * time.Second)
 
-		err = waitForStsRunnig(ctx, sts.Name, ns.Name)
+		err = waitForStsRunning(ctx, sts.Name, ns.Name)
 		require.NoError(t, err)
 
-		err = waitForPodRunnig(ctx, podName, ns.Name)
+		err = waitForPodRunning(ctx, podName, ns.Name)
 		require.NoError(t, err)
 
 		t.Log("verify that data is still the same")
@@ -325,7 +325,7 @@ func newKubernetesClient() (client.Client, error) {
 	return c, nil
 }
 
-func waitForPodRunnig(ctx context.Context, name, namespace string) error {
+func waitForPodRunning(ctx context.Context, name, namespace string) error {
 	return retry.Do(func() error {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -357,7 +357,7 @@ func waitForPodRunnig(ctx context.Context, name, namespace string) error {
 	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
 }
 
-func waitForStsRunnig(ctx context.Context, name, namespace string) error {
+func waitForStsRunning(ctx context.Context, name, namespace string) error {
 	return retry.Do(func() error {
 		sts := &appsv1.StatefulSet{
 			ObjectMeta: metav1.ObjectMeta{
