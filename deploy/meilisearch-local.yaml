@@ -26,13 +26,14 @@ spec:
         image: getmeili/meilisearch:v1.3.0
         imagePullPolicy: IfNotPresent
         livenessProbe:
+          failureThreshold: 6
           httpGet:
             path: /health
             port: http
-          initialDelaySeconds: 5
-          periodSeconds: 5
+          initialDelaySeconds: 30
+          periodSeconds: 10
           successThreshold: 1
-          timeoutSeconds: 1
+          timeoutSeconds: 5
         name: meilisearch
         ports:
         - containerPort: 7700
@@ -43,20 +44,20 @@ spec:
             path: /health
             port: http
           initialDelaySeconds: 5
-          periodSeconds: 5
-          successThreshold: 1
-          timeoutSeconds: 1
+          periodSeconds: 10
+          timeoutSeconds: 5
         resources: {}
         startupProbe:
           httpGet:
             path: /health
             port: http
-          initialDelaySeconds: 1
-          periodSeconds: 1
-          successThreshold: 1
-          timeoutSeconds: 1
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 10
         volumeMounts:
-        - mountPath: /meili_data
+        - mountPath: /backup
+          name: backup
+        - mountPath: /data
           name: data
         - mountPath: /usr/local/bin/backup-restore-sidecar
           name: bin-provision
@@ -87,7 +88,7 @@ spec:
         volumeMounts:
         - mountPath: /backup
           name: backup
-        - mountPath: /meili_data
+        - mountPath: /data
           name: data
         - mountPath: /etc/backup-restore-sidecar
           name: backup-restore-sidecar-config
@@ -150,13 +151,13 @@ data:
     ---
     bind-addr: 0.0.0.0
     db: meilisearch
-    db-data-directory: /meili_data/
+    db-data-directory: /data/data.ms/
     backup-provider: local
     backup-cron-schedule: "*/1 * * * *"
     object-prefix: meilisearch-test
-    compression-method: tar
+    compression-method: targz
     post-exec-cmds:
-    - meilisearch
+    - meilisearch --db-path=/data/data.ms/ --dump-dir=/backup/upload/files
 kind: ConfigMap
 metadata:
   creationTimestamp: null
