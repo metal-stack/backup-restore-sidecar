@@ -28,18 +28,20 @@ func Test_Postgres_Restore(t *testing.T) {
 }
 
 func Test_Postgres_Upgrade(t *testing.T) {
-	upgradeFlow(t, &flowSpec{
-		databaseType: "postgres",
+	upgradeFlow(t, &upgradeFlowSpec{
+		flowSpec: flowSpec{
+			databaseType:     "postgres",
+			sts:              examples.PostgresSts,
+			backingResources: examples.PostgresBackingResources,
+			addTestData:      addPostgresTestData,
+			verifyTestData:   verifyPostgresTestData,
+		},
 		databaseImages: []string{
 			"postgres:12-alpine",
 			// "postgres:13-alpine", commented to test if two versions upgrade also work
 			"postgres:14-alpine",
 			"postgres:15-alpine",
 		},
-		sts:              examples.PostgresSts,
-		backingResources: examples.PostgresBackingResources,
-		addTestData:      addPostgresTestData,
-		verifyTestData:   verifyPostgresTestData,
 	})
 }
 

@@ -6,12 +6,10 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/avast/retry-go/v4"
 	"github.com/meilisearch/meilisearch-go"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/generate/examples/examples"
-	"github.com/metal-stack/metal-lib/pkg/pointer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -33,18 +31,19 @@ func Test_Meilisearch_Restore(t *testing.T) {
 }
 
 func Test_Meilisearch_Upgrade(t *testing.T) {
-	upgradeFlow(t, &flowSpec{
-		databaseType: "meilisearch",
+	upgradeFlow(t, &upgradeFlowSpec{
+		flowSpec: flowSpec{
+			databaseType:     "meilisearch",
+			sts:              examples.MeilisearchSts,
+			backingResources: examples.MeilisearchBackingResources,
+			addTestData:      addMeilisearchTestData,
+			verifyTestData:   verifyMeilisearchTestData,
+		},
 		databaseImages: []string{
 			"getmeili/meilisearch:v1.2.0",
 			"getmeili/meilisearch:v1.3.0",
 			"getmeili/meilisearch:v1.3.2",
 		},
-		sts:              examples.MeilisearchSts,
-		backingResources: examples.MeilisearchBackingResources,
-		addTestData:      addMeilisearchTestData,
-		verifyTestData:   verifyMeilisearchTestData,
-		stsUpdateTimeout: pointer.Pointer(20 * time.Second),
 	})
 }
 

@@ -19,10 +19,7 @@ const (
 	rethinkDbContainerImage = "rethinkdb:2.4.0"
 )
 
-func RethinkDbSts(namespace, image string) *appsv1.StatefulSet {
-	if image == "" {
-		image = rethinkDbContainerImage
-	}
+func RethinkDbSts(namespace string) *appsv1.StatefulSet {
 	return &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "StatefulSet",
@@ -54,7 +51,7 @@ func RethinkDbSts(namespace, image string) *appsv1.StatefulSet {
 					Containers: []corev1.Container{
 						{
 							Name:    "rethinkdb",
-							Image:   image,
+							Image:   rethinkDbContainerImage,
 							Command: []string{"backup-restore-sidecar", "wait"},
 							Env: []corev1.EnvVar{
 								{
@@ -95,7 +92,7 @@ func RethinkDbSts(namespace, image string) *appsv1.StatefulSet {
 						},
 						{
 							Name:    "backup-restore-sidecar",
-							Image:   image,
+							Image:   rethinkDbContainerImage,
 							Command: []string{"backup-restore-sidecar", "start", "--log-level=debug"},
 							Ports: []corev1.ContainerPort{
 								{

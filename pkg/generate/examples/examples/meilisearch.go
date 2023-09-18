@@ -18,11 +18,7 @@ const (
 	meilisearchContainerImage = "getmeili/meilisearch:v1.3.0"
 )
 
-func MeilisearchSts(namespace, image string) *appsv1.StatefulSet {
-	if image == "" {
-		image = meilisearchContainerImage
-	}
-
+func MeilisearchSts(namespace string) *appsv1.StatefulSet {
 	return &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "StatefulSet",
@@ -54,7 +50,7 @@ func MeilisearchSts(namespace, image string) *appsv1.StatefulSet {
 					Containers: []corev1.Container{
 						{
 							Name:            "meilisearch",
-							Image:           image,
+							Image:           meilisearchContainerImage,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Command:         []string{"backup-restore-sidecar", "wait"},
 							LivenessProbe: &corev1.Probe{
@@ -121,7 +117,7 @@ func MeilisearchSts(namespace, image string) *appsv1.StatefulSet {
 						},
 						{
 							Name:    "backup-restore-sidecar",
-							Image:   image,
+							Image:   meilisearchContainerImage,
 							Command: []string{"backup-restore-sidecar", "start", "--log-level=debug"},
 							Env: []corev1.EnvVar{
 								{

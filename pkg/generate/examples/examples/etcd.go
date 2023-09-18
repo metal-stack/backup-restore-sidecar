@@ -16,10 +16,7 @@ var (
 	etcdContainerImage = "quay.io/coreos/etcd:v3.5.7"
 )
 
-func EtcdSts(namespace string, image string) *appsv1.StatefulSet {
-	if image == "" {
-		image = etcdContainerImage
-	}
+func EtcdSts(namespace string) *appsv1.StatefulSet {
 	return &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "StatefulSet",
@@ -51,7 +48,7 @@ func EtcdSts(namespace string, image string) *appsv1.StatefulSet {
 					Containers: []corev1.Container{
 						{
 							Name:    "etcd",
-							Image:   image,
+							Image:   etcdContainerImage,
 							Command: []string{"backup-restore-sidecar", "wait"},
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
@@ -110,7 +107,7 @@ func EtcdSts(namespace string, image string) *appsv1.StatefulSet {
 						},
 						{
 							Name:    "backup-restore-sidecar",
-							Image:   image,
+							Image:   etcdContainerImage,
 							Command: []string{"backup-restore-sidecar", "start", "--log-level=debug"},
 							Ports: []corev1.ContainerPort{
 								{

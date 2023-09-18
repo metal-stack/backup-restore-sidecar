@@ -21,11 +21,7 @@ const (
 	postgresContainerImage = "postgres:12-alpine"
 )
 
-func PostgresSts(namespace, image string) *appsv1.StatefulSet {
-	if image == "" {
-		image = postgresContainerImage
-	}
-
+func PostgresSts(namespace string) *appsv1.StatefulSet {
 	return &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "StatefulSet",
@@ -57,7 +53,7 @@ func PostgresSts(namespace, image string) *appsv1.StatefulSet {
 					Containers: []corev1.Container{
 						{
 							Name:    "postgres",
-							Image:   image,
+							Image:   postgresContainerImage,
 							Command: []string{"backup-restore-sidecar", "wait"},
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
@@ -150,7 +146,7 @@ func PostgresSts(namespace, image string) *appsv1.StatefulSet {
 						},
 						{
 							Name:    "backup-restore-sidecar",
-							Image:   image,
+							Image:   postgresContainerImage,
 							Command: []string{"backup-restore-sidecar", "start", "--log-level=debug"},
 							Env: []corev1.EnvVar{
 								{

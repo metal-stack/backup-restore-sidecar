@@ -15,25 +15,25 @@ import (
 
 func main() {
 	// etcd
-	err := dumpToExamples(examples.EtcdDatabaseName+"-local.yaml", append([]client.Object{examples.EtcdSts("default", "")}, examples.EtcdBackingResources("default")...)...)
+	err := dumpToExamples(examples.EtcdDatabaseName+"-local.yaml", append([]client.Object{examples.EtcdSts("default")}, examples.EtcdBackingResources("default")...)...)
 	if err != nil {
 		panic(err)
 	}
 
 	// meilisearch
-	err = dumpToExamples(examples.MeilisearchDatabaseName+"-local.yaml", append([]client.Object{examples.MeilisearchSts("default", "")}, examples.MeilisearchBackingResources("default")...)...)
+	err = dumpToExamples(examples.MeilisearchDatabaseName+"-local.yaml", append([]client.Object{examples.MeilisearchSts("default")}, examples.MeilisearchBackingResources("default")...)...)
 	if err != nil {
 		panic(err)
 	}
 
 	// postgres
-	err = dumpToExamples(examples.PostgresDatabaseName+"-local.yaml", append([]client.Object{examples.PostgresSts("default", "")}, examples.PostgresBackingResources("default")...)...)
+	err = dumpToExamples(examples.PostgresDatabaseName+"-local.yaml", append([]client.Object{examples.PostgresSts("default")}, examples.PostgresBackingResources("default")...)...)
 	if err != nil {
 		panic(err)
 	}
 
 	// rethinkdb
-	err = dumpToExamples(examples.RethinkDbDatabaseName+"-local.yaml", append([]client.Object{examples.RethinkDbSts("default", "")}, examples.RethinkDbBackingResources("default")...)...)
+	err = dumpToExamples(examples.RethinkDbDatabaseName+"-local.yaml", append([]client.Object{examples.RethinkDbSts("default")}, examples.RethinkDbBackingResources("default")...)...)
 	if err != nil {
 		panic(err)
 	}
