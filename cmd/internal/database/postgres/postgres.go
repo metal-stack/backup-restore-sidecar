@@ -157,7 +157,7 @@ func (db *Postgres) Probe(ctx context.Context) error {
 	// TODO: use postgres client to connect
 	conn, err := net.DialTimeout("tcp", net.JoinHostPort(db.host, strconv.Itoa(db.port)), connectionTimeout)
 	if err != nil {
-		return fmt.Errorf("connection error:%w", err)
+		return fmt.Errorf("connection error: %w", err)
 	}
 	defer conn.Close()
 	return nil

@@ -148,6 +148,7 @@ var startCmd = &cobra.Command{
 		metrics.Start(logger.Named("metrics"))
 
 		initializer.New(logger.Named("initializer"), addr, db, bp, comp, metrics, viper.GetString(databaseDatadirFlg)).Start(stop)
+
 		if err := probe.Start(stop, logger.Named("probe"), db); err != nil {
 			return err
 		}
