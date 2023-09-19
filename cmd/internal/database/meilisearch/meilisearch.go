@@ -14,6 +14,7 @@ import (
 	"github.com/meilisearch/meilisearch-go"
 	"github.com/spf13/afero"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
@@ -209,19 +210,36 @@ func (db *Meilisearch) importDump(ctx context.Context, dump string) error {
 		return fmt.Errorf("unable to create prober")
 	}
 
-	for {
-		time.Sleep(3 * time.Second)
+	waitForRestore := func() error {
+		ticker := time.NewTicker(3 * time.Second)
+		defer ticker.Stop()
+		sem := semaphore.NewWeighted(1)
 
-		err = restoreDB.Probe(ctx)
-		if err != nil {
-			db.log.Errorw("meilisearch is still restoring, continue probing for readiness...", "error", err)
+		for {
+			select {
+			case <-ticker.C:
+				if !sem.TryAcquire(1) {
+					continue
+				}
 
-			return err
-		} else {
-			db.log.Infow("meilisearch started after importing the dump, stopping it again for takeover from the database container")
+				err = restoreDB.Probe(ctx)
+				sem.Release(1)
+				if err != nil {
+					db.log.Errorw("meilisearch is still restoring, continue probing for readiness...", "error", err)
+					continue
+				}
 
-			break
+				db.log.Infow("meilisearch started after importing the dump, stopping it again for takeover from the database container")
+
+				return nil
+			case <-ctx.Done():
+				return fmt.Errorf("context cancelled during meilisearch restore")
+			}
 		}
+	}
+
+	if err := waitForRestore(); err != nil {
+		return handleFailedRecovery(err)
 	}
 
 	if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
