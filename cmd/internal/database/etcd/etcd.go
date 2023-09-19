@@ -43,7 +43,7 @@ func New(log *zap.SugaredLogger, datadir, caCert, cert, key, endpoints, name str
 	}
 }
 
-// Check checks whether a backup needs to be restored or not, returns true if it needs a backup
+// Check indicates whether a restore of the database is required or not.
 func (db *Etcd) Check(_ context.Context) (bool, error) {
 	empty, err := utils.IsEmpty(db.datadir)
 	if err != nil {

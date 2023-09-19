@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/avast/retry-go/v4"
 	"github.com/meilisearch/meilisearch-go"
 	"github.com/spf13/afero"
 	"golang.org/x/sync/errgroup"
@@ -83,9 +82,14 @@ func (db *Meilisearch) Backup(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("unable to find dump: %w", err)
 	}
-	if len(dumps) == 0 {
+	if len(dumps) != 1 {
 		return fmt.Errorf("did not find unique dump, found %d", len(dumps))
 	}
+
+	// we need to do a copy here and cannot simply rename as the file system is
+	// mounted by two containers. the dump is created in the database container,
+	// the copy is done in the backup-restore-sidecar container. os.Rename would
+	// lead to an error.
 
 	err = utils.Copy(afero.NewOsFs(), dumps[0], path.Join(constants.BackupDir, latestStableDump))
 	if err != nil {
@@ -110,7 +114,7 @@ func (db *Meilisearch) Backup(ctx context.Context) error {
 	return nil
 }
 
-// Check checks whether a backup needs to be restored or not, returns true if it needs a backup
+// Check indicates whether a restore of the database is required or not.
 func (db *Meilisearch) Check(_ context.Context) (bool, error) {
 	empty, err := utils.IsEmpty(db.datadir)
 	if err != nil {
@@ -159,7 +163,7 @@ func (db *Meilisearch) Recover(ctx context.Context) error {
 		return fmt.Errorf("unable to recover %w", err)
 	}
 
-	db.log.Infow("recovery done", "duration", time.Since(start))
+	db.log.Infow("successfully restored meilisearch database", "duration", time.Since(start).String())
 
 	return nil
 }
@@ -195,29 +199,32 @@ func (db *Meilisearch) importDump(ctx context.Context, dump string) error {
 			return err
 		}
 
-		db.log.Info("import of dump finished")
+		db.log.Info("execution of meilisearch finished without an error")
 
 		return nil
 	})
 
-	// TODO big databases might take longer, not sure if 100 attempts are enough
-	// must check how long it take max with backoff ?
-	err = retry.Do(func() error {
-		restoreDB, err := New(db.log, db.datadir, "http://localhost:1", db.apikey)
-		if err != nil {
-			return fmt.Errorf("unable to create prober")
-		}
+	restoreDB, err := New(db.log, db.datadir, "http://localhost:1", db.apikey)
+	if err != nil {
+		return fmt.Errorf("unable to create prober")
+	}
+
+	for {
+		time.Sleep(3 * time.Second)
 
 		err = restoreDB.Probe(ctx)
 		if err != nil {
+			db.log.Errorw("meilisearch is still restoring, continue probing for readiness...", "error", err)
+
 			return err
+		} else {
+			db.log.Infow("meilisearch started after importing the dump, stopping it again for takeover from the database container")
+
+			break
 		}
+	}
 
-		db.log.Infow("meilisearch started after importing the dump, stopping it again")
-
-		return cmd.Process.Signal(syscall.SIGINT)
-	}, retry.Attempts(100), retry.Context(ctx))
-	if err != nil {
+	if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
 		return handleFailedRecovery(err)
 	}
 
