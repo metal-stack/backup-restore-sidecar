@@ -27,7 +27,7 @@ type rethinkDbTestData struct {
 
 func Test_RethinkDB_Restore(t *testing.T) {
 	restoreFlow(t, &flowSpec{
-		databaseType:     "rethinkdb",
+		databaseType:     examples.RethinkDB,
 		sts:              examples.RethinkDbSts,
 		backingResources: examples.RethinkDbBackingResources,
 		addTestData:      addRethinkDbTestData,

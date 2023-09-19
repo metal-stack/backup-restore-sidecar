@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	MeilisearchDatabaseName = "meilisearch"
-	MeilisearchPassword     = "test123!"
+	Meilisearch         = "meilisearch"
+	MeilisearchPassword = "test123!"
 
 	meilisearchContainerImage = "getmeili/meilisearch:v1.3.0"
 )

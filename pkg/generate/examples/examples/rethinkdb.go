@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	RethinkDbDatabaseName = "rethinkdb"
+	RethinkDB = "rethinkdb"
 
 	RethinkDbPassword = "test123!"
 

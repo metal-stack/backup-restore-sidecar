@@ -19,7 +19,7 @@ import (
 
 func Test_ETCD_Restore(t *testing.T) {
 	restoreFlow(t, &flowSpec{
-		databaseType:     examples.EtcdDatabaseName,
+		databaseType:     examples.Etcd,
 		sts:              examples.EtcdSts,
 		backingResources: examples.EtcdBackingResources,
 		addTestData:      addEtcdTestData,

@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	PostgresDatabaseName = "postgres"
+	Postgres = "postgres"
 
 	PostgresDB       = "postgres"
 	PostgresPassword = "test123!"

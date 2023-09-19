@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	EtcdDatabaseName   = "etcd"
+	Etcd               = "etcd"
 	etcdContainerImage = "quay.io/coreos/etcd:v3.5.7"
 )
 

@@ -22,7 +22,7 @@ const (
 
 func Test_Meilisearch_Restore(t *testing.T) {
 	restoreFlow(t, &flowSpec{
-		databaseType:     "meilisearch",
+		databaseType:     examples.Meilisearch,
 		sts:              examples.MeilisearchSts,
 		backingResources: examples.MeilisearchBackingResources,
 		addTestData:      addMeilisearchTestData,
@@ -33,7 +33,7 @@ func Test_Meilisearch_Restore(t *testing.T) {
 func Test_Meilisearch_Upgrade(t *testing.T) {
 	upgradeFlow(t, &upgradeFlowSpec{
 		flowSpec: flowSpec{
-			databaseType:     "meilisearch",
+			databaseType:     examples.Meilisearch,
 			sts:              examples.MeilisearchSts,
 			backingResources: examples.MeilisearchBackingResources,
 			addTestData:      addMeilisearchTestData,

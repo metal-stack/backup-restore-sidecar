@@ -19,7 +19,7 @@ import (
 
 func Test_Postgres_Restore(t *testing.T) {
 	restoreFlow(t, &flowSpec{
-		databaseType:     "postgres",
+		databaseType:     examples.Postgres,
 		sts:              examples.PostgresSts,
 		backingResources: examples.PostgresBackingResources,
 		addTestData:      addPostgresTestData,
@@ -30,7 +30,7 @@ func Test_Postgres_Restore(t *testing.T) {
 func Test_Postgres_Upgrade(t *testing.T) {
 	upgradeFlow(t, &upgradeFlowSpec{
 		flowSpec: flowSpec{
-			databaseType:     "postgres",
+			databaseType:     examples.Postgres,
 			sts:              examples.PostgresSts,
 			backingResources: examples.PostgresBackingResources,
 			addTestData:      addPostgresTestData,
