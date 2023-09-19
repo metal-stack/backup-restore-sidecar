@@ -188,7 +188,7 @@ func (db *Meilisearch) importDump(ctx context.Context, dump string) error {
 	)
 
 	args := []string{"--import-dump", dump, "--master-key", db.apikey, "--dump-dir", constants.RestoreDir, "--db-path", db.datadir, "--http-addr", "localhost:1"}
-	cmd := exec.CommandContext(ctx, meilisearchCmd, args...) // nolint:gosec
+	cmd := exec.CommandContext(ctx, meilisearchCmd, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
