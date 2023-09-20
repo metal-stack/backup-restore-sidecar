@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 )
 
 const (
@@ -51,7 +52,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 
 	// Check if required commands are present
 	for _, command := range requiredCommands {
-		if ok := db.isCommandPresent(command); !ok {
+		if ok := utils.IsCommandPresent(command); !ok {
 			db.log.Errorf("%q is not present, skipping upgrade", command)
 			return nil
 		}
@@ -84,7 +85,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 
 	// Check if old pg_config are present and match pgVersion
 	oldPostgresConfigCmd := path.Join(oldPostgresBinDir, postgresConfigCmd)
-	if ok := db.isCommandPresent(oldPostgresConfigCmd); !ok {
+	if ok := utils.IsCommandPresent(oldPostgresConfigCmd); !ok {
 		db.log.Infof("%q is not present, please make sure that at least one backup was taken with the old postgres version or restart the backup-restore-sidecar container with the old postgres version before running an upgrade, skipping upgrade", oldPostgresConfigCmd)
 		return nil
 	}
@@ -242,19 +243,6 @@ func (db *Postgres) getDatabaseVersion(pgVersionFile string) (int, error) {
 	}
 
 	return pgVersion, nil
-}
-
-func (db *Postgres) isCommandPresent(command string) bool {
-	p, err := exec.LookPath(command)
-	if err != nil {
-		return false
-	}
-
-	if _, err := os.Stat(p); errors.Is(err, fs.ErrNotExist) {
-		return false
-	}
-
-	return true
 }
 
 func (db *Postgres) getBinDir(ctx context.Context, pgConfigCmd string) (string, error) {

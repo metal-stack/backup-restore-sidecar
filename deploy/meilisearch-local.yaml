@@ -6,37 +6,58 @@ kind: StatefulSet
 metadata:
   creationTimestamp: null
   labels:
-    app: rethinkdb
-  name: rethinkdb
+    app: meilisearch
+  name: meilisearch
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: rethinkdb
-  serviceName: rethinkdb
+      app: meilisearch
+  serviceName: meilisearch
   template:
     metadata:
       creationTimestamp: null
       labels:
-        app: rethinkdb
+        app: meilisearch
     spec:
       containers:
       - command:
         - backup-restore-sidecar
         - wait
-        env:
-        - name: RETHINKDB_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              key: rethinkdb-password
-              name: rethinkdb
-        image: rethinkdb:2.4.0
-        name: rethinkdb
+        image: getmeili/meilisearch:v1.3.0
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 6
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 5
+        name: meilisearch
         ports:
-        - containerPort: 8080
-        - containerPort: 28015
+        - containerPort: 7700
+          name: http
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
         resources: {}
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 10
         volumeMounts:
+        - mountPath: /backup
+          name: backup
         - mountPath: /data
           name: data
         - mountPath: /usr/local/bin/backup-restore-sidecar
@@ -48,7 +69,18 @@ spec:
         - backup-restore-sidecar
         - start
         - --log-level=debug
-        image: rethinkdb:2.4.0
+        env:
+        - name: BACKUP_RESTORE_SIDECAR_MEILISEARCH_APIKEY
+          valueFrom:
+            secretKeyRef:
+              key: MEILISEARCH_APIKEY
+              name: meilisearch
+        - name: BACKUP_RESTORE_SIDECAR_MEILISEARCH_URL
+          valueFrom:
+            secretKeyRef:
+              key: MEILISEARCH_URL
+              name: meilisearch
+        image: getmeili/meilisearch:v1.3.0
         name: backup-restore-sidecar
         ports:
         - containerPort: 8000
@@ -59,25 +91,15 @@ spec:
           name: backup
         - mountPath: /data
           name: data
-        - mountPath: /rethinkdb-secret
-          name: rethinkdb-credentials
         - mountPath: /etc/backup-restore-sidecar
           name: backup-restore-sidecar-config
         - mountPath: /usr/local/bin/backup-restore-sidecar
           name: bin-provision
           subPath: backup-restore-sidecar
-        - mountPath: /usr/local/bin/rethinkdb-dump
-          name: bin-provision
-          subPath: rethinkdb-dump
-        - mountPath: /usr/local/bin/rethinkdb-restore
-          name: bin-provision
-          subPath: rethinkdb-restore
       initContainers:
       - command:
         - cp
         - /backup-restore-sidecar
-        - /rethinkdb/rethinkdb-dump
-        - /rethinkdb/rethinkdb-restore
         - /bin-provision
         image: ghcr.io/metal-stack/backup-restore-sidecar:latest
         imagePullPolicy: IfNotPresent
@@ -93,14 +115,8 @@ spec:
       - name: backup
         persistentVolumeClaim:
           claimName: backup
-      - name: rethinkdb-credentials
-        secret:
-          items:
-          - key: rethinkdb-password
-            path: rethinkdb-password.txt
-          secretName: rethinkdb
       - configMap:
-          name: backup-restore-sidecar-config-rethinkdb
+          name: backup-restore-sidecar-config-meilisearch
         name: backup-restore-sidecar-config
       - emptyDir: {}
         name: bin-provision
@@ -135,47 +151,44 @@ data:
   config.yaml: |
     ---
     bind-addr: 0.0.0.0
-    db: rethinkdb
-    db-data-directory: /data/rethinkdb/
+    db: meilisearch
+    db-data-directory: /data/data.ms/
     backup-provider: local
-    rethinkdb-passwordfile: /rethinkdb-secret/rethinkdb-password.txt
     backup-cron-schedule: "*/1 * * * *"
-    object-prefix: rethinkdb-test
+    object-prefix: meilisearch-test
+    compression-method: targz
     post-exec-cmds:
-    # IMPORTANT: the --directory needs to point to the exact sidecar data dir, otherwise the database will be restored to the wrong location
-    - rethinkdb --bind all --directory /data/rethinkdb --initial-password ${RETHINKDB_PASSWORD}
+    - meilisearch --db-path=/data/data.ms/ --dump-dir=/backup/upload/files
 kind: ConfigMap
 metadata:
   creationTimestamp: null
-  name: backup-restore-sidecar-config-rethinkdb
+  name: backup-restore-sidecar-config-meilisearch
 ---
 apiVersion: v1
 kind: Secret
 metadata:
   creationTimestamp: null
-  name: rethinkdb
+  name: meilisearch
 stringData:
-  rethinkdb-password: test123!
+  MEILISEARCH_APIKEY: test123!
+  MEILISEARCH_URL: http://localhost:7700
 ---
 apiVersion: v1
 kind: Service
 metadata:
   creationTimestamp: null
   labels:
-    app: rethinkdb
-  name: rethinkdb
+    app: meilisearch
+  name: meilisearch
 spec:
   ports:
-  - name: "10080"
-    port: 10080
-    targetPort: 10080
-  - name: "28015"
-    port: 28015
-    targetPort: 28015
+  - name: "7700"
+    port: 7700
+    targetPort: 7700
   - name: metrics
     port: 2112
     targetPort: 2112
   selector:
-    app: rethinkdb
+    app: meilisearch
 status:
   loadBalancer: {}

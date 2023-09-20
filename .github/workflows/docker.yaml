@@ -70,7 +70,7 @@ jobs:
     - name: Lint
       uses: golangci/golangci-lint-action@v3
       with:
-        args: --build-tags integration -p bugs -p unused --timeout=3m
+        args: --build-tags integration -p bugs -p unused --timeout=10m
 
     - name: Test
       run: |

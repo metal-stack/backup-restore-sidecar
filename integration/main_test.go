@@ -7,8 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -17,11 +15,9 @@ import (
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	brsclient "github.com/metal-stack/backup-restore-sidecar/pkg/client"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	"sigs.k8s.io/yaml"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -32,17 +28,19 @@ import (
 
 type flowSpec struct {
 	databaseType string
-	// slice of images, executed in order during upgrade
-	databaseImages   []string
-	sts              func(namespace, image string) *appsv1.StatefulSet
+
+	sts              func(namespace string) *appsv1.StatefulSet
 	backingResources func(namespace string) []client.Object
 	addTestData      func(t *testing.T, ctx context.Context)
 	verifyTestData   func(t *testing.T, ctx context.Context)
 }
 
-const (
-	backupRestoreSidecarContainerImage = "ghcr.io/metal-stack/backup-restore-sidecar:latest"
-)
+type upgradeFlowSpec struct {
+	flowSpec
+
+	// slice of images, executed in order during upgrade
+	databaseImages []string
+}
 
 var (
 	restConfig *rest.Config
@@ -65,11 +63,7 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 	var (
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
 		ns          = testNamespace(t)
-		image       string
 	)
-	if len(spec.databaseImages) > 0 {
-		image = spec.databaseImages[0]
-	}
 
 	defer cancel()
 
@@ -95,12 +89,10 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 	t.Log("applying resource manifests")
 
 	objects := func() []client.Object {
-		objects := []client.Object{spec.sts(ns.Name, image)}
+		objects := []client.Object{spec.sts(ns.Name)}
 		objects = append(objects, spec.backingResources(ns.Name)...)
 		return objects
 	}
-
-	dumpToExamples(t, spec.databaseType+"-local.yaml", objects()...)
 
 	for _, o := range objects() {
 		o := o
@@ -108,9 +100,9 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 		require.NoError(t, err)
 	}
 
-	podName := spec.sts(ns.Name, image).Name + "-0"
+	podName := spec.sts(ns.Name).Name + "-0"
 
-	err = waitForPodRunnig(ctx, podName, ns.Name)
+	err = waitForPodRunning(ctx, podName, ns.Name)
 	require.NoError(t, err)
 
 	t.Log("adding test data to database")
@@ -147,7 +139,7 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 
 	t.Log("remove sts and delete data volume")
 
-	err = c.Delete(ctx, spec.sts(ns.Name, image))
+	err = c.Delete(ctx, spec.sts(ns.Name))
 	require.NoError(t, err)
 
 	err = c.Delete(ctx, &corev1.PersistentVolumeClaim{
@@ -168,10 +160,10 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 
 	t.Log("recreate sts")
 
-	err = c.Create(ctx, spec.sts(ns.Name, image))
+	err = c.Create(ctx, spec.sts(ns.Name))
 	require.NoError(t, err)
 
-	err = waitForPodRunnig(ctx, podName, ns.Name)
+	err = waitForPodRunning(ctx, podName, ns.Name)
 	require.NoError(t, err)
 
 	t.Log("verify that data gets restored")
@@ -179,7 +171,7 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 	spec.verifyTestData(t, ctx)
 }
 
-func upgradeFlow(t *testing.T, spec *flowSpec) {
+func upgradeFlow(t *testing.T, spec *upgradeFlowSpec) {
 	t.Log("running upgrade flow")
 
 	require.GreaterOrEqual(t, len(spec.databaseImages), 2, "at least 2 database images must be specified for the upgrade test")
@@ -212,10 +204,15 @@ func upgradeFlow(t *testing.T, spec *flowSpec) {
 	err := c.Create(ctx, ns)
 	require.NoError(t, client.IgnoreAlreadyExists(err))
 
-	t.Log("applying resource manifests")
+	t.Logf("starting database with initial image %q", initialImage)
+
+	sts := spec.sts(ns.Name)
+	for i := range sts.Spec.Template.Spec.Containers {
+		sts.Spec.Template.Spec.Containers[i].Image = initialImage
+	}
 
 	objects := func() []client.Object {
-		objects := []client.Object{spec.sts(ns.Name, initialImage)}
+		objects := []client.Object{sts}
 		objects = append(objects, spec.backingResources(ns.Name)...)
 		return objects
 	}
@@ -226,53 +223,60 @@ func upgradeFlow(t *testing.T, spec *flowSpec) {
 		require.NoError(t, err)
 	}
 
-	podName := spec.sts(ns.Name, initialImage).Name + "-0"
+	podName := spec.sts(ns.Name).Name + "-0"
 
-	err = waitForPodRunnig(ctx, podName, ns.Name)
+	err = waitForPodRunning(ctx, podName, ns.Name)
 	require.NoError(t, err)
 
 	t.Log("adding test data to database")
 
 	spec.addTestData(t, ctx)
 
-	t.Log("taking a backup")
-
-	brsc, err := brsclient.New(ctx, "http://localhost:8000")
-	require.NoError(t, err)
-
-	_, err = brsc.DatabaseServiceClient().CreateBackup(ctx, &v1.CreateBackupRequest{})
-	assert.NoError(t, err)
-
-	var backup *v1.Backup
-	err = retry.Do(func() error {
-		backups, err := brsc.BackupServiceClient().ListBackups(ctx, &v1.ListBackupsRequest{})
-		if err != nil {
-			return err
-		}
-
-		if len(backups.Backups) == 0 {
-			return fmt.Errorf("no backups were made yet")
-		}
-
-		backup = backups.Backups[0]
-
-		return nil
-	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
-	require.NoError(t, err)
-	require.NotNil(t, backup)
-
 	for _, image := range nextImages {
-		image := image
-		nextSts := spec.sts(ns.Name, image).DeepCopy()
+		t.Log("taking a backup")
+
+		brsc, err := brsclient.New(ctx, "http://localhost:8000")
+		require.NoError(t, err)
+
+		var backup *v1.Backup
+		err = retry.Do(func() error {
+			_, err = brsc.DatabaseServiceClient().CreateBackup(ctx, &v1.CreateBackupRequest{})
+			if err != nil {
+				t.Log(err)
+				return err
+			}
+
+			backups, err := brsc.BackupServiceClient().ListBackups(ctx, &v1.ListBackupsRequest{})
+			if err != nil {
+				return err
+			}
+
+			if len(backups.Backups) == 0 {
+				return fmt.Errorf("no backups were made yet")
+			}
+
+			backup = backups.Backups[0]
+
+			return nil
+		}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
+		require.NoError(t, err)
+		require.NotNil(t, backup)
+
+		nextSts := spec.sts(ns.Name)
+		for i := range nextSts.Spec.Template.Spec.Containers {
+			nextSts.Spec.Template.Spec.Containers[i].Image = image
+		}
 		t.Logf("deploy sts with next database version %q, container %q", image, nextSts.Spec.Template.Spec.Containers[0].Image)
 
 		err = c.Update(ctx, nextSts, &client.UpdateOptions{})
 		require.NoError(t, err)
 
-		time.Sleep(10 * time.Second)
+		time.Sleep(1 * time.Second)
 
-		// TODO maybe better wait for generation changed
-		err = waitForPodRunnig(ctx, podName, ns.Name)
+		err = waitForStsRunning(ctx, sts.Name, ns.Name)
+		require.NoError(t, err)
+
+		err = waitForPodRunning(ctx, podName, ns.Name)
 		require.NoError(t, err)
 
 		t.Log("verify that data is still the same")
@@ -321,41 +325,7 @@ func newKubernetesClient() (client.Client, error) {
 	return c, nil
 }
 
-func dumpToExamples(t *testing.T, name string, resources ...client.Object) {
-	content := []byte(`# DO NOT EDIT! This is auto-generated by the integration tests
----
-`)
-
-	for i, r := range resources {
-		r.SetNamespace("") // not needed for example manifests
-
-		r := r.DeepCopyObject()
-
-		if sts, ok := r.(*appsv1.StatefulSet); ok {
-			// host network is only for integration testing purposes
-			sts.Spec.Template.Spec.HostNetwork = false
-		}
-
-		raw, err := yaml.Marshal(r)
-		require.NoError(t, err)
-
-		if i != len(resources)-1 {
-			raw = append(raw, []byte("---\n")...)
-		}
-
-		content = append(content, raw...)
-	}
-
-	_, filename, _, _ := runtime.Caller(1)
-
-	dest := path.Join(path.Dir(filename), "..", "deploy", name)
-	t.Logf("example manifest written to %s", dest)
-
-	err := os.WriteFile(dest, content, 0600)
-	require.NoError(t, err)
-}
-
-func waitForPodRunnig(ctx context.Context, name, namespace string) error {
+func waitForPodRunning(ctx context.Context, name, namespace string) error {
 	return retry.Do(func() error {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -384,7 +354,33 @@ func waitForPodRunnig(ctx context.Context, name, namespace string) error {
 		}
 
 		return nil
-	}, retry.Context(ctx), retry.Attempts(0))
+	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
+}
+
+func waitForStsRunning(ctx context.Context, name, namespace string) error {
+	return retry.Do(func() error {
+		sts := &appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			},
+		}
+
+		err := c.Get(ctx, client.ObjectKeyFromObject(sts), sts)
+		if err != nil {
+			return err
+		}
+
+		if sts.Status.CurrentRevision != sts.Status.UpdateRevision {
+			return fmt.Errorf("sts revision is not yet running running")
+		}
+
+		if sts.Status.ReadyReplicas != sts.Status.Replicas {
+			return fmt.Errorf("not all replicas in ready status")
+		}
+
+		return nil
+	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
 }
 
 func waitUntilNotFound(ctx context.Context, obj client.Object) error {
@@ -398,5 +394,5 @@ func waitUntilNotFound(ctx context.Context, obj client.Object) error {
 		}
 
 		return fmt.Errorf("resource is still running: %s", obj.GetName())
-	}, retry.Context(ctx), retry.Attempts(0))
+	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
 }

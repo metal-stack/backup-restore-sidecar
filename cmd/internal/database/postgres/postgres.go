@@ -46,7 +46,7 @@ func New(log *zap.SugaredLogger, datadir string, host string, port int, user str
 	}
 }
 
-// Check checks whether a backup needs to be restored or not, returns true if it needs a backup
+// Check indicates whether a restore of the database is required or not.
 func (db *Postgres) Check(_ context.Context) (bool, error) {
 	empty, err := utils.IsEmpty(db.datadir)
 	if err != nil {
@@ -157,7 +157,7 @@ func (db *Postgres) Probe(ctx context.Context) error {
 	// TODO: use postgres client to connect
 	conn, err := net.DialTimeout("tcp", net.JoinHostPort(db.host, strconv.Itoa(db.port)), connectionTimeout)
 	if err != nil {
-		return fmt.Errorf("connection error:%w", err)
+		return fmt.Errorf("connection error: %w", err)
 	}
 	defer conn.Close()
 	return nil

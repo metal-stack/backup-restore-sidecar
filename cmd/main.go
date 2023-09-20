@@ -18,6 +18,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/etcd"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/meilisearch"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/postgres"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/rethinkdb"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/initializer"
@@ -56,6 +57,9 @@ const (
 	postgresHostFlg     = "postgres-host"
 	postgresPasswordFlg = "postgres-password"
 	postgresPortFlg     = "postgres-port"
+
+	meilisearchURLFlg    = "meilisearch-url"
+	meilisearchAPIKeyFlg = "meilisearch-apikey"
 
 	rethinkDBPasswordFileFlg = "rethinkdb-passwordfile"
 	rethinkDBURLFlg          = "rethinkdb-url"
@@ -144,6 +148,7 @@ var startCmd = &cobra.Command{
 		metrics.Start(logger.Named("metrics"))
 
 		initializer.New(logger.Named("initializer"), addr, db, bp, comp, metrics, viper.GetString(databaseDatadirFlg)).Start(stop)
+
 		if err := probe.Start(stop, logger.Named("probe"), db); err != nil {
 			return err
 		}
@@ -265,7 +270,7 @@ func init() {
 	rootCmd.AddCommand(startCmd, waitCmd, restoreCmd, createBackupCmd)
 
 	rootCmd.PersistentFlags().StringP(logLevelFlg, "", "info", "sets the application log level")
-	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb|etcd]")
+	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb|etcd|meilisearch]")
 	rootCmd.PersistentFlags().StringP(databaseDatadirFlg, "", "", "the directory where the database stores its data in")
 
 	err := viper.BindPFlags(rootCmd.PersistentFlags())
@@ -425,6 +430,17 @@ func initDatabase() error {
 			viper.GetString(etcdEndpoints),
 			viper.GetString(etcdName),
 		)
+	case "meilisearch":
+		var err error
+		db, err = meilisearch.New(
+			logger.Named("meilisearch"),
+			datadir,
+			viper.GetString(meilisearchURLFlg),
+			viper.GetString(meilisearchAPIKeyFlg),
+		)
+		if err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unsupported database type: %s", dbString)
 	}

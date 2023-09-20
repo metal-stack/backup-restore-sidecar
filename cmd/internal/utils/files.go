@@ -3,7 +3,9 @@ package utils
 import (
 	"errors"
 	"io"
+	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/spf13/afero"
@@ -64,4 +66,17 @@ func Copy(fs afero.Fs, src, dst string) error {
 	}
 
 	return nil
+}
+
+func IsCommandPresent(command string) bool {
+	p, err := exec.LookPath(command)
+	if err != nil {
+		return false
+	}
+
+	if _, err := os.Stat(p); errors.Is(err, fs.ErrNotExist) {
+		return false
+	}
+
+	return true
 }
