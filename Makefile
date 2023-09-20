@@ -22,7 +22,7 @@ GO_RUN_ARG := -run $(GO_RUN)
 endif
 
 .PHONY: build
-build:
+build: generate-examples
 	go mod tidy
 	go build -ldflags "$(LINKMODE)" -tags 'osusergo netgo static_build' -o bin/backup-restore-sidecar github.com/metal-stack/backup-restore-sidecar/cmd
 	strip bin/backup-restore-sidecar
@@ -31,10 +31,14 @@ build:
 test: build
 	go test -cover ./...
 
+.PHONY: generate-examples
+generate-examples:
+	go run ./pkg/generate/examples/dump.go
+
 .PHONY: test-integration
 test-integration: kind-cluster-create
 	kind --name backup-restore-sidecar load docker-image ghcr.io/metal-stack/backup-restore-sidecar:latest
-	KUBECONFIG=$(KUBECONFIG) go test $(GO_RUN_ARG) -tags=integration -count 1 -v -p 1 -timeout 10m ./...
+	KUBECONFIG=$(KUBECONFIG) go test $(GO_RUN_ARG) -tags=integration -count 1 -v -p 1 -timeout 20m ./...
 
 .PHONY: proto
 proto:
@@ -59,6 +63,10 @@ start-rethinkdb:
 .PHONY: start-etcd
 start-etcd:
 	$(MAKE)	start	DB=etcd
+
+.PHONY: start-meilisearch
+start-meilisearch:
+	$(MAKE)	start	DB=meilisearch
 
 .PHONY: start
 start: kind-cluster-create
