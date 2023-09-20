@@ -41,6 +41,13 @@ type Meilisearch struct {
 
 // New instantiates a new meilisearch database
 func New(log *zap.SugaredLogger, datadir string, url string, apikey string) (*Meilisearch, error) {
+	if url == "" {
+		return nil, fmt.Errorf("meilisearch api url cannot be empty")
+	}
+	if apikey == "" {
+		return nil, fmt.Errorf("meilisearch api key cannot be empty")
+	}
+
 	client := meilisearch.NewClient(meilisearch.ClientConfig{
 		Host:   url,
 		APIKey: apikey,
