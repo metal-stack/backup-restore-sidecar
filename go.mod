@@ -26,7 +26,7 @@ require (
 	go.uber.org/zap v1.25.0
 	golang.org/x/sync v0.3.0
 	google.golang.org/api v0.140.0
-	google.golang.org/grpc v1.58.0
+	google.golang.org/grpc v1.58.3
 	google.golang.org/protobuf v1.31.0
 	gopkg.in/rethinkdb/rethinkdb-go.v6 v6.2.2
 	k8s.io/api v0.28.1
