@@ -33,11 +33,11 @@ func Test_BackupProviderS3(t *testing.T) {
 	defer func() {
 		if t.Failed() {
 			r, err := c.Logs(ctx)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			if err == nil {
 				logs, err := io.ReadAll(r)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				fmt.Println(string(logs))
 			}
@@ -109,7 +109,7 @@ func Test_BackupProviderS3(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = versions.Get("foo")
-		assert.Error(t, err)
+		require.Error(t, err)
 
 		allVersions := versions.List()
 		require.Len(t, allVersions, backupAmount)
@@ -123,7 +123,7 @@ func Test_BackupProviderS3(t *testing.T) {
 			assert.NotZero(t, v.Date)
 
 			getVersion, err := versions.Get(v.Version)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, v, getVersion)
 
 			if i == 0 {

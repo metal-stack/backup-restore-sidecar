@@ -92,7 +92,7 @@ func Test_BackupProviderLocal(t *testing.T) {
 				require.NoError(t, err)
 
 				_, err = versions.Get("foo")
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				allVersions := versions.List()
 				amount := backupAmount
@@ -108,7 +108,7 @@ func Test_BackupProviderLocal(t *testing.T) {
 					assert.NotZero(t, v.Date)
 
 					getVersion, err := versions.Get(v.Version)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					assert.Equal(t, v, getVersion)
 
 					if i == 0 {

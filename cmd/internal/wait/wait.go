@@ -34,12 +34,12 @@ func Start(ctx context.Context, log *zap.SugaredLogger, addr string) error {
 				continue
 			}
 
-			if resp.Status == v1.StatusResponse_DONE {
-				log.Infow("initializer succeeded, database can be started", "message", resp.Message)
+			if resp.GetStatus() == v1.StatusResponse_DONE {
+				log.Infow("initializer succeeded, database can be started", "message", resp.GetMessage())
 				return nil
 			}
 
-			log.Infow("initializer has not yet succeeded", "status", resp.Status, "message", resp.Message)
+			log.Infow("initializer has not yet succeeded", "status", resp.GetStatus(), "message", resp.GetMessage())
 		}
 	}
 }
