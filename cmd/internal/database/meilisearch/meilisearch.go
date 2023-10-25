@@ -80,7 +80,10 @@ func (db *Meilisearch) Backup(ctx context.Context) error {
 
 	db.log.Infow("dump creation triggered", "taskUUID", dumpResponse.TaskUID)
 
-	dumpTask, err := db.client.WaitForTask(dumpResponse.TaskUID, meilisearch.WaitParams{Context: ctx})
+	dumpTask, err := db.client.WaitForTask(dumpResponse.TaskUID, meilisearch.WaitParams{
+		Context:  ctx,
+		Interval: time.Millisecond * 50,
+	})
 	if err != nil {
 		return err
 	}

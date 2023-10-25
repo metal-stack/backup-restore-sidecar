@@ -222,8 +222,8 @@ var restoreListCmd = &cobra.Command{
 		}
 
 		var data [][]string
-		for _, b := range backups.Backups {
-			data = append(data, []string{b.Timestamp.AsTime().String(), b.Name, b.Version})
+		for _, b := range backups.GetBackups() {
+			data = append(data, []string{b.GetTimestamp().AsTime().String(), b.GetName(), b.GetVersion()})
 		}
 
 		p := utils.NewTablePrinter()

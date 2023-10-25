@@ -126,11 +126,11 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 			return err
 		}
 
-		if len(backups.Backups) == 0 {
+		if len(backups.GetBackups()) == 0 {
 			return fmt.Errorf("no backups were made yet")
 		}
 
-		backup = backups.Backups[0]
+		backup = backups.GetBackups()[0]
 
 		return nil
 	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
@@ -251,11 +251,11 @@ func upgradeFlow(t *testing.T, spec *upgradeFlowSpec) {
 				return err
 			}
 
-			if len(backups.Backups) == 0 {
+			if len(backups.GetBackups()) == 0 {
 				return fmt.Errorf("no backups were made yet")
 			}
 
-			backup = backups.Backups[0]
+			backup = backups.GetBackups()[0]
 
 			return nil
 		}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))

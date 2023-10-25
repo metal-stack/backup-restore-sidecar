@@ -49,7 +49,7 @@ func (s *backupService) ListBackups(ctx context.Context, _ *v1.ListBackupsReques
 	response := &v1.BackupListResponse{}
 	for _, b := range backups {
 		b := b
-		response.Backups = append(response.Backups, &v1.Backup{
+		response.Backups = append(response.GetBackups(), &v1.Backup{
 			Name:      b.Name,
 			Version:   b.Version,
 			Timestamp: timestamppb.New(b.Date),
@@ -60,7 +60,7 @@ func (s *backupService) ListBackups(ctx context.Context, _ *v1.ListBackupsReques
 }
 
 func (s *backupService) RestoreBackup(ctx context.Context, req *v1.RestoreBackupRequest) (*v1.RestoreBackupResponse, error) {
-	if req.Version == "" {
+	if req.GetVersion() == "" {
 		return nil, status.Error(codes.InvalidArgument, "version to restore must be defined explicitly")
 	}
 
@@ -69,7 +69,7 @@ func (s *backupService) RestoreBackup(ctx context.Context, req *v1.RestoreBackup
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	version, err := versions.Get(req.Version)
+	version, err := versions.Get(req.GetVersion())
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
