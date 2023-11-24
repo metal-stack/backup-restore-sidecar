@@ -68,6 +68,10 @@ start-etcd:
 start-meilisearch:
 	$(MAKE)	start	DB=meilisearch
 
+.PHONY: start-redis
+start-redis:
+	$(MAKE)	start	DB=redis
+
 .PHONY: start
 start: kind-cluster-create
 	kind --name backup-restore-sidecar load docker-image ghcr.io/metal-stack/backup-restore-sidecar:latest

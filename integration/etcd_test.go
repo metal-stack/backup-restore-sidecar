@@ -13,8 +13,6 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"github.com/metal-stack/backup-restore-sidecar/pkg/generate/examples/examples"
-
-	_ "github.com/lib/pq"
 )
 
 func Test_ETCD_Restore(t *testing.T) {

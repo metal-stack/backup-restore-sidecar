@@ -9,11 +9,13 @@ Probably, it does not make sense to use this project with large databases. Howev
 ## Supported Databases
 
 | Database    | Image        | Status | Upgrade Support |
-| ----------- | ------------ | :----: | :-------------: |
-| postgres    | >= 12-alpine |  beta  |       ✅        |
-| rethinkdb   | >= 2.4.0     |  beta  |       ❌        |
-| ETCD        | >= 3.5       | alpha  |       ❌        |
-| meilisearch | >= 1.2.0     | alpha  |       ✅        |
+|-------------|--------------|:------:|:---------------:|
+| postgres    | >= 12-alpine |  beta  |        ✅        |
+| rethinkdb   | >= 2.4.0     |  beta  |        ❌        |
+| ETCD        | >= 3.5       | alpha  |        ❌        |
+| meilisearch | >= 1.2.0     | alpha  |        ✅        |
+| redis       | >= 6.0       | alpha  |        ❌        |
+| keydb       | >= 6.0       | alpha  |        ❌        |
 
 ## Database Upgrades
 
