@@ -28,7 +28,7 @@ type Redis struct {
 	client *redis.Client
 }
 
-// New instantiates a new meilisearch database
+// New instantiates a new redis database
 func New(log *zap.SugaredLogger, datadir string, addr string, password *string) (*Redis, error) {
 	if addr == "" {
 		return nil, fmt.Errorf("redis addr cannot be empty")
@@ -53,7 +53,7 @@ func New(log *zap.SugaredLogger, datadir string, addr string, password *string) 
 	}, nil
 }
 
-// Backup takes a dump of meilisearch with the meilisearch client.
+// Backup takes a dump of redis with the redis client.
 func (db *Redis) Backup(ctx context.Context) error {
 	if err := os.RemoveAll(constants.BackupDir); err != nil {
 		return fmt.Errorf("could not clean backup directory: %w", err)

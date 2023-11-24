@@ -44,6 +44,11 @@ func main() {
 			sts:     examples.RedisSts,
 			backing: examples.RedisBackingResources,
 		},
+		{
+			db:      examples.KeyDB,
+			sts:     examples.KeyDBSts,
+			backing: examples.KeyDBBackingResources,
+		},
 	} {
 		err := dumpToExamples(localExample.db+"-local.yaml", append([]client.Object{localExample.sts("default")}, localExample.backing("default")...)...)
 		if err != nil {

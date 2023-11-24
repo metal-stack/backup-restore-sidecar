@@ -1,0 +1,148 @@
+# THESE EXAMPLES ARE GENERATED!
+# Use them as a template for your deployment, but do not commit manual changes to these files.
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  creationTimestamp: null
+  labels:
+    app: keydb
+  name: keydb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keydb
+  serviceName: keydb
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: keydb
+    spec:
+      containers:
+      - command:
+        - backup-restore-sidecar
+        - wait
+        image: eqalpha/keydb:alpine
+        livenessProbe:
+          exec:
+            command:
+            - keydb-cli
+            - ping
+          failureThreshold: 3
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: keydb
+        ports:
+        - containerPort: 6379
+          name: client
+          protocol: TCP
+        readinessProbe:
+          exec:
+            command:
+            - keydb-cli
+            - ping
+          failureThreshold: 3
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources: {}
+        volumeMounts:
+        - mountPath: /data
+          name: data
+        - mountPath: /usr/local/bin/backup-restore-sidecar
+          name: bin-provision
+          subPath: backup-restore-sidecar
+        - mountPath: /etc/backup-restore-sidecar
+          name: backup-restore-sidecar-config
+      - command:
+        - backup-restore-sidecar
+        - start
+        - --log-level=debug
+        image: eqalpha/keydb:alpine
+        name: backup-restore-sidecar
+        ports:
+        - containerPort: 8000
+          name: grpc
+        resources: {}
+        volumeMounts:
+        - mountPath: /backup
+          name: backup
+        - mountPath: /data
+          name: data
+        - mountPath: /etc/backup-restore-sidecar
+          name: backup-restore-sidecar-config
+        - mountPath: /usr/local/bin/backup-restore-sidecar
+          name: bin-provision
+          subPath: backup-restore-sidecar
+      initContainers:
+      - command:
+        - cp
+        - /backup-restore-sidecar
+        - /bin-provision
+        image: ghcr.io/metal-stack/backup-restore-sidecar:latest
+        imagePullPolicy: IfNotPresent
+        name: backup-restore-sidecar-provider
+        resources: {}
+        volumeMounts:
+        - mountPath: /bin-provision
+          name: bin-provision
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: data
+      - name: backup
+        persistentVolumeClaim:
+          claimName: backup
+      - configMap:
+          name: backup-restore-sidecar-config-postgres
+        name: backup-restore-sidecar-config
+      - emptyDir: {}
+        name: bin-provision
+  updateStrategy: {}
+  volumeClaimTemplates:
+  - metadata:
+      creationTimestamp: null
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+    status: {}
+  - metadata:
+      creationTimestamp: null
+      name: backup
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+    status: {}
+status:
+  availableReplicas: 0
+  replicas: 0
+---
+apiVersion: v1
+data:
+  config.yaml: |
+    ---
+    bind-addr: 0.0.0.0
+    db: keydb
+    db-data-directory: /data/
+    backup-provider: local
+    backup-cron-schedule: "*/1 * * * *"
+    object-prefix: keydb-test
+    redis-addr: localhost:6379
+    post-exec-cmds:
+    - keydb-server
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: backup-restore-sidecar-config-postgres
