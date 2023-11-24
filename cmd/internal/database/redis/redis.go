@@ -29,20 +29,21 @@ type Redis struct {
 }
 
 // New instantiates a new meilisearch database
-func New(log *zap.SugaredLogger, datadir string, addr string, password string) (*Redis, error) {
+func New(log *zap.SugaredLogger, datadir string, addr string, password *string) (*Redis, error) {
 	if addr == "" {
 		return nil, fmt.Errorf("redis addr cannot be empty")
 	}
-	if password == "" {
-		return nil, fmt.Errorf("redis password cannot be empty")
-	}
 
-	client := redis.NewClient(&redis.Options{
-		Addr:     addr,
-		Password: password,
+	opts := &redis.Options{
+		Addr: addr,
 		// FIXME check if all dbs are backed up from 0
 		DB: 0,
-	})
+	}
+	if password != nil {
+		opts.Password = *password
+	}
+
+	client := redis.NewClient(opts)
 
 	return &Redis{
 		log:      log,

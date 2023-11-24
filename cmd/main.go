@@ -447,11 +447,15 @@ func initDatabase() error {
 		}
 	case "redis":
 		var err error
+		var password string
+		if viper.IsSet(redisPasswordFlg) {
+			password = viper.GetString(redisPasswordFlg)
+		}
 		db, err = redis.New(
 			logger.Named("redis"),
 			datadir,
 			viper.GetString(redisAddrFlg),
-			viper.GetString(redisPasswordFlg),
+			&password,
 		)
 		if err != nil {
 			return err

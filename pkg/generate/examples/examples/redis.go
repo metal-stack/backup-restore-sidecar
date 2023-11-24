@@ -237,7 +237,7 @@ db-data-directory: /data/redis/
 backup-provider: local
 backup-cron-schedule: "*/1 * * * *"
 object-prefix: redis-test
-redis-endpoints: http://localhost:6379
+redis-addr: localhost:6379
 post-exec-cmds:
 - redis-server
 `,
