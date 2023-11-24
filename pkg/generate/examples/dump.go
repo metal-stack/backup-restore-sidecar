@@ -39,6 +39,11 @@ func main() {
 			sts:     examples.RethinkDbSts,
 			backing: examples.RethinkDbBackingResources,
 		},
+		{
+			db:      examples.Redis,
+			sts:     examples.RedisSts,
+			backing: examples.RedisBackingResources,
+		},
 	} {
 		err := dumpToExamples(localExample.db+"-local.yaml", append([]client.Object{localExample.sts("default")}, localExample.backing("default")...)...)
 		if err != nil {

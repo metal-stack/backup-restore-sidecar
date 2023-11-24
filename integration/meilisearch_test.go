@@ -12,8 +12,6 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/pkg/generate/examples/examples"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	_ "github.com/lib/pq"
 )
 
 const (
