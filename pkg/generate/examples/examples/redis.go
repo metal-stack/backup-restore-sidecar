@@ -233,7 +233,7 @@ func RedisBackingResources(namespace string) []client.Object {
 				"config.yaml": `---
 bind-addr: 0.0.0.0
 db: redis
-db-data-directory: /data/redis/
+db-data-directory: /data/
 backup-provider: local
 backup-cron-schedule: "*/1 * * * *"
 object-prefix: redis-test
