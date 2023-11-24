@@ -36,8 +36,6 @@ func New(log *zap.SugaredLogger, datadir string, addr string, password *string) 
 
 	opts := &redis.Options{
 		Addr: addr,
-		// FIXME check if all dbs are backed up from 0
-		DB: 0,
 	}
 	if password != nil {
 		opts.Password = *password
