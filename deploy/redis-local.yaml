@@ -99,7 +99,7 @@ spec:
         persistentVolumeClaim:
           claimName: backup
       - configMap:
-          name: backup-restore-sidecar-config-postgres
+          name: backup-restore-sidecar-config-redis
         name: backup-restore-sidecar-config
       - emptyDir: {}
         name: bin-provision
@@ -145,4 +145,4 @@ data:
 kind: ConfigMap
 metadata:
   creationTimestamp: null
-  name: backup-restore-sidecar-config-postgres
+  name: backup-restore-sidecar-config-redis

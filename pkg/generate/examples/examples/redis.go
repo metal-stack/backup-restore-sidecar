@@ -168,7 +168,7 @@ func RedisSts(namespace string) *appsv1.StatefulSet {
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
-										Name: "backup-restore-sidecar-config-postgres",
+										Name: "backup-restore-sidecar-config-redis",
 									},
 								},
 							},
@@ -226,7 +226,7 @@ func RedisBackingResources(namespace string) []client.Object {
 				APIVersion: corev1.SchemeGroupVersion.String(),
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "backup-restore-sidecar-config-postgres",
+				Name:      "backup-restore-sidecar-config-redis",
 				Namespace: namespace,
 			},
 			Data: map[string]string{
