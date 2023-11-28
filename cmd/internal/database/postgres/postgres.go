@@ -7,7 +7,6 @@ import (
 	"os"
 	"path"
 	"strconv"
-	"time"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
@@ -15,8 +14,6 @@ import (
 )
 
 const (
-	connectionTimeout = 1 * time.Second
-
 	postgresBackupCmd = "pg_basebackup"
 	postgresBaseTar   = "base.tar.gz"
 	postgresWalTar    = "pg_wal.tar.gz"
