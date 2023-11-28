@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -53,11 +54,7 @@ func New(log *zap.SugaredLogger, datadir string, addr string, password *string) 
 
 // Backup takes a dump of redis with the redis client.
 func (db *Redis) Backup(ctx context.Context) error {
-	isMaster, err := db.isMaster(ctx)
-	if err != nil {
-		return err
-	}
-	if !isMaster {
+	if !db.isMaster(ctx) {
 		db.log.Info("this database is not master, not taking a backup")
 		return nil
 	}
@@ -71,7 +68,7 @@ func (db *Redis) Backup(ctx context.Context) error {
 	}
 
 	start := time.Now()
-	_, err = db.client.Save(ctx).Result()
+	_, err := db.client.Save(ctx).Result()
 	if err != nil {
 		return fmt.Errorf("could not create a dump: %w", err)
 	}
@@ -157,16 +154,11 @@ func (db *Redis) Upgrade(_ context.Context) error {
 	return nil
 }
 
-func (db *Redis) isMaster(ctx context.Context) (bool, error) {
-	infos, err := db.client.InfoMap(ctx).Result()
-	if err != nil {
-		return false, fmt.Errorf("connection error: %w", err)
-	}
-
-	master, ok := infos["Replication"]["role"]
-	if ok && master == "master" {
+func (db *Redis) isMaster(ctx context.Context) bool {
+	info := db.client.Info(ctx, "replication").Val()
+	if strings.Contains(info, "role:master") {
 		db.log.Info("this is database master")
-		return true, nil
+		return true
 	}
-	return false, nil
+	return false
 }
