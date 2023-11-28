@@ -53,6 +53,15 @@ func New(log *zap.SugaredLogger, datadir string, addr string, password *string) 
 
 // Backup takes a dump of redis with the redis client.
 func (db *Redis) Backup(ctx context.Context) error {
+	isMaster, err := db.isMaster(ctx)
+	if err != nil {
+		return err
+	}
+	if !isMaster {
+		db.log.Info("this database is not master, not taking a backup")
+		return nil
+	}
+
 	if err := os.RemoveAll(constants.BackupDir); err != nil {
 		return fmt.Errorf("could not clean backup directory: %w", err)
 	}
@@ -62,7 +71,7 @@ func (db *Redis) Backup(ctx context.Context) error {
 	}
 
 	start := time.Now()
-	_, err := db.client.Save(ctx).Result()
+	_, err = db.client.Save(ctx).Result()
 	if err != nil {
 		return fmt.Errorf("could not create a dump: %w", err)
 	}
@@ -146,4 +155,18 @@ func (db *Redis) Recover(ctx context.Context) error {
 // Upgrade performs an upgrade of the database in case a newer version of the database is detected.
 func (db *Redis) Upgrade(_ context.Context) error {
 	return nil
+}
+
+func (db *Redis) isMaster(ctx context.Context) (bool, error) {
+	infos, err := db.client.InfoMap(ctx).Result()
+	if err != nil {
+		return false, fmt.Errorf("connection error: %w", err)
+	}
+
+	master, ok := infos["Replication"]["role"]
+	if ok && master == "master" {
+		db.log.Info("this is database master")
+		return true, nil
+	}
+	return false, nil
 }
