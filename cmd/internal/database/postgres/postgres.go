@@ -2,8 +2,8 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
-	"net"
 	"os"
 	"path"
 	"strconv"
@@ -154,11 +154,18 @@ func (db *Postgres) Recover(ctx context.Context) error {
 
 // Probe figures out if the database is running and available for taking backups.
 func (db *Postgres) Probe(ctx context.Context) error {
-	// TODO: use postgres client to connect
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort(db.host, strconv.Itoa(db.port)), connectionTimeout)
+	// TODO is postgres db OK ?
+	connString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=postgres sslmode=disable", db.host, db.port, db.user, db.password)
+	var err error
+	dbc, err := sql.Open("postgres", connString)
 	if err != nil {
-		return fmt.Errorf("connection error: %w", err)
+		return fmt.Errorf("unable to open postgres connection %w", err)
 	}
-	defer conn.Close()
+	defer dbc.Close()
+
+	err = dbc.PingContext(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to ping postgres connection %w", err)
+	}
 	return nil
 }
