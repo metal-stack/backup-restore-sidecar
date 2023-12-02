@@ -163,7 +163,7 @@ func (db *Redis) isMaster(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("unable to get database info %w", err)
 	}
-	if strings.Contains(info, "role:master") {
+	if strings.Contains(info, "role:master") || strings.Contains(info, "role:active-replica") {
 		db.log.Info("this is database master")
 		return true, nil
 	}
