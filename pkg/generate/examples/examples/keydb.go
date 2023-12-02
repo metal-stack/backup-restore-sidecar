@@ -12,7 +12,7 @@ import (
 
 var (
 	KeyDB               = "keydb"
-	keyDBContainerImage = "eqalpha/keydb:alpine"
+	keyDBContainerImage = "eqalpha/keydb"
 )
 
 func KeyDBSts(namespace string) *appsv1.StatefulSet {

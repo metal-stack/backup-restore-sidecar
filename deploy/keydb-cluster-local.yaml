@@ -13,7 +13,7 @@ spec:
   selector:
     matchLabels:
       app: keydb
-  serviceName: keydb
+  serviceName: keydb-headless
   template:
     metadata:
       creationTimestamp: null
@@ -24,7 +24,7 @@ spec:
       - command:
         - backup-restore-sidecar
         - wait
-        image: eqalpha/keydb:alpine
+        image: eqalpha/keydb
         livenessProbe:
           exec:
             command:
@@ -59,11 +59,13 @@ spec:
           subPath: backup-restore-sidecar
         - mountPath: /etc/backup-restore-sidecar
           name: backup-restore-sidecar-config
+        - mountPath: /utils
+          name: backup-restore-sidecar-utils
       - command:
         - backup-restore-sidecar
         - start
         - --log-level=debug
-        image: eqalpha/keydb:alpine
+        image: eqalpha/keydb
         name: backup-restore-sidecar
         ports:
         - containerPort: 8000
@@ -105,9 +107,10 @@ spec:
         name: backup-restore-sidecar-config
       - name: backup-restore-sidecar-utils
         secret:
+          defaultMode: 493
           items:
-          - key: server.sh
-            path: server.sh
+          - key: keydb-cluster.sh
+            path: keydb-cluster.sh
           secretName: backup-restore-sidecar-util-keydb
       - emptyDir: {}
         name: bin-provision
@@ -149,7 +152,7 @@ data:
     object-prefix: keydb-test
     redis-addr: localhost:6379
     post-exec-cmds:
-    - /utils/server.sh
+    - /utils/keydb-cluster.sh
 kind: ConfigMap
 metadata:
   creationTimestamp: null
@@ -161,8 +164,26 @@ metadata:
   creationTimestamp: null
   name: backup-restore-sidecar-util-keydb
 stringData:
-  server.sh: "\n#!/bin/bash\nset -euxo pipefail\n\nhost=\"$(hostname)\"\nreplicas=()\n\nfor
+  keydb-cluster.sh: "#!/bin/bash\nset -ex\n\nhost=\"$(hostname)\"\nreplicas=()\n\nfor
     node in {0..2}; do\n  if [ \"${host}\" != \"keydb-${node}\" ]; then\n\t  replicas+=(\"--replicaof
-    keydb-${node} 6379\")\n  fi\ndone\nexec keydb-server /etc/keydb/redis.conf \\\n\t--active-replica
-    3 \\\n\t--multi-master yes \\\n\t--appendonly no \\\n\t--bind \"0.0.0.0\" \\\n\t--port
-    6379 \\\n\t--protected-mode no \\\n\t\"${replicas[@]}\"\n"
+    keydb-${node}-headless.keydb.default.svc.cluster.local 6379\")\n  fi\ndone\nexec
+    keydb-server /etc/keydb/redis.conf \\\n\t--active-replica yes \\\n\t--multi-master
+    yes \\\n\t--appendonly no \\\n\t--bind \"0.0.0.0\" \\\n\t--port 6379 \\\n\t--protected-mode
+    no \\\n\t\"${replicas[@]}\"\n"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  name: keydb-headless
+spec:
+  ports:
+  - name: server
+    port: 6379
+    protocol: TCP
+    targetPort: keydb
+  selector:
+    app: keydb
+  type: ClusterIP
+status:
+  loadBalancer: {}

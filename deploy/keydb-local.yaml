@@ -24,7 +24,7 @@ spec:
       - command:
         - backup-restore-sidecar
         - wait
-        image: eqalpha/keydb:alpine
+        image: eqalpha/keydb
         livenessProbe:
           exec:
             command:
@@ -63,7 +63,7 @@ spec:
         - backup-restore-sidecar
         - start
         - --log-level=debug
-        image: eqalpha/keydb:alpine
+        image: eqalpha/keydb
         name: backup-restore-sidecar
         ports:
         - containerPort: 8000

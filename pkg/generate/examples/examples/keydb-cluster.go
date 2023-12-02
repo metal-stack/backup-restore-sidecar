@@ -1,12 +1,15 @@
 package examples
 
 import (
+	"fmt"
+
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/metal-stack/metal-lib/pkg/pointer"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -26,7 +29,7 @@ func KeyDBClusterSts(namespace string) *appsv1.StatefulSet {
 			},
 		},
 		Spec: appsv1.StatefulSetSpec{
-			ServiceName: "keydb",
+			ServiceName: "keydb-headless",
 			Replicas:    pointer.Pointer(int32(3)),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
@@ -91,6 +94,10 @@ func KeyDBClusterSts(namespace string) *appsv1.StatefulSet {
 								{
 									Name:      "backup-restore-sidecar-config",
 									MountPath: "/etc/backup-restore-sidecar",
+								},
+								{
+									Name:      "backup-restore-sidecar-utils",
+									MountPath: "/utils",
 								},
 							},
 						},
@@ -181,10 +188,11 @@ func KeyDBClusterSts(namespace string) *appsv1.StatefulSet {
 									SecretName: "backup-restore-sidecar-util-keydb",
 									Items: []corev1.KeyToPath{
 										{
-											Key:  "server.sh",
-											Path: "server.sh",
+											Key:  "keydb-cluster.sh",
+											Path: "keydb-cluster.sh",
 										},
 									},
+									DefaultMode: pointer.Pointer(int32(0755)),
 								},
 							},
 						},
@@ -254,7 +262,7 @@ backup-cron-schedule: "*/1 * * * *"
 object-prefix: keydb-test
 redis-addr: localhost:6379
 post-exec-cmds:
-- /utils/server.sh
+- /utils/keydb-cluster.sh
 `,
 			},
 		},
@@ -269,27 +277,51 @@ post-exec-cmds:
 				Namespace: namespace,
 			},
 			StringData: map[string]string{
-				"server.sh": `
-#!/bin/bash
-set -euxo pipefail
+				"keydb-cluster.sh": fmt.Sprintf(`#!/bin/bash
+set -ex
 
+# FIXME: Hostname is actually backup-restore-sidecar-control-plane
 host="$(hostname)"
 replicas=()
 
 for node in {0..2}; do
   if [ "${host}" != "keydb-${node}" ]; then
-	  replicas+=("--replicaof keydb-${node} 6379")
+	  replicas+=("--replicaof keydb-${node}-headless.keydb.%s.svc.cluster.local 6379")
   fi
 done
 exec keydb-server /etc/keydb/redis.conf \
-	--active-replica 3 \
+	--active-replica yes \
 	--multi-master yes \
 	--appendonly no \
 	--bind "0.0.0.0" \
 	--port 6379 \
 	--protected-mode no \
 	"${replicas[@]}"
-`,
+`, namespace),
+			},
+		},
+		&corev1.Service{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Service",
+				APIVersion: corev1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "keydb-headless",
+				Namespace: namespace,
+			},
+			Spec: corev1.ServiceSpec{
+				Type: corev1.ServiceTypeClusterIP,
+				Ports: []corev1.ServicePort{
+					{
+						Name:       "server",
+						Port:       6379,
+						Protocol:   corev1.ProtocolTCP,
+						TargetPort: intstr.FromString("keydb"),
+					},
+				},
+				Selector: map[string]string{
+					"app": "keydb",
+				},
 			},
 		},
 	}
