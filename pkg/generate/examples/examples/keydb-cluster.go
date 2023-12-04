@@ -281,6 +281,7 @@ post-exec-cmds:
 set -ex
 
 # FIXME: Hostname is actually backup-restore-sidecar-control-plane
+env
 host="$(hostname)"
 replicas=()
 
@@ -289,7 +290,7 @@ for node in {0..2}; do
 	  replicas+=("--replicaof keydb-${node}-headless.keydb.%s.svc.cluster.local 6379")
   fi
 done
-exec keydb-server /etc/keydb/redis.conf \
+keydb-server /etc/keydb/redis.conf \
 	--active-replica yes \
 	--multi-master yes \
 	--appendonly no \
