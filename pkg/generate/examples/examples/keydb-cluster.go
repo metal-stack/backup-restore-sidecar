@@ -49,30 +49,40 @@ func KeyDBClusterSts(namespace string) *appsv1.StatefulSet {
 							Name:    "keydb",
 							Image:   keyDBContainerImage,
 							Command: []string{"backup-restore-sidecar", "wait"},
-							LivenessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									Exec: &corev1.ExecAction{
-										Command: []string{"keydb-cli", "ping"},
+							Env: []corev1.EnvVar{
+								{
+									Name: "MY_POD_NAME",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "metadata.name",
+										},
 									},
 								},
-								InitialDelaySeconds: 15,
-								TimeoutSeconds:      1,
-								PeriodSeconds:       5,
-								SuccessThreshold:    1,
-								FailureThreshold:    3,
 							},
-							ReadinessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									Exec: &corev1.ExecAction{
-										Command: []string{"keydb-cli", "ping"},
-									},
-								},
-								InitialDelaySeconds: 15,
-								TimeoutSeconds:      1,
-								PeriodSeconds:       5,
-								SuccessThreshold:    1,
-								FailureThreshold:    3,
-							},
+							// LivenessProbe: &corev1.Probe{
+							// 	ProbeHandler: corev1.ProbeHandler{
+							// 		Exec: &corev1.ExecAction{
+							// 			Command: []string{"keydb-cli", "ping"},
+							// 		},
+							// 	},
+							// 	InitialDelaySeconds: 15,
+							// 	TimeoutSeconds:      1,
+							// 	PeriodSeconds:       5,
+							// 	SuccessThreshold:    1,
+							// 	FailureThreshold:    3,
+							// },
+							// ReadinessProbe: &corev1.Probe{
+							// 	ProbeHandler: corev1.ProbeHandler{
+							// 		Exec: &corev1.ExecAction{
+							// 			Command: []string{"keydb-cli", "ping"},
+							// 		},
+							// 	},
+							// 	InitialDelaySeconds: 15,
+							// 	TimeoutSeconds:      1,
+							// 	PeriodSeconds:       5,
+							// 	SuccessThreshold:    1,
+							// 	FailureThreshold:    3,
+							// },
 							Ports: []corev1.ContainerPort{
 								// default ports are taken by kind keydb because running in host network
 								{
@@ -282,11 +292,10 @@ set -ex
 
 # FIXME: Hostname is actually backup-restore-sidecar-control-plane
 env
-host="$(hostname)"
 replicas=()
 
 for node in {0..2}; do
-  if [ "${host}" != "keydb-${node}" ]; then
+  if [ "${MY_POD_NAME}" != "keydb-${node}" ]; then
 	  replicas+=("--replicaof keydb-${node}-headless.keydb.%s.svc.cluster.local 6379")
   fi
 done

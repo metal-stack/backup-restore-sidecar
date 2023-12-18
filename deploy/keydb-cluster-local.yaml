@@ -24,32 +24,17 @@ spec:
       - command:
         - backup-restore-sidecar
         - wait
+        env:
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
         image: eqalpha/keydb
-        livenessProbe:
-          exec:
-            command:
-            - keydb-cli
-            - ping
-          failureThreshold: 3
-          initialDelaySeconds: 15
-          periodSeconds: 5
-          successThreshold: 1
-          timeoutSeconds: 1
         name: keydb
         ports:
         - containerPort: 6379
           name: client
           protocol: TCP
-        readinessProbe:
-          exec:
-            command:
-            - keydb-cli
-            - ping
-          failureThreshold: 3
-          initialDelaySeconds: 15
-          periodSeconds: 5
-          successThreshold: 1
-          timeoutSeconds: 1
         resources: {}
         volumeMounts:
         - mountPath: /data
@@ -164,11 +149,12 @@ metadata:
   creationTimestamp: null
   name: backup-restore-sidecar-util-keydb
 stringData:
-  keydb-cluster.sh: "#!/bin/bash\nset -ex\n\n# FIXME: Hostname is actually backup-restore-sidecar-control-plane\nenv\nhost=\"$(hostname)\"\nreplicas=()\n\nfor
-    node in {0..2}; do\n  if [ \"${host}\" != \"keydb-${node}\" ]; then\n\t  replicas+=(\"--replicaof
-    keydb-${node}-headless.keydb.default.svc.cluster.local 6379\")\n  fi\ndone\nkeydb-server
-    /etc/keydb/redis.conf \\\n\t--active-replica yes \\\n\t--multi-master yes \\\n\t--appendonly
-    no \\\n\t--bind \"0.0.0.0\" \\\n\t--port 6379 \\\n\t--protected-mode no \\\n\t\"${replicas[@]}\"\n"
+  keydb-cluster.sh: "#!/bin/bash\nset -ex\n\n# FIXME: Hostname is actually backup-restore-sidecar-control-plane\nenv\nreplicas=()\n\nfor
+    node in {0..2}; do\n  if [ \"${MY_POD_NAME}\" != \"keydb-${node}\" ]; then\n\t
+    \ replicas+=(\"--replicaof keydb-${node}-headless.keydb.default.svc.cluster.local
+    6379\")\n  fi\ndone\nkeydb-server /etc/keydb/redis.conf \\\n\t--active-replica
+    yes \\\n\t--multi-master yes \\\n\t--appendonly no \\\n\t--bind \"0.0.0.0\" \\\n\t--port
+    6379 \\\n\t--protected-mode no \\\n\t\"${replicas[@]}\"\n"
 ---
 apiVersion: v1
 kind: Service

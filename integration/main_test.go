@@ -81,7 +81,7 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 		require.NoError(t, err, "cleanup did not succeed")
 	}
 	cleanup()
-	defer cleanup()
+	// defer cleanup()
 
 	err := c.Create(ctx, ns)
 	require.NoError(t, client.IgnoreAlreadyExists(err))
