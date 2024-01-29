@@ -171,6 +171,23 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 		"--new-bindir", newPostgresBinDir,
 		"--link",
 	}
+
+	runsTimescaleDB, err := db.runningTimescaleDB(ctx, postgresConfigCmd)
+	if err != nil {
+		return err
+	}
+
+	if runsTimescaleDB {
+		db.log.Infow("running timescaledb, applying custom options for upgrade command")
+
+		// timescaledb libraries in this container are only compatible with the current postgres version
+		// do not load them anymore with the old postgresql server
+		pgUpgradeArgs = append(pgUpgradeArgs,
+			"--old-options", "-c shared_preload_libraries=''",
+			"--new-options", "-c timescaledb.restoring=on -c shared_preload_libraries=timescaledb",
+		)
+	}
+
 	cmd = exec.CommandContext(ctx, postgresUpgradeCmd, pgUpgradeArgs...) //nolint:gosec
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -253,6 +270,22 @@ func (db *Postgres) getBinDir(ctx context.Context, pgConfigCmd string) (string, 
 	}
 
 	return strings.TrimSpace(string(out)), nil
+}
+
+func (db *Postgres) runningTimescaleDB(ctx context.Context, pgConfigCmd string) (bool, error) {
+	cmd := exec.CommandContext(ctx, pgConfigCmd, "--pkglibdir")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, err
+	}
+
+	libDir := strings.TrimSpace(string(out))
+
+	if _, err := os.Stat(path.Join(libDir, "timescaledb.so")); err == nil {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // copyPostgresBinaries is needed to save old postgres binaries for a later major upgrade

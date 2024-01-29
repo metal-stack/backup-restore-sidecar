@@ -11,6 +11,8 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"go.uber.org/zap"
+
+	_ "github.com/lib/pq"
 )
 
 const (

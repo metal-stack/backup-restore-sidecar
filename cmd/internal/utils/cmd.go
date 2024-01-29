@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -52,7 +53,7 @@ func (c *CmdExecutor) ExecWithStreamingOutput(ctx context.Context, command strin
 
 	parts := strings.Fields(command)
 
-	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...) // nolint:gosec
+	cmd := exec.Command(parts[0], parts[1:]...) // nolint:gosec
 
 	c.log.Debugw("running command", "command", cmd.Path, "args", cmd.Args)
 
@@ -61,5 +62,30 @@ func (c *CmdExecutor) ExecWithStreamingOutput(ctx context.Context, command strin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stdout
 
-	return cmd.Run()
+	err := cmd.Start()
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		<-ctx.Done()
+
+		go func() {
+			time.Sleep(10 * time.Second)
+
+			c.log.Infow("force killing post-exec command now")
+			if err := cmd.Process.Signal(os.Kill); err != nil {
+				panic(err)
+			}
+		}()
+
+		c.log.Infow("sending sigint to post-exec command process")
+
+		err := cmd.Process.Signal(os.Interrupt)
+		if err != nil {
+			c.log.Errorw("unable to send interrupt to post-exec command", "error", err)
+		}
+	}()
+
+	return cmd.Wait()
 }
