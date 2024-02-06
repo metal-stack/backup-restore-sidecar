@@ -114,13 +114,22 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	gid, err := strconv.Atoi(pgUser.Gid)
+	if err != nil {
+		return err
+	}
 
 	// remove /data/postgres-new if present
-	newDataDirTemp := path.Join("/data", "postgres-new")
+	newDataDirTemp := path.Join("/data", "postgres-new") // TODO: /data should not be hardcoded
 	err = os.RemoveAll(newDataDirTemp)
 	if err != nil {
 		db.log.Errorw("unable to remove new datadir, skipping upgrade", "error", err)
 		return nil
+	}
+
+	err = os.Chown("/data", uid, gid)
+	if err != nil {
+		return err
 	}
 
 	// initdb -D /data/postgres-new
