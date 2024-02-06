@@ -11,6 +11,8 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"go.uber.org/zap"
+
+	_ "github.com/lib/pq"
 )
 
 const (
@@ -153,7 +155,7 @@ func (db *Postgres) Recover(ctx context.Context) error {
 func (db *Postgres) Probe(ctx context.Context) error {
 	// TODO is postgres db OK ?
 	connString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=postgres sslmode=disable", db.host, db.port, db.user, db.password)
-	var err error
+
 	dbc, err := sql.Open("postgres", connString)
 	if err != nil {
 		return fmt.Errorf("unable to open postgres connection %w", err)
@@ -164,5 +166,84 @@ func (db *Postgres) Probe(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("unable to ping postgres connection %w", err)
 	}
+
+	runsTimescaleDB, err := db.runningTimescaleDB(ctx, postgresConfigCmd)
+	if err == nil && runsTimescaleDB {
+		db.log.Infow("detected running timescaledb, running post-start hook to update timescaledb extension if necessary")
+
+		err = db.updateTimescaleDB(ctx, dbc)
+		if err != nil {
+			return fmt.Errorf("unable to update timescaledb: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (db *Postgres) updateTimescaleDB(ctx context.Context, dbc *sql.DB) error {
+	var (
+		databaseNames []string
+	)
+
+	databaseNameRows, err := dbc.QueryContext(ctx, "SELECT datname,datallowconn FROM pg_database")
+	if err != nil {
+		return fmt.Errorf("unable to get database names: %w", err)
+	}
+	defer databaseNameRows.Close()
+
+	for databaseNameRows.Next() {
+		var name string
+		var allowed bool
+		if err := databaseNameRows.Scan(&name, &allowed); err != nil {
+			return err
+		}
+
+		if allowed {
+			databaseNames = append(databaseNames, name)
+		}
+	}
+	if err := databaseNameRows.Err(); err != nil {
+		return err
+	}
+
+	for _, dbName := range databaseNames {
+		connString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", db.host, db.port, db.user, db.password, dbName)
+		dbc2, err := sql.Open("postgres", connString)
+		if err != nil {
+			return fmt.Errorf("unable to open postgres connection %w", err)
+		}
+		defer dbc2.Close()
+
+		rows, err := dbc2.QueryContext(ctx, "SELECT extname FROM pg_extension")
+		if err != nil {
+			return fmt.Errorf("unable to get extensions: %w", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var extName string
+			if err := rows.Scan(&extName); err != nil {
+				return err
+			}
+
+			if extName != "timescaledb" {
+				continue
+			}
+
+			db.log.Infow("updating timescaledb extension", "db-name", dbName)
+
+			_, err = dbc2.ExecContext(ctx, "ALTER EXTENSION timescaledb UPDATE")
+			if err != nil {
+				return fmt.Errorf("unable to update extension: %w", err)
+			}
+
+			break
+		}
+
+		if err := rows.Err(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

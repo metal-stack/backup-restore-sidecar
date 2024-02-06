@@ -114,13 +114,22 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	gid, err := strconv.Atoi(pgUser.Gid)
+	if err != nil {
+		return err
+	}
 
 	// remove /data/postgres-new if present
-	newDataDirTemp := path.Join("/data", "postgres-new")
+	newDataDirTemp := path.Join("/data", "postgres-new") // TODO: /data should not be hardcoded
 	err = os.RemoveAll(newDataDirTemp)
 	if err != nil {
 		db.log.Errorw("unable to remove new datadir, skipping upgrade", "error", err)
 		return nil
+	}
+
+	err = os.Chown("/data", uid, gid)
+	if err != nil {
+		return err
 	}
 
 	// initdb -D /data/postgres-new
@@ -171,6 +180,24 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 		"--new-bindir", newPostgresBinDir,
 		"--link",
 	}
+
+	runsTimescaleDB, err := db.runningTimescaleDB(ctx, postgresConfigCmd)
+	if err != nil {
+		return err
+	}
+
+	if runsTimescaleDB {
+		// see https://github.com/timescale/timescaledb/issues/1844 and https://github.com/timescale/timescaledb/issues/4503#issuecomment-1860883843
+		db.log.Infow("running timescaledb, applying custom options for upgrade command")
+
+		// timescaledb libraries in this container are only compatible with the current postgres version
+		// do not load them anymore with the old postgresql server
+		pgUpgradeArgs = append(pgUpgradeArgs,
+			"--old-options", "-c shared_preload_libraries=''",
+			"--new-options", "-c timescaledb.restoring=on -c shared_preload_libraries=timescaledb",
+		)
+	}
+
 	cmd = exec.CommandContext(ctx, postgresUpgradeCmd, pgUpgradeArgs...) //nolint:gosec
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -250,6 +277,29 @@ func (db *Postgres) getBinDir(ctx context.Context, pgConfigCmd string) (string, 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", err
+	}
+
+	return strings.TrimSpace(string(out)), nil
+}
+
+func (db *Postgres) runningTimescaleDB(ctx context.Context, pgConfigCmd string) (bool, error) {
+	libDir, err := db.getLibDir(ctx, pgConfigCmd)
+	if err != nil {
+		return false, err
+	}
+
+	if _, err := os.Stat(path.Join(libDir, "timescaledb.so")); err == nil {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (db *Postgres) getLibDir(ctx context.Context, pgConfigCmd string) (string, error) {
+	cmd := exec.CommandContext(ctx, pgConfigCmd, "--pkglibdir")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("unable to figure out lib dir: %w", err)
 	}
 
 	return strings.TrimSpace(string(out)), nil
