@@ -1,13 +1,13 @@
 package metrics
 
 import (
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.uber.org/zap"
 )
 
 // Metrics contains the collected metrics
@@ -54,7 +54,7 @@ func New() *Metrics {
 }
 
 // Start starts the metrics server
-func (m *Metrics) Start(log *zap.SugaredLogger) {
+func (m *Metrics) Start(log *slog.Logger) {
 	log.Info("starting metrics server")
 	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -64,7 +64,7 @@ func (m *Metrics) Start(log *zap.SugaredLogger) {
 			<h1>backup-restore metrics</h1>
 			<p><a href='/metrics'>Metrics</a></p </body </html>`))
 		if err != nil {
-			log.Errorw("error handling metrics root endpoint", "error", err)
+			log.Error("error handling metrics root endpoint", "error", err)
 		}
 	})
 
@@ -80,7 +80,7 @@ func (m *Metrics) Start(log *zap.SugaredLogger) {
 		}
 		err := server.ListenAndServe()
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 	}()
 }

@@ -3,6 +3,7 @@ package local
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,8 +14,6 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
-
-	"go.uber.org/zap"
 )
 
 const (
@@ -24,7 +23,7 @@ const (
 // BackupProviderLocal implements the backup provider interface for no backup provider (useful to disable sidecar functionality in development environments)
 type BackupProviderLocal struct {
 	fs              afero.Fs
-	log             *zap.SugaredLogger
+	log             *slog.Logger
 	config          *BackupProviderConfigLocal
 	nextBackupCount int64
 }
@@ -41,7 +40,7 @@ func (c *BackupProviderConfigLocal) validate() error {
 }
 
 // New returns a Local backup provider
-func New(log *zap.SugaredLogger, config *BackupProviderConfigLocal) (*BackupProviderLocal, error) {
+func New(log *slog.Logger, config *BackupProviderConfigLocal) (*BackupProviderLocal, error) {
 	if config == nil {
 		return nil, errors.New("local backup provider requires a provider config")
 	}
@@ -70,7 +69,7 @@ func New(log *zap.SugaredLogger, config *BackupProviderConfigLocal) (*BackupProv
 
 // EnsureBackupBucket ensures a backup bucket at the backup provider
 func (b *BackupProviderLocal) EnsureBackupBucket(_ context.Context) error {
-	b.log.Infow("ensuring backup bucket called for provider local")
+	b.log.Info("ensuring backup bucket called for provider local")
 
 	if err := b.fs.MkdirAll(b.config.LocalBackupPath, 0777); err != nil {
 		return fmt.Errorf("could not create local backup directory: %w", err)
@@ -81,14 +80,14 @@ func (b *BackupProviderLocal) EnsureBackupBucket(_ context.Context) error {
 
 // CleanupBackups cleans up backups according to the given backup cleanup policy at the backup provider
 func (b *BackupProviderLocal) CleanupBackups(_ context.Context) error {
-	b.log.Infow("cleanup backups called for provider local")
+	b.log.Info("cleanup backups called for provider local")
 
 	return nil
 }
 
 // DownloadBackup downloads the given backup version to the restoration folder
 func (b *BackupProviderLocal) DownloadBackup(_ context.Context, version *providers.BackupVersion) error {
-	b.log.Infow("download backup called for provider local")
+	b.log.Info("download backup called for provider local")
 
 	source := filepath.Join(b.config.LocalBackupPath, version.Name)
 	destination := filepath.Join(constants.DownloadDir, version.Name)
@@ -103,7 +102,7 @@ func (b *BackupProviderLocal) DownloadBackup(_ context.Context, version *provide
 
 // UploadBackup uploads a backup to the backup provider
 func (b *BackupProviderLocal) UploadBackup(_ context.Context, sourcePath string) error {
-	b.log.Infow("upload backups called for provider local")
+	b.log.Info("upload backups called for provider local")
 
 	destination := filepath.Join(b.config.LocalBackupPath, filepath.Base(sourcePath))
 
@@ -125,7 +124,7 @@ func (b *BackupProviderLocal) GetNextBackupName(_ context.Context) string {
 
 // ListBackups lists the available backups of the backup provider
 func (b *BackupProviderLocal) ListBackups(_ context.Context) (providers.BackupVersions, error) {
-	b.log.Infow("listing backups called for provider local")
+	b.log.Info("listing backups called for provider local")
 
 	d, err := b.fs.Open(b.config.LocalBackupPath)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	iofs "io/fs"
+	"log/slog"
 	"path"
 	"strings"
 	"testing"
@@ -12,14 +13,13 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap/zaptest"
 )
 
 func Test_BackupProviderLocal(t *testing.T) {
 	var (
 		ctx                     = context.Background()
 		localProviderBackupPath = defaultLocalBackupPath
-		log                     = zaptest.NewLogger(t).Sugar()
+		log                     = slog.Default()
 	)
 
 	for _, backupAmount := range []int{0, 1, 5, constants.DefaultObjectsToKeep + 5} {

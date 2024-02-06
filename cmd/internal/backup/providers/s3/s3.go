@@ -2,6 +2,7 @@ package s3
 
 import (
 	"context"
+	"log/slog"
 	"path"
 	"path/filepath"
 	"strings"
@@ -11,8 +12,6 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
-
-	"go.uber.org/zap"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -29,7 +28,7 @@ const (
 // BackupProviderS3 implements the backup provider interface for S3
 type BackupProviderS3 struct {
 	fs     afero.Fs
-	log    *zap.SugaredLogger
+	log    *slog.Logger
 	c      *s3.S3
 	sess   *session.Session
 	config *BackupProviderConfigS3
@@ -66,7 +65,7 @@ func (c *BackupProviderConfigS3) validate() error {
 }
 
 // New returns a S3 backup provider
-func New(log *zap.SugaredLogger, config *BackupProviderConfigS3) (*BackupProviderS3, error) {
+func New(log *slog.Logger, config *BackupProviderConfigS3) (*BackupProviderS3, error) {
 	if config == nil {
 		return nil, errors.New("s3 backup provider requires a provider config")
 	}
@@ -242,7 +241,7 @@ func (b *BackupProviderS3) UploadBackup(ctx context.Context, sourcePath string) 
 		destination = b.config.ObjectPrefix + "/" + destination
 	}
 
-	b.log.Debugw("uploading object", "src", sourcePath, "dest", destination)
+	b.log.Debug("uploading object", "src", sourcePath, "dest", destination)
 
 	uploader := s3manager.NewUploader(b.sess)
 	_, err = uploader.UploadWithContext(ctx, &s3manager.UploadInput{

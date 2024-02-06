@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"strings"
@@ -13,7 +14,6 @@ import (
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
-	"go.uber.org/zap"
 )
 
 const (
@@ -22,7 +22,7 @@ const (
 
 // Redis implements the database interface
 type Redis struct {
-	log      *zap.SugaredLogger
+	log      *slog.Logger
 	executor *utils.CmdExecutor
 	datadir  string
 
@@ -30,7 +30,7 @@ type Redis struct {
 }
 
 // New instantiates a new redis database
-func New(log *zap.SugaredLogger, datadir string, addr string, password *string) (*Redis, error) {
+func New(log *slog.Logger, datadir string, addr string, password *string) (*Redis, error) {
 	if addr == "" {
 		return nil, fmt.Errorf("redis addr cannot be empty")
 	}
@@ -83,7 +83,7 @@ func (db *Redis) Backup(ctx context.Context) error {
 	dumpDir := resp["dir"]
 	dumpFile := path.Join(dumpDir, redisDumpFile)
 
-	db.log.Infow("dump created successfully", "file", dumpFile, "duration", time.Since(start).String())
+	db.log.Info("dump created successfully", "file", dumpFile, "duration", time.Since(start).String())
 
 	// we need to do a copy here and cannot simply rename as the file system is
 	// mounted by two containers. the dump is created in the database container,
@@ -100,7 +100,7 @@ func (db *Redis) Backup(ctx context.Context) error {
 		return fmt.Errorf("unable to clean up dump: %w", err)
 	}
 
-	db.log.Debugw("successfully took backup of redis")
+	db.log.Debug("successfully took backup of redis")
 	return nil
 }
 
@@ -148,7 +148,7 @@ func (db *Redis) Recover(ctx context.Context) error {
 		return fmt.Errorf("unable to recover %w", err)
 	}
 
-	db.log.Infow("successfully restored redis database", "duration", time.Since(start).String())
+	db.log.Info("successfully restored redis database", "duration", time.Since(start).String())
 
 	return nil
 }
