@@ -155,7 +155,7 @@ func (db *Postgres) Recover(ctx context.Context) error {
 func (db *Postgres) Probe(ctx context.Context) error {
 	// TODO is postgres db OK ?
 	connString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=postgres sslmode=disable", db.host, db.port, db.user, db.password)
-	var err error
+
 	dbc, err := sql.Open("postgres", connString)
 	if err != nil {
 		return fmt.Errorf("unable to open postgres connection %w", err)
@@ -166,5 +166,30 @@ func (db *Postgres) Probe(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("unable to ping postgres connection %w", err)
 	}
+
+	runsTimescaleDB, err := db.runningTimescaleDB(ctx, postgresConfigCmd)
+	if err == nil && runsTimescaleDB {
+		db.log.Infow("detected running timescaledb, running post-start hook to update timescaledb extension if necessary")
+
+		_, err = dbc.ExecContext(ctx, "ALTER EXTENSION timescaledb UPDATE;")
+		if err != nil {
+			return fmt.Errorf("unable to alter extension: %w", err)
+		}
+
+		// we also need to upgrade the extension in the template1 database because there it is also installed
+
+		connString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=template1 sslmode=disable", db.host, db.port, db.user, db.password)
+		dbcTemplate1, err := sql.Open("postgres", connString)
+		if err != nil {
+			return fmt.Errorf("unable to open postgres connection %w", err)
+		}
+		defer dbcTemplate1.Close()
+
+		_, err = dbcTemplate1.ExecContext(ctx, "ALTER EXTENSION timescaledb UPDATE;")
+		if err != nil {
+			return fmt.Errorf("unable to alter extension for template database: %w", err)
+		}
+	}
+
 	return nil
 }

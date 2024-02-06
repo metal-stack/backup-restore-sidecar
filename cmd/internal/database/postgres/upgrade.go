@@ -178,6 +178,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	}
 
 	if runsTimescaleDB {
+		// see https://github.com/timescale/timescaledb/issues/1844 and https://github.com/timescale/timescaledb/issues/4503#issuecomment-1860883843
 		db.log.Infow("running timescaledb, applying custom options for upgrade command")
 
 		// timescaledb libraries in this container are only compatible with the current postgres version
@@ -273,19 +274,26 @@ func (db *Postgres) getBinDir(ctx context.Context, pgConfigCmd string) (string, 
 }
 
 func (db *Postgres) runningTimescaleDB(ctx context.Context, pgConfigCmd string) (bool, error) {
-	cmd := exec.CommandContext(ctx, pgConfigCmd, "--pkglibdir")
-	out, err := cmd.CombinedOutput()
+	libDir, err := db.getLibDir(ctx, pgConfigCmd)
 	if err != nil {
 		return false, err
 	}
-
-	libDir := strings.TrimSpace(string(out))
 
 	if _, err := os.Stat(path.Join(libDir, "timescaledb.so")); err == nil {
 		return true, nil
 	}
 
 	return false, nil
+}
+
+func (db *Postgres) getLibDir(ctx context.Context, pgConfigCmd string) (string, error) {
+	cmd := exec.CommandContext(ctx, pgConfigCmd, "--pkglibdir")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("unable to figure out lib dir: %w", err)
+	}
+
+	return strings.TrimSpace(string(out)), nil
 }
 
 // copyPostgresBinaries is needed to save old postgres binaries for a later major upgrade
