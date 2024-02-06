@@ -61,7 +61,8 @@ post-exec-cmds:
 		databaseImages: []string{
 			"timescale/timescaledb:2.11.2-pg12",
 			"timescale/timescaledb:2.11.2-pg15",
-			"timescale/timescaledb:2.12.2-pg15",
+			// it is allowed to skip a minor version
+			// "timescale/timescaledb:2.12.2-pg15",
 			"timescale/timescaledb:2.13.1-pg15",
 			"timescale/timescaledb:2.13.1-pg16",
 		},

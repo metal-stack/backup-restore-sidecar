@@ -171,23 +171,77 @@ func (db *Postgres) Probe(ctx context.Context) error {
 	if err == nil && runsTimescaleDB {
 		db.log.Infow("detected running timescaledb, running post-start hook to update timescaledb extension if necessary")
 
-		_, err = dbc.ExecContext(ctx, "ALTER EXTENSION timescaledb UPDATE;")
+		err = db.updateTimescaleDB(ctx, dbc)
 		if err != nil {
-			return fmt.Errorf("unable to alter extension: %w", err)
+			return fmt.Errorf("unable to update timescaledb: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (db *Postgres) updateTimescaleDB(ctx context.Context, dbc *sql.DB) error {
+	var (
+		databaseNames []string
+	)
+
+	databaseNameRows, err := dbc.QueryContext(ctx, "SELECT datname,datallowconn FROM pg_database")
+	if err != nil {
+		return fmt.Errorf("unable to get database names: %w", err)
+	}
+	defer databaseNameRows.Close()
+
+	for databaseNameRows.Next() {
+		var name string
+		var allowed bool
+		if err := databaseNameRows.Scan(&name, &allowed); err != nil {
+			return err
 		}
 
-		// we also need to upgrade the extension in the template1 database because there it is also installed
+		if allowed {
+			databaseNames = append(databaseNames, name)
+		}
+	}
+	if err := databaseNameRows.Err(); err != nil {
+		return err
+	}
 
-		connString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=template1 sslmode=disable", db.host, db.port, db.user, db.password)
-		dbcTemplate1, err := sql.Open("postgres", connString)
+	for _, dbName := range databaseNames {
+		connString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", db.host, db.port, db.user, db.password, dbName)
+		dbc2, err := sql.Open("postgres", connString)
 		if err != nil {
 			return fmt.Errorf("unable to open postgres connection %w", err)
 		}
-		defer dbcTemplate1.Close()
+		defer dbc2.Close()
 
-		_, err = dbcTemplate1.ExecContext(ctx, "ALTER EXTENSION timescaledb UPDATE;")
+		rows, err := dbc2.QueryContext(ctx, "SELECT extname FROM pg_extension")
 		if err != nil {
-			return fmt.Errorf("unable to alter extension for template database: %w", err)
+			return fmt.Errorf("unable to get extensions: %w", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var extName string
+			if err := rows.Scan(&extName); err != nil {
+				return err
+			}
+
+			if extName != "timescaledb" {
+				continue
+			}
+
+			db.log.Infow("updating timescaledb extension", "db-name", dbName)
+
+			_, err = dbc2.ExecContext(ctx, "ALTER EXTENSION timescaledb UPDATE")
+			if err != nil {
+				return fmt.Errorf("unable to update extension: %w", err)
+			}
+
+			break
+		}
+
+		if err := rows.Err(); err != nil {
+			return err
 		}
 	}
 
