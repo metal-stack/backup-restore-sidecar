@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	iofs "io/fs"
+	"log/slog"
 	"net/http"
 	"path"
 	"strings"
@@ -21,14 +22,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"go.uber.org/zap/zaptest"
 	"google.golang.org/api/option"
 )
 
 func Test_BackupProviderGCP(t *testing.T) {
 	var (
 		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
-		log         = zaptest.NewLogger(t).Sugar()
+		log         = slog.Default()
 	)
 
 	defer cancel()

@@ -3,6 +3,7 @@ package meilisearch
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -18,7 +19,6 @@ import (
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
-	"go.uber.org/zap"
 )
 
 const (
@@ -30,7 +30,7 @@ const (
 
 // Meilisearch implements the database interface
 type Meilisearch struct {
-	log                   *zap.SugaredLogger
+	log                   *slog.Logger
 	executor              *utils.CmdExecutor
 	datadir               string
 	copyBinaryAfterBackup bool
@@ -40,7 +40,7 @@ type Meilisearch struct {
 }
 
 // New instantiates a new meilisearch database
-func New(log *zap.SugaredLogger, datadir string, url string, apikey string) (*Meilisearch, error) {
+func New(log *slog.Logger, datadir string, url string, apikey string) (*Meilisearch, error) {
 	if url == "" {
 		return nil, fmt.Errorf("meilisearch api url cannot be empty")
 	}
@@ -78,7 +78,7 @@ func (db *Meilisearch) Backup(ctx context.Context) error {
 		return fmt.Errorf("could not create a dump: %w", err)
 	}
 
-	db.log.Infow("dump creation triggered", "taskUUID", dumpResponse.TaskUID)
+	db.log.Info("dump creation triggered", "taskUUID", dumpResponse.TaskUID)
 
 	dumpTask, err := db.client.WaitForTask(dumpResponse.TaskUID, meilisearch.WaitParams{
 		Context:  ctx,
@@ -87,7 +87,7 @@ func (db *Meilisearch) Backup(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	db.log.Infow("dump created successfully", "duration", dumpTask.Duration)
+	db.log.Info("dump created successfully", "duration", dumpTask.Duration)
 
 	dumps, err := filepath.Glob(constants.BackupDir + "/*.dump")
 	if err != nil {
@@ -112,7 +112,7 @@ func (db *Meilisearch) Backup(ctx context.Context) error {
 		return fmt.Errorf("unable to clean up dump: %w", err)
 	}
 
-	db.log.Debugw("successfully took backup of meilisearch")
+	db.log.Debug("successfully took backup of meilisearch")
 
 	if db.copyBinaryAfterBackup {
 		// for a future upgrade, the current meilisearch binary is required
@@ -174,7 +174,7 @@ func (db *Meilisearch) Recover(ctx context.Context) error {
 		return fmt.Errorf("unable to recover %w", err)
 	}
 
-	db.log.Infow("successfully restored meilisearch database", "duration", time.Since(start).String())
+	db.log.Info("successfully restored meilisearch database", "duration", time.Since(start).String())
 
 	return nil
 }
@@ -185,10 +185,10 @@ func (db *Meilisearch) importDump(ctx context.Context, dump string) error {
 		g, _ = errgroup.WithContext(ctx)
 
 		handleFailedRecovery = func(restoreErr error) error {
-			db.log.Errorw("trying to handle failed database recovery", "error", restoreErr)
+			db.log.Error("trying to handle failed database recovery", "error", restoreErr)
 
 			if err := os.RemoveAll(db.datadir); err != nil {
-				db.log.Errorw("unable to cleanup database data directory after failed recovery attempt, high risk of starting with fresh database on container restart", "err", err)
+				db.log.Error("unable to cleanup database data directory after failed recovery attempt, high risk of starting with fresh database on container restart", "err", err)
 			} else {
 				db.log.Info("cleaned up database data directory after failed recovery attempt to prevent start of fresh database")
 			}
@@ -203,7 +203,7 @@ func (db *Meilisearch) importDump(ctx context.Context, dump string) error {
 	cmd.Stderr = os.Stderr
 
 	g.Go(func() error {
-		db.log.Infow("execute meilisearch", "args", args)
+		db.log.Info("execute meilisearch", "args", args)
 
 		err = cmd.Run()
 		if err != nil {
@@ -235,11 +235,11 @@ func (db *Meilisearch) importDump(ctx context.Context, dump string) error {
 				err = restoreDB.Probe(ctx)
 				sem.Release(1)
 				if err != nil {
-					db.log.Errorw("meilisearch is still restoring, continue probing for readiness...", "error", err)
+					db.log.Error("meilisearch is still restoring, continue probing for readiness...", "error", err)
 					continue
 				}
 
-				db.log.Infow("meilisearch started after importing the dump, stopping it again for takeover from the database container")
+				db.log.Info("meilisearch started after importing the dump, stopping it again for takeover from the database container")
 
 				return nil
 			case <-ctx.Done():
@@ -260,7 +260,7 @@ func (db *Meilisearch) importDump(ctx context.Context, dump string) error {
 	if err != nil {
 		// will probably work better in meilisearch v1.4.0: https://github.com/meilisearch/meilisearch/commit/eff8570f591fe32a6106087807e3fe8c18e8e5e4
 		if strings.Contains(err.Error(), "interrupt") {
-			db.log.Infow("meilisearch terminated but reported an error which can be ignored", "error", err)
+			db.log.Info("meilisearch terminated but reported an error which can be ignored", "error", err)
 		} else {
 			return handleFailedRecovery(err)
 		}

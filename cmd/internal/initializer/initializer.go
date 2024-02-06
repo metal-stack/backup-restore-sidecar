@@ -3,6 +3,7 @@ package initializer
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"path"
@@ -16,19 +17,17 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
-	"go.uber.org/zap"
 
 	"google.golang.org/grpc"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 )
 
 type Initializer struct {
 	currentStatus *v1.StatusResponse
-	log           *zap.SugaredLogger
+	log           *slog.Logger
 	addr          string
 	db            database.Database
 	bp            providers.BackupProvider
@@ -37,7 +36,7 @@ type Initializer struct {
 	dbDataDir     string
 }
 
-func New(log *zap.SugaredLogger, addr string, db database.Database, bp providers.BackupProvider, comp *compress.Compressor, metrics *metrics.Metrics, dbDataDir string) *Initializer {
+func New(log *slog.Logger, addr string, db database.Database, bp providers.BackupProvider, comp *compress.Compressor, metrics *metrics.Metrics, dbDataDir string) *Initializer {
 	return &Initializer{
 		currentStatus: &v1.StatusResponse{
 			Status:  v1.StatusResponse_CHECKING,
@@ -58,12 +57,12 @@ func (i *Initializer) Start(ctx context.Context) {
 	opts := []grpc.ServerOption{
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
 			grpc_ctxtags.StreamServerInterceptor(),
-			grpc_zap.StreamServerInterceptor(i.log.Desugar()),
+			// grpc_zap.StreamServerInterceptor(i.log.Desugar()), // FIXME migrate to grpc_middleware v2
 			grpc_recovery.StreamServerInterceptor(),
 		)),
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
 			grpc_ctxtags.UnaryServerInterceptor(),
-			grpc_zap.UnaryServerInterceptor(i.log.Desugar()),
+			// grpc_zap.UnaryServerInterceptor(i.log.Desugar()), // FIXME migrate to grpc_middleware v2
 			grpc_recovery.UnaryServerInterceptor(),
 		)),
 	}
@@ -88,11 +87,12 @@ func (i *Initializer) Start(ctx context.Context) {
 	v1.RegisterBackupServiceServer(grpcServer, backupService)
 	v1.RegisterDatabaseServiceServer(grpcServer, databaseService)
 
-	i.log.Infow("start initializer server", "address", i.addr)
+	i.log.Info("start initializer server", "address", i.addr)
 
 	lis, err := net.Listen("tcp", i.addr)
 	if err != nil {
-		i.log.Fatalf("failed to listen: %v", err)
+		i.log.Error("failed to listen: %v", err)
+		panic(err)
 	}
 
 	go func() {
@@ -103,20 +103,23 @@ func (i *Initializer) Start(ctx context.Context) {
 
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
-			i.log.Fatalf("failed to serve: %v", err)
+			i.log.Error("failed to serve: %v", err)
+			panic(err)
 		}
 	}()
 
 	err = i.initialize(ctx)
 	if err != nil {
-		i.log.Fatalw("error initializing database, shutting down", "error", err)
+		i.log.Error("error initializing database, shutting down", "error", err)
+		panic(err)
 	}
 
 	i.currentStatus.Status = v1.StatusResponse_UPGRADING
 	i.currentStatus.Message = "start upgrading database"
 	err = i.db.Upgrade(ctx)
 	if err != nil {
-		i.log.Fatalw("upgrade database failed", "error", err)
+		i.log.Error("upgrade database failed", "error", err)
+		panic(err)
 	}
 
 	i.log.Info("initializer done")
@@ -177,7 +180,7 @@ func (i *Initializer) initialize(ctx context.Context) error {
 
 // Restore restores the database with the given backup version
 func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVersion) error {
-	i.log.Infow("restoring backup", "version", version.Version, "date", version.Date.String())
+	i.log.Info("restoring backup", "version", version.Version, "date", version.Date.String())
 
 	i.currentStatus.Status = v1.StatusResponse_RESTORING
 	i.currentStatus.Message = "prepare restore"

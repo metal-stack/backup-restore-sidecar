@@ -3,6 +3,7 @@ package rethinkdb
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +16,6 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/probe"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
-	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	r "gopkg.in/rethinkdb/rethinkdb-go.v6"
@@ -40,12 +40,12 @@ type RethinkDB struct {
 	datadir      string
 	url          string
 	passwordFile string
-	log          *zap.SugaredLogger
+	log          *slog.Logger
 	executor     *utils.CmdExecutor
 }
 
 // New instantiates a new rethinkdb database
-func New(log *zap.SugaredLogger, datadir string, url string, passwordFile string) *RethinkDB {
+func New(log *slog.Logger, datadir string, url string, passwordFile string) *RethinkDB {
 	return &RethinkDB{
 		log:          log,
 		datadir:      datadir,
@@ -101,7 +101,7 @@ func (db *RethinkDB) Backup(ctx context.Context) error {
 		return fmt.Errorf("backup file was not created: %s", rethinkDBBackupFilePath)
 	}
 
-	db.log.Debugw("successfully took backup of rethinkdb database")
+	db.log.Debug("successfully took backup of rethinkdb database")
 
 	return nil
 }
@@ -133,7 +133,7 @@ func (db *RethinkDB) Recover(ctx context.Context) error {
 		// database start without restored data, which can mess up things big time
 
 		handleFailedRecovery = func(restoreErr error) error {
-			db.log.Errorw("trying to handle failed database recovery", "error", restoreErr)
+			db.log.Error("trying to handle failed database recovery", "error", restoreErr)
 
 			// kill the rethinkdb process
 			cancelRethinkdb()
@@ -142,11 +142,11 @@ func (db *RethinkDB) Recover(ctx context.Context) error {
 
 			err := g.Wait()
 			if err != nil {
-				db.log.Errorw("rethinkdb go routine finished with error", "error", err)
+				db.log.Error("rethinkdb go routine finished with error", "error", err)
 			}
 
 			if err := os.RemoveAll(db.datadir); err != nil {
-				db.log.Errorw("unable to cleanup database data directory after failed recovery attempt, high risk of starting with fresh database on container restart", "err", err)
+				db.log.Error("unable to cleanup database data directory after failed recovery attempt, high risk of starting with fresh database on container restart", "err", err)
 			} else {
 				db.log.Info("cleaned up database data directory after failed recovery attempt to prevent start of fresh database")
 			}
@@ -159,7 +159,7 @@ func (db *RethinkDB) Recover(ctx context.Context) error {
 
 	g.Go(func() error {
 		args := []string{"--bind", "all", "--driver-port", "1", "--directory", db.datadir, "--initial-password", strings.TrimSpace(string(passwordRaw))}
-		db.log.Debugw("execute rethinkdb", "args", args)
+		db.log.Debug("execute rethinkdb", "args", args)
 
 		cmd = exec.CommandContext(rethinkdbCtx, rethinkDBCmd, args...) // nolint:gosec
 		cmd.Stdout = os.Stdout
@@ -174,7 +174,7 @@ func (db *RethinkDB) Recover(ctx context.Context) error {
 		return nil
 	})
 
-	db.log.Infow("waiting for rethinkdb database to come up")
+	db.log.Info("waiting for rethinkdb database to come up")
 
 	probeCtx, probeCancel := context.WithTimeout(ctx, restoreDatabaseStartupTimeout)
 	defer probeCancel()
@@ -201,15 +201,15 @@ func (db *RethinkDB) Recover(ctx context.Context) error {
 	}
 
 	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		db.log.Errorw("failed to send sigterm signal to rethinkdb, killing it", "error", err)
+		db.log.Error("failed to send sigterm signal to rethinkdb, killing it", "error", err)
 		cancelRethinkdb()
 	}
 
 	err = g.Wait()
 	if err != nil {
-		db.log.Errorw("rethinkdb process not properly terminated, but restore was successful", "error", err)
+		db.log.Error("rethinkdb process not properly terminated, but restore was successful", "error", err)
 	} else {
-		db.log.Infow("successfully restored rethinkdb database")
+		db.log.Info("successfully restored rethinkdb database")
 	}
 
 	return nil

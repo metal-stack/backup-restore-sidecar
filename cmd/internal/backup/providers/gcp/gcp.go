@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -16,7 +17,6 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
 
-	"go.uber.org/zap"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -31,7 +31,7 @@ const (
 // BackupProviderGCP implements the backup provider interface for GCP
 type BackupProviderGCP struct {
 	fs     afero.Fs
-	log    *zap.SugaredLogger
+	log    *slog.Logger
 	c      *storage.Client
 	config *BackupProviderConfigGCP
 }
@@ -65,7 +65,7 @@ func (c *BackupProviderConfigGCP) validate() error {
 }
 
 // New returns a GCP backup provider
-func New(ctx context.Context, log *zap.SugaredLogger, config *BackupProviderConfigGCP) (*BackupProviderGCP, error) {
+func New(ctx context.Context, log *slog.Logger, config *BackupProviderConfigGCP) (*BackupProviderGCP, error) {
 	if config == nil {
 		return nil, errors.New("gcp backup provider requires a provider config")
 	}
@@ -162,7 +162,7 @@ func (b *BackupProviderGCP) DownloadBackup(ctx context.Context, version *provide
 	}
 	backupFilePath := path.Join(constants.DownloadDir, downloadFileName)
 
-	b.log.Infow("downloading", "object", version.Name, "gen", gen, "to", backupFilePath)
+	b.log.Info("downloading", "object", version.Name, "gen", gen, "to", backupFilePath)
 
 	r, err := bucket.Object(version.Name).Generation(gen).NewReader(ctx)
 	if err != nil {
@@ -199,7 +199,7 @@ func (b *BackupProviderGCP) UploadBackup(ctx context.Context, sourcePath string)
 		destination = b.config.ObjectPrefix + "/" + destination
 	}
 
-	b.log.Debugw("uploading object", "src", sourcePath, "dest", destination)
+	b.log.Debug("uploading object", "src", sourcePath, "dest", destination)
 
 	obj := bucket.Object(destination)
 	w := obj.NewWriter(ctx)

@@ -4,13 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"strconv"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
-	"go.uber.org/zap"
 
 	_ "github.com/lib/pq"
 )
@@ -28,12 +28,12 @@ type Postgres struct {
 	port     int
 	user     string
 	password string
-	log      *zap.SugaredLogger
+	log      *slog.Logger
 	executor *utils.CmdExecutor
 }
 
 // New instantiates a new postgres database
-func New(log *zap.SugaredLogger, datadir string, host string, port int, user string, password string) *Postgres {
+func New(log *slog.Logger, datadir string, host string, port int, user string, password string) *Postgres {
 	return &Postgres{
 		log:      log,
 		datadir:  datadir,
@@ -106,7 +106,7 @@ func (db *Postgres) Backup(ctx context.Context) error {
 		}
 	}
 
-	db.log.Debugw("successfully took backup of postgres database", "output", out)
+	db.log.Debug("successfully took backup of postgres database", "output", out)
 
 	return nil
 }
@@ -129,7 +129,7 @@ func (db *Postgres) Recover(ctx context.Context) error {
 		return fmt.Errorf("error untaring base backup: %s %w", out, err)
 	}
 
-	db.log.Debugw("restored postgres base backup", "output", out)
+	db.log.Debug("restored postgres base backup", "output", out)
 
 	if err := os.RemoveAll(path.Join(db.datadir, "pg_wal")); err != nil {
 		return fmt.Errorf("could not clean pg_wal directory: %w", err)
@@ -144,7 +144,7 @@ func (db *Postgres) Recover(ctx context.Context) error {
 		return fmt.Errorf("error untaring wal backup: %s %w", out, err)
 	}
 
-	db.log.Debugw("restored postgres pg_wal backup", "output", out)
+	db.log.Debug("restored postgres pg_wal backup", "output", out)
 
 	db.log.Info("successfully restored postgres database")
 
@@ -169,7 +169,7 @@ func (db *Postgres) Probe(ctx context.Context) error {
 
 	runsTimescaleDB, err := db.runningTimescaleDB(ctx, postgresConfigCmd)
 	if err == nil && runsTimescaleDB {
-		db.log.Infow("detected running timescaledb, running post-start hook to update timescaledb extension if necessary")
+		db.log.Info("detected running timescaledb, running post-start hook to update timescaledb extension if necessary")
 
 		err = db.updateTimescaleDB(ctx, dbc)
 		if err != nil {
@@ -230,7 +230,7 @@ func (db *Postgres) updateTimescaleDB(ctx context.Context, dbc *sql.DB) error {
 				continue
 			}
 
-			db.log.Infow("updating timescaledb extension", "db-name", dbName)
+			db.log.Info("updating timescaledb extension", "db-name", dbName)
 
 			_, err = dbc2.ExecContext(ctx, "ALTER EXTENSION timescaledb UPDATE")
 			if err != nil {

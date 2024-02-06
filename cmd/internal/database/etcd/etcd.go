@@ -3,12 +3,12 @@ package etcd
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
-	"go.uber.org/zap"
 )
 
 const (
@@ -21,7 +21,7 @@ type Etcd struct {
 	caCert    string
 	cert      string
 	endpoints string
-	log       *zap.SugaredLogger
+	log       *slog.Logger
 	key       string
 	name      string
 
@@ -30,7 +30,7 @@ type Etcd struct {
 }
 
 // New instantiates a new etcd database
-func New(log *zap.SugaredLogger, datadir, caCert, cert, key, endpoints, name string) *Etcd {
+func New(log *slog.Logger, datadir, caCert, cert, key, endpoints, name string) *Etcd {
 	return &Etcd{
 		log:       log,
 		datadir:   datadir,
@@ -74,7 +74,7 @@ func (db *Etcd) Backup(ctx context.Context) error {
 		return fmt.Errorf("error running backup command: %s", out)
 	}
 
-	db.log.Infow("took backup of etcd database", "output", out)
+	db.log.Info("took backup of etcd database", "output", out)
 
 	if _, err := os.Stat(snapshotFileName); os.IsNotExist(err) {
 		return fmt.Errorf("backup file was not created: %s", snapshotFileName)
@@ -85,7 +85,7 @@ func (db *Etcd) Backup(ctx context.Context) error {
 		return fmt.Errorf("backup was not created correct: %s", out)
 	}
 
-	db.log.Infow("successfully took backup of etcd database, snapshot status is", "status", out)
+	db.log.Info("successfully took backup of etcd database, snapshot status is", "status", out)
 
 	return nil
 }
@@ -102,7 +102,7 @@ func (db *Etcd) Recover(ctx context.Context) error {
 		return fmt.Errorf("restored backup file was not created correct: %s", out)
 	}
 
-	db.log.Infow("successfully pulled backup of etcd database, snapshot status is", "status", out)
+	db.log.Info("successfully pulled backup of etcd database, snapshot status is", "status", out)
 
 	if err := utils.RemoveContents(db.datadir); err != nil {
 		return fmt.Errorf("could not clean database data directory %w", err)
@@ -117,13 +117,13 @@ func (db *Etcd) Recover(ctx context.Context) error {
 		return fmt.Errorf("unable to restore:%w", err)
 	}
 
-	db.log.Infow("restored etcd base backup", "output", out)
+	db.log.Info("restored etcd base backup", "output", out)
 
 	if err := os.RemoveAll(snapshotFileName); err != nil {
 		return fmt.Errorf("could not remove snapshot %w", err)
 	}
 
-	db.log.Infow("successfully restored etcd database")
+	db.log.Info("successfully restored etcd database")
 
 	return nil
 }

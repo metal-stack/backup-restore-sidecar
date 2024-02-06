@@ -3,10 +3,10 @@ package probe
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
-	"go.uber.org/zap"
 )
 
 var (
@@ -14,7 +14,7 @@ var (
 )
 
 // Start starts the database prober
-func Start(ctx context.Context, log *zap.SugaredLogger, db database.DatabaseProber) error {
+func Start(ctx context.Context, log *slog.Logger, db database.DatabaseProber) error {
 	log.Info("start probing database")
 
 	for {
@@ -26,7 +26,7 @@ func Start(ctx context.Context, log *zap.SugaredLogger, db database.DatabaseProb
 			if err == nil {
 				return nil
 			}
-			log.Errorw("database has not yet started, waiting and retrying...", "error", err)
+			log.Error("database has not yet started, waiting and retrying...", "error", err)
 		}
 	}
 }

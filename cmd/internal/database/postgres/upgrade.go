@@ -40,7 +40,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	// First check if there are data already present
 	pgVersionFile := path.Join(db.datadir, postgresVersionFile)
 	if _, err := os.Stat(pgVersionFile); errors.Is(err, fs.ErrNotExist) {
-		db.log.Infof("%q is not present, no upgrade required", pgVersionFile)
+		db.log.Info("pgversion file is not present, no upgrade required", "file", pgVersionFile)
 		return nil
 	}
 
@@ -53,7 +53,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	// Check if required commands are present
 	for _, command := range requiredCommands {
 		if ok := utils.IsCommandPresent(command); !ok {
-			db.log.Errorf("%q is not present, skipping upgrade", command)
+			db.log.Error("command is not present, skipping upgrade", "command", command)
 			return nil
 		}
 	}
@@ -61,23 +61,23 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	// Then check the version of the existing database
 	pgVersion, err := db.getDatabaseVersion(pgVersionFile)
 	if err != nil {
-		db.log.Errorw("unable get database version, skipping upgrade", "error", err)
+		db.log.Error("unable get database version, skipping upgrade", "error", err)
 		return nil
 	}
 
 	// Now check the version of the actual postgres binaries
 	binaryVersionMajor, err := db.getBinaryVersion(ctx, postgresConfigCmd)
 	if err != nil {
-		db.log.Errorw("unable to get binary version, skipping upgrade", "error", err)
+		db.log.Error("unable to get binary version, skipping upgrade", "error", err)
 		return nil
 	}
 
 	if pgVersion == binaryVersionMajor {
-		db.log.Infow("no version difference, no upgrade required", "database-version", pgVersion, "binary-version", binaryVersionMajor)
+		db.log.Info("no version difference, no upgrade required", "database-version", pgVersion, "binary-version", binaryVersionMajor)
 		return nil
 	}
 	if pgVersion > binaryVersionMajor {
-		db.log.Errorw("database is newer than postgres binary, aborting", "database-version", pgVersion, "binary-version", binaryVersionMajor)
+		db.log.Error("database is newer than postgres binary, aborting", "database-version", pgVersion, "binary-version", binaryVersionMajor)
 		return fmt.Errorf("database is newer than postgres binary")
 	}
 
@@ -86,24 +86,24 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	// Check if old pg_config are present and match pgVersion
 	oldPostgresConfigCmd := path.Join(oldPostgresBinDir, postgresConfigCmd)
 	if ok := utils.IsCommandPresent(oldPostgresConfigCmd); !ok {
-		db.log.Infof("%q is not present, please make sure that at least one backup was taken with the old postgres version or restart the backup-restore-sidecar container with the old postgres version before running an upgrade, skipping upgrade", oldPostgresConfigCmd)
+		db.log.Info("command is not present, please make sure that at least one backup was taken with the old postgres version or restart the backup-restore-sidecar container with the old postgres version before running an upgrade, skipping upgrade", "command", oldPostgresConfigCmd)
 		return nil
 	}
 
 	// We need to upgrade, therefore old binaries are required
 	oldBinaryVersionMajor, err := db.getBinaryVersion(ctx, oldPostgresConfigCmd)
 	if err != nil {
-		db.log.Errorw("unable to get old binary version, skipping upgrade", "error", err)
+		db.log.Error("unable to get old binary version, skipping upgrade", "error", err)
 		return nil
 	}
 
 	if oldBinaryVersionMajor != pgVersion {
-		db.log.Errorw("database version and old binary version do not match, skipping upgrade", "old database", pgVersion, "old binary", oldBinaryVersionMajor)
+		db.log.Error("database version and old binary version do not match, skipping upgrade", "old database", pgVersion, "old binary", oldBinaryVersionMajor)
 		return nil
 	}
 
 	// OK we need to upgrade the database in place, maybe taking a backup before is recommended
-	db.log.Infow("start upgrading from", "old database", pgVersion, "old binary", oldBinaryVersionMajor, "new binary", binaryVersionMajor)
+	db.log.Info("start upgrading from", "old database", pgVersion, "old binary", oldBinaryVersionMajor, "new binary", binaryVersionMajor)
 
 	// run the pg_upgrade command as postgres user
 	pgUser, err := user.Lookup("postgres")
@@ -123,7 +123,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	newDataDirTemp := path.Join("/data", "postgres-new") // TODO: /data should not be hardcoded
 	err = os.RemoveAll(newDataDirTemp)
 	if err != nil {
-		db.log.Errorw("unable to remove new datadir, skipping upgrade", "error", err)
+		db.log.Error("unable to remove new datadir, skipping upgrade", "error", err)
 		return nil
 	}
 
@@ -142,15 +142,15 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	}
 	err = cmd.Run()
 	if err != nil {
-		db.log.Errorw("unable to run initdb on new new datadir, skipping upgrade", "error", err)
+		db.log.Error("unable to run initdb on new new datadir, skipping upgrade", "error", err)
 		return nil
 	}
 
-	db.log.Infow("new database directory initialized")
+	db.log.Info("new database directory initialized")
 
 	// restore old pg_hba.conf and postgresql.conf
 	for _, config := range []string{postgresHBAConf, postgresqlConf} {
-		db.log.Infow("restore old configuration into new datadir", "config", config)
+		db.log.Info("restore old configuration into new datadir", "config", config)
 
 		cfg, err := os.ReadFile(path.Join(db.datadir, config))
 		if err != nil {
@@ -188,7 +188,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 
 	if runsTimescaleDB {
 		// see https://github.com/timescale/timescaledb/issues/1844 and https://github.com/timescale/timescaledb/issues/4503#issuecomment-1860883843
-		db.log.Infow("running timescaledb, applying custom options for upgrade command")
+		db.log.Info("running timescaledb, applying custom options for upgrade command")
 
 		// timescaledb libraries in this container are only compatible with the current postgres version
 		// do not load them anymore with the old postgresql server
@@ -207,14 +207,14 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	}
 	cmd.Dir = pgUser.HomeDir
 
-	db.log.Infow("running pg_upgrade with", "args", pgUpgradeArgs)
+	db.log.Info("running pg_upgrade with", "args", pgUpgradeArgs)
 	err = cmd.Run()
 	if err != nil {
-		db.log.Errorw("unable to run pg_upgrade on new new datadir, abort upgrade", "error", err)
+		db.log.Error("unable to run pg_upgrade on new new datadir, abort upgrade", "error", err)
 		return fmt.Errorf("unable to run pg_upgrade %w", err)
 	}
 
-	db.log.Infow("pg_upgrade done")
+	db.log.Info("pg_upgrade done")
 
 	// rm -rf /data/postgres
 	err = os.RemoveAll(db.datadir)
@@ -227,7 +227,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 		return fmt.Errorf("unable to rename upgraded datadir to destination, a full restore is required: %w", err)
 	}
 
-	db.log.Infow("pg_upgrade done and new data in place", "took", time.Since(start))
+	db.log.Info("pg_upgrade done and new data in place", "took", time.Since(start))
 
 	return nil
 }
@@ -331,7 +331,7 @@ func (db *Postgres) copyPostgresBinaries(ctx context.Context, override bool) err
 		return fmt.Errorf("unable to remove old pg bin dir: %w", err)
 	}
 
-	db.log.Infow("copying postgres binaries for later upgrades", "from", binDir, "to", pgBinDir)
+	db.log.Info("copying postgres binaries for later upgrades", "from", binDir, "to", pgBinDir)
 	copy := exec.CommandContext(ctx, "cp", "-av", binDir, pgBinDir)
 	copy.Stdout = os.Stdout
 	copy.Stderr = os.Stderr
@@ -353,7 +353,7 @@ func (db *Postgres) restoreOldPostgresBinaries(src, dst string) error {
 			return nil
 		}
 
-		db.log.Infow("copying postgres binaries from old datadir to new datadir", "from", path, "to", dst)
+		db.log.Info("copying postgres binaries from old datadir to new datadir", "from", path, "to", dst)
 
 		copy := exec.Command("cp", "-av", path, dst)
 		copy.Stdout = os.Stdout

@@ -25,7 +25,7 @@ func (db *Meilisearch) Upgrade(ctx context.Context) error {
 
 	versionFile := path.Join(db.datadir, meilisearchVersionFile)
 	if _, err := os.Stat(versionFile); errors.Is(err, fs.ErrNotExist) {
-		db.log.Infof("%q is not present, no upgrade required", versionFile)
+		db.log.Info("version file is not present, no upgrade required", "file", versionFile)
 		return nil
 	}
 
@@ -36,25 +36,25 @@ func (db *Meilisearch) Upgrade(ctx context.Context) error {
 
 	meilisearchVersion, err := db.getBinaryVersion(ctx)
 	if err != nil {
-		db.log.Errorw("unable to get binary version, skipping upgrade", "error", err)
+		db.log.Error("unable to get binary version, skipping upgrade", "error", err)
 		return nil
 	}
 
 	if dbVersion.String() == meilisearchVersion.String() {
-		db.log.Infow("no version difference, no upgrade required", "database-version", dbVersion, "binary-version", meilisearchVersion)
+		db.log.Info("no version difference, no upgrade required", "database-version", dbVersion, "binary-version", meilisearchVersion)
 		return nil
 	}
 	if dbVersion.GreaterThan(meilisearchVersion) {
-		db.log.Errorw("database is newer than meilisearch binary, aborting", "database-version", dbVersion, "binary-version", meilisearchVersion)
+		db.log.Error("database is newer than meilisearch binary, aborting", "database-version", dbVersion, "binary-version", meilisearchVersion)
 		return fmt.Errorf("database is newer than meilisearch binary")
 	}
 
 	if ok := utils.IsCommandPresent(db.previousBinaryPath()); !ok {
-		db.log.Infof("%q is not present, please make sure that at least one backup was taken with the old meilisearch version, skipping upgrade", db.previousBinaryPath())
+		db.log.Info("command is not present, please make sure that at least one backup was taken with the old meilisearch version, skipping upgrade", "command", db.previousBinaryPath())
 		return nil
 	}
 
-	db.log.Infow("start upgrade", "from", dbVersion, "to", meilisearchVersion)
+	db.log.Info("start upgrade", "from", dbVersion, "to", meilisearchVersion)
 
 	err = db.dumpWithOldBinary(ctx)
 	if err != nil {
@@ -77,10 +77,10 @@ func (db *Meilisearch) Upgrade(ctx context.Context) error {
 
 	err = os.RemoveAll(oldVersionDataDir)
 	if err != nil {
-		db.log.Errorw("unable cleanup old version data dir, consider manual cleanup", "error", err)
+		db.log.Error("unable cleanup old version data dir, consider manual cleanup", "error", err)
 	}
 
-	db.log.Infow("meilisearch upgrade done and new data in place", "duration", time.Since(start))
+	db.log.Info("meilisearch upgrade done and new data in place", "duration", time.Since(start))
 
 	return nil
 }
@@ -109,7 +109,7 @@ func (db *Meilisearch) copyMeilisearchBinary(ctx context.Context, override bool)
 		return fmt.Errorf("unable to create versioned bin dir in data directory")
 	}
 
-	db.log.Infow("copying meilisearch binary for later upgrades", "from", binPath, "to", db.previousBinaryPath())
+	db.log.Info("copying meilisearch binary for later upgrades", "from", binPath, "to", db.previousBinaryPath())
 
 	copy := exec.CommandContext(ctx, "cp", "-av", binPath, db.previousBinaryPath())
 	copy.Stdout = os.Stdout
@@ -177,7 +177,7 @@ func (db *Meilisearch) dumpWithOldBinary(ctx context.Context) error {
 	cmd.Stderr = os.Stderr
 
 	g.Go(func() error {
-		db.log.Infow("execute previous meilisearch version", "args", args)
+		db.log.Info("execute previous meilisearch version", "args", args)
 
 		err = cmd.Run()
 		if err != nil {
@@ -197,12 +197,12 @@ func (db *Meilisearch) dumpWithOldBinary(ctx context.Context) error {
 	err = retry.Do(func() error {
 		err = restoreDB.Probe(ctx)
 		if err != nil {
-			db.log.Errorw("meilisearch is still starting, continue probing for readiness...", "error", err)
+			db.log.Error("meilisearch is still starting, continue probing for readiness...", "error", err)
 
 			return err
 		}
 
-		db.log.Infow("previous meilisearch started and is now ready for backup")
+		db.log.Info("previous meilisearch started and is now ready for backup")
 		return nil
 	}, retry.Context(ctx))
 	if err != nil {
@@ -214,7 +214,7 @@ func (db *Meilisearch) dumpWithOldBinary(ctx context.Context) error {
 		return fmt.Errorf("unable to create dump from previous meilisearch version")
 	}
 
-	db.log.Infow("taken dump from previous meilisearch version, stopping it again")
+	db.log.Info("taken dump from previous meilisearch version, stopping it again")
 
 	if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
 		return err
@@ -224,7 +224,7 @@ func (db *Meilisearch) dumpWithOldBinary(ctx context.Context) error {
 	if err != nil {
 		// will probably work better in meilisearch v1.4.0: https://github.com/meilisearch/meilisearch/commit/eff8570f591fe32a6106087807e3fe8c18e8e5e4
 		if strings.Contains(err.Error(), "interrupt") {
-			db.log.Infow("meilisearch terminated but reported an error which can be ignored", "error", err)
+			db.log.Info("meilisearch terminated but reported an error which can be ignored", "error", err)
 		} else {
 			return err
 		}

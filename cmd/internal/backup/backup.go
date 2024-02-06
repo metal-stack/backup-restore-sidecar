@@ -3,6 +3,7 @@ package backup
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 
@@ -12,12 +13,11 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	cron "github.com/robfig/cron/v3"
-	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 )
 
 type BackuperConfig struct {
-	Log            *zap.SugaredLogger
+	Log            *slog.Logger
 	BackupSchedule string
 	DatabaseProber database.DatabaseProber
 	BackupProvider backuproviders.BackupProvider
@@ -26,7 +26,7 @@ type BackuperConfig struct {
 }
 
 type Backuper struct {
-	log            *zap.SugaredLogger
+	log            *slog.Logger
 	backupSchedule string
 	db             database.DatabaseProber
 	bp             backuproviders.BackupProvider
@@ -57,11 +57,11 @@ func (b *Backuper) Start(ctx context.Context) error {
 	id, err := c.AddFunc(b.backupSchedule, func() {
 		err := b.CreateBackup(ctx)
 		if err != nil {
-			b.log.Errorw("error creating backup", "error", err)
+			b.log.Error("error creating backup", "error", err)
 		}
 
 		for _, e := range c.Entries() {
-			b.log.Infow("scheduling next backup", "at", e.Next.String())
+			b.log.Info("scheduling next backup", "at", e.Next.String())
 		}
 	})
 	if err != nil {
@@ -69,7 +69,7 @@ func (b *Backuper) Start(ctx context.Context) error {
 	}
 
 	c.Start()
-	b.log.Infow("scheduling next backup", "at", c.Entry(id).Next.String())
+	b.log.Info("scheduling next backup", "at", c.Entry(id).Next.String())
 	<-ctx.Done()
 	c.Stop()
 	return nil
@@ -87,7 +87,7 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 		return fmt.Errorf("database backup failed: %w", err)
 	}
 
-	b.log.Infow("successfully backed up database")
+	b.log.Info("successfully backed up database")
 
 	backupArchiveName := b.bp.GetNextBackupName(ctx)
 
@@ -118,9 +118,9 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 	err = b.bp.CleanupBackups(ctx)
 	if err != nil {
 		b.metrics.CountError("cleanup")
-		b.log.Errorw("cleaning up backups failed", "error", err)
+		b.log.Error("cleaning up backups failed", "error", err)
 	} else {
-		b.log.Infow("cleaned up backups")
+		b.log.Info("cleaned up backups")
 	}
 
 	return nil

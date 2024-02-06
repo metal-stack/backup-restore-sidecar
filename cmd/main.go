@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -32,8 +32,6 @@ import (
 	"github.com/metal-stack/v"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 const (
@@ -98,7 +96,7 @@ const (
 
 var (
 	cfgFile string
-	logger  *zap.SugaredLogger
+	logger  *slog.Logger
 	db      database.Database
 	bp      providers.BackupProvider
 	stop    context.Context
@@ -129,9 +127,9 @@ var startCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		for _, cmd := range viper.GetStringSlice(preExecCommandsFlg) {
-			logger.Infow("running pre-exec command", "cmd", cmd)
+			logger.Info("running pre-exec command", "cmd", cmd)
 
-			executor := utils.NewExecutor(logger.Named("pre-executor"))
+			executor := utils.NewExecutor(logger.WithGroup("pre-executor"))
 
 			err := executor.ExecWithStreamingOutput(stop, cmd)
 			if err != nil {
@@ -141,7 +139,7 @@ var startCmd = &cobra.Command{
 
 		addr := fmt.Sprintf("%s:%d", viper.GetString(bindAddrFlg), viper.GetInt(portFlg))
 
-		logger.Infow("starting backup-restore-sidecar", "version", v.V, "bind-addr", addr)
+		logger.Info("starting backup-restore-sidecar", "version", v.V, "bind-addr", addr)
 
 		comp, err := compress.New(viper.GetString(compressionMethod))
 		if err != nil {
@@ -149,16 +147,16 @@ var startCmd = &cobra.Command{
 		}
 
 		metrics := metrics.New()
-		metrics.Start(logger.Named("metrics"))
+		metrics.Start(logger.WithGroup("metrics"))
 
-		initializer.New(logger.Named("initializer"), addr, db, bp, comp, metrics, viper.GetString(databaseDatadirFlg)).Start(stop)
+		initializer.New(logger.WithGroup("initializer"), addr, db, bp, comp, metrics, viper.GetString(databaseDatadirFlg)).Start(stop)
 
-		if err := probe.Start(stop, logger.Named("probe"), db); err != nil {
+		if err := probe.Start(stop, logger.WithGroup("probe"), db); err != nil {
 			return err
 		}
 
 		backuper := backup.New(&backup.BackuperConfig{
-			Log:            logger.Named("backup"),
+			Log:            logger.WithGroup("backup"),
 			BackupSchedule: viper.GetString(backupCronScheduleFlg),
 			DatabaseProber: db,
 			BackupProvider: bp,
@@ -243,13 +241,13 @@ var waitCmd = &cobra.Command{
 		initSignalHandlers()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := wait.Start(stop, logger.Named("wait"), viper.GetString(serverAddrFlg)); err != nil {
+		if err := wait.Start(stop, logger.WithGroup("wait"), viper.GetString(serverAddrFlg)); err != nil {
 			return err
 		}
 
 		for _, cmd := range viper.GetStringSlice(postExecCommandsFlg) {
-			logger.Infow("running post-exec command", "cmd", cmd)
-			executor := utils.NewExecutor(logger.Named("post-executor"))
+			logger.Info("running post-exec command", "cmd", cmd)
+			executor := utils.NewExecutor(logger.WithGroup("post-executor"))
 
 			err := executor.ExecWithStreamingOutput(stop, cmd)
 			if err != nil {
@@ -266,7 +264,8 @@ func main() {
 		if logger == nil {
 			panic(err)
 		}
-		logger.Fatalw("failed executing root command", "error", err)
+		logger.Error("failed executing root command", "error", err)
+		panic(err)
 	}
 }
 
@@ -349,7 +348,8 @@ func initConfig() {
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)
 		if err := viper.ReadInConfig(); err != nil {
-			logger.Fatalw("config file path set explicitly, but unreadable", "error", err)
+			logger.Error("config file path set explicitly, but unreadable", "error", err)
+			panic(err)
 		}
 	} else {
 		viper.SetConfigName("config")
@@ -359,39 +359,38 @@ func initConfig() {
 		if err := viper.ReadInConfig(); err != nil {
 			usedCfg := viper.ConfigFileUsed()
 			if usedCfg != "" {
-				logger.Fatalw("config file unreadable", "config-file", usedCfg, "error", err)
+				logger.Error("config file unreadable", "config-file", usedCfg, "error", err)
+				panic(err)
 			}
 		}
 	}
 
 	usedCfg := viper.ConfigFileUsed()
 	if usedCfg != "" {
-		logger.Infow("read config file", "config-file", usedCfg)
+		logger.Info("read config file", "config-file", usedCfg)
 	}
 }
 
 func initLogging() {
-	level := zap.InfoLevel
 
-	var err error
+	level := slog.LevelInfo
 	if viper.IsSet(logLevelFlg) {
-		level, err = zapcore.ParseLevel(viper.GetString(logLevelFlg))
-		if err != nil {
-			log.Fatalf("can't initialize zap logger: %v", err)
+		switch strings.ToLower(viper.GetString(logLevelFlg)) {
+		case "info":
+			level = slog.LevelInfo
+		case "debug":
+			level = slog.LevelDebug
+		case "warn":
+			level = slog.LevelWarn
+		case "error":
+			level = slog.LevelError
+		default:
+			panic(fmt.Errorf("unknown log level:%q given", viper.GetString(logLevelFlg)))
 		}
 	}
 
-	cfg := zap.NewProductionConfig()
-	cfg.Level = zap.NewAtomicLevelAt(level)
-	cfg.EncoderConfig.TimeKey = "timestamp"
-	cfg.EncoderConfig.EncodeTime = zapcore.RFC3339TimeEncoder
-
-	l, err := cfg.Build()
-	if err != nil {
-		log.Fatalf("can't initialize zap logger: %v", err)
-	}
-
-	logger = l.Sugar()
+	jsonHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
+	logger = slog.New(jsonHandler)
 }
 
 func initSignalHandlers() {
@@ -410,7 +409,7 @@ func initDatabase() error {
 	switch dbString {
 	case "postgres":
 		db = postgres.New(
-			logger.Named("postgres"),
+			logger.WithGroup("postgres"),
 			datadir,
 			viper.GetString(postgresHostFlg),
 			viper.GetInt(postgresPortFlg),
@@ -419,14 +418,14 @@ func initDatabase() error {
 		)
 	case "rethinkdb":
 		db = rethinkdb.New(
-			logger.Named("rethinkdb"),
+			logger.WithGroup("rethinkdb"),
 			datadir,
 			viper.GetString(rethinkDBURLFlg),
 			viper.GetString(rethinkDBPasswordFileFlg),
 		)
 	case "etcd":
 		db = etcd.New(
-			logger.Named("etcd"),
+			logger.WithGroup("etcd"),
 			datadir,
 			viper.GetString(etcdCaCert),
 			viper.GetString(etcdCert),
@@ -437,7 +436,7 @@ func initDatabase() error {
 	case "meilisearch":
 		var err error
 		db, err = meilisearch.New(
-			logger.Named("meilisearch"),
+			logger.WithGroup("meilisearch"),
 			datadir,
 			viper.GetString(meilisearchURLFlg),
 			viper.GetString(meilisearchAPIKeyFlg),
@@ -452,7 +451,7 @@ func initDatabase() error {
 			password = viper.GetString(redisPasswordFlg)
 		}
 		db, err = redis.New(
-			logger.Named("redis"),
+			logger.WithGroup("redis"),
 			datadir,
 			viper.GetString(redisAddrFlg),
 			&password,
@@ -464,7 +463,7 @@ func initDatabase() error {
 		return fmt.Errorf("unsupported database type: %s", dbString)
 	}
 
-	logger.Infow("initialized database adapter", "type", dbString)
+	logger.Info("initialized database adapter", "type", dbString)
 
 	return nil
 }
@@ -476,7 +475,7 @@ func initBackupProvider() error {
 	case "gcp":
 		bp, err = gcp.New(
 			context.Background(),
-			logger.Named("backup"),
+			logger.WithGroup("backup"),
 			&gcp.BackupProviderConfigGCP{
 				ObjectPrefix:   viper.GetString(objectPrefixFlg),
 				ObjectsToKeep:  viper.GetInt64(objectsToKeepFlg),
@@ -487,7 +486,7 @@ func initBackupProvider() error {
 		)
 	case "s3":
 		bp, err = s3.New(
-			logger.Named("backup"),
+			logger.WithGroup("backup"),
 			&s3.BackupProviderConfigS3{
 				ObjectPrefix:  viper.GetString(objectPrefixFlg),
 				ObjectsToKeep: viper.GetInt64(objectsToKeepFlg),
@@ -500,7 +499,7 @@ func initBackupProvider() error {
 		)
 	case "local":
 		bp, err = local.New(
-			logger.Named("backup"),
+			logger.WithGroup("backup"),
 			&local.BackupProviderConfigLocal{
 				LocalBackupPath: viper.GetString(localBackupPathFlg),
 				ObjectsToKeep:   viper.GetInt64(objectsToKeepFlg),
@@ -512,6 +511,6 @@ func initBackupProvider() error {
 	if err != nil {
 		return fmt.Errorf("error initializing backup provider: %w", err)
 	}
-	logger.Infow("initialized backup provider", "type", bpString)
+	logger.Info("initialized backup provider", "type", bpString)
 	return nil
 }

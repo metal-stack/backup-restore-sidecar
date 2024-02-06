@@ -3,19 +3,18 @@ package utils
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 type CmdExecutor struct {
-	log *zap.SugaredLogger
+	log *slog.Logger
 }
 
-func NewExecutor(log *zap.SugaredLogger) *CmdExecutor {
+func NewExecutor(log *slog.Logger) *CmdExecutor {
 	return &CmdExecutor{
 		log: log,
 	}
@@ -26,7 +25,7 @@ func (c *CmdExecutor) ExecuteCommandWithOutput(ctx context.Context, command stri
 	if err != nil {
 		return fmt.Sprintf("unable to find command:%s in path", command), err
 	}
-	c.log.Infow("running command", "command", commandWithPath, "args", strings.Join(arg, " "))
+	c.log.Info("running command", "command", commandWithPath, "args", strings.Join(arg, " "))
 	cmd := exec.CommandContext(ctx, commandWithPath, arg...)
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, env...)
@@ -55,7 +54,7 @@ func (c *CmdExecutor) ExecWithStreamingOutput(ctx context.Context, command strin
 
 	cmd := exec.Command(parts[0], parts[1:]...) // nolint:gosec
 
-	c.log.Debugw("running command", "command", cmd.Path, "args", cmd.Args)
+	c.log.Debug("running command", "command", cmd.Path, "args", cmd.Args)
 
 	cmd.Env = os.Environ()
 
@@ -73,17 +72,17 @@ func (c *CmdExecutor) ExecWithStreamingOutput(ctx context.Context, command strin
 		go func() {
 			time.Sleep(10 * time.Second)
 
-			c.log.Infow("force killing post-exec command now")
+			c.log.Info("force killing post-exec command now")
 			if err := cmd.Process.Signal(os.Kill); err != nil {
 				panic(err)
 			}
 		}()
 
-		c.log.Infow("sending sigint to post-exec command process")
+		c.log.Info("sending sigint to post-exec command process")
 
 		err := cmd.Process.Signal(os.Interrupt)
 		if err != nil {
-			c.log.Errorw("unable to send interrupt to post-exec command", "error", err)
+			c.log.Error("unable to send interrupt to post-exec command", "error", err)
 		}
 	}()
 
