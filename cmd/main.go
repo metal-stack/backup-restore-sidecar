@@ -9,8 +9,6 @@ import (
 	"os/signal"
 	"strings"
 
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/localfs"
-
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
@@ -20,6 +18,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/etcd"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/localfs"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/meilisearch"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/postgres"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/redis"
@@ -463,10 +462,9 @@ func initDatabase() error {
 		}
 	case "localfs":
 		db = localfs.New(
-			logger.Named("localfs"),
+			logger.WithGroup("localfs"),
 			datadir,
 		)
-
 	default:
 		return fmt.Errorf("unsupported database type: %s", dbString)
 	}
