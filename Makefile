@@ -24,12 +24,7 @@ endif
 .PHONY: build
 build: generate-examples
 	go mod tidy
-	go build -ldflags "-X 'github.com/metal-stack/v.Version=$(VERSION)' \
-                           -X 'github.com/metal-stack/v.Revision=$(GITVERSION)' \
-                           -X 'github.com/metal-stack/v.GitSHA1=$(SHA)' \
-                           -X 'github.com/metal-stack/v.BuildDate=$(BUILDDATE)' \
-                           $(EXTLDFLAGS)" \
-                           -tags 'osusergo netgo static_build' -o bin/backup-restore-sidecar github.com/metal-stack/backup-restore-sidecar/cmd
+	go build -ldflags "$(LINKMODE)" -tags 'osusergo netgo static_build' -o bin/backup-restore-sidecar github.com/metal-stack/backup-restore-sidecar/cmd
 	strip bin/backup-restore-sidecar
 
 .PHONY: test
