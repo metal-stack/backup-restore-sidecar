@@ -265,7 +265,7 @@ func main() {
 			panic(err)
 		}
 		logger.Error("failed executing root command", "error", err)
-		panic(err)
+		os.Exit(1)
 	}
 }
 
