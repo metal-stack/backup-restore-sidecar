@@ -402,11 +402,11 @@ func waitUntilNotFound(ctx context.Context, obj client.Object) error {
 	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
 }
 
-func execCommand(ctx context.Context, containerName string, cmd []string) (string, string, error) {
+func execCommand(ctx context.Context, containerName string, cmd []string) (string, error) {
 	var stdout, stderr bytes.Buffer
 	client, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
 	req := client.CoreV1().RESTClient().Post().Resource("pods").Name(pod.Name).Namespace(pod.Namespace).SubResource("exec")
@@ -425,15 +425,15 @@ func execCommand(ctx context.Context, containerName string, cmd []string) (strin
 	)
 	exec, err := remotecommand.NewSPDYExecutor(restConfig, "POST", req.URL())
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
-	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
+	err = exec.StreamWithContext(context.WithoutCancel(ctx), remotecommand.StreamOptions{
 		Stdin:  nil,
 		Stdout: &stdout,
 		Stderr: &stderr,
 	})
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
-	return strings.TrimSpace(stdout.String()), strings.TrimSpace(stderr.String()), nil
+	return strings.TrimSpace(stdout.String()), nil
 }
