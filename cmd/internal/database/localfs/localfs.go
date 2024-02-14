@@ -11,11 +11,6 @@ import (
 	"github.com/spf13/afero"
 )
 
-const (
-	backupDest = constants.BackupDir + "/localfs"
-	restoreSrc = constants.RestoreDir + "/localfs"
-)
-
 type LocalFS struct {
 	datadir   string
 	fileNames []string
@@ -29,36 +24,21 @@ func New(log *slog.Logger, datadir string) *LocalFS {
 	}
 }
 
-// Check if Datadir contains the specified filenames
+// Check if Datadir is empty
 func (l *LocalFS) Check(ctx context.Context) (bool, error) {
-	dirEntrys, err := os.ReadDir(l.datadir)
-
+	empty, err := utils.IsEmpty(l.datadir)
 	if err != nil {
 		return false, err
 	}
-
-	result := true
-
-	for i := 0; i < len(l.fileNames) && result; i++ {
-		found := false
-
-		for j := 0; j < len(dirEntrys) && !found; j++ {
-			curEntry, err := dirEntrys[j].Info()
-
-			if err != nil {
-				return false, err
-			}
-
-			found = l.fileNames[i] == curEntry.Name()
-		}
-
-		result = found
+	if empty {
+		l.log.Info("data directory is empty")
+		return true, err
 	}
 
-	return result, nil
+	return false, nil
 }
 
-// put Datadir into constants.Backupdir directory
+// put Datadir into constants.BackupDir directory
 func (l *LocalFS) Backup(ctx context.Context) error {
 	//ToDo: put Datadir into compressed archive
 
@@ -70,7 +50,7 @@ func (l *LocalFS) Backup(ctx context.Context) error {
 		return fmt.Errorf("could not create backup directory: %w", err)
 	}
 
-	if err := utils.Copy(afero.NewOsFs(), l.datadir, backupDest); err != nil {
+	if err := utils.CopyDirectory(afero.NewOsFs(), l.datadir, constants.BackupDir); err != nil {
 		return fmt.Errorf("could not copy contents: %w", err)
 	}
 
@@ -78,13 +58,14 @@ func (l *LocalFS) Backup(ctx context.Context) error {
 	return nil
 }
 
+// get data from constants.RestoreDir
 func (l *LocalFS) Recover(ctx context.Context) error {
 	//ToDo: decompress archive into Datadir
 	if err := utils.RemoveContents(l.datadir); err != nil {
 		return fmt.Errorf("Could not cleanup Datadir: %w", err)
 	}
 
-	if err := utils.Copy(afero.NewOsFs(), restoreSrc, l.datadir); err != nil {
+	if err := utils.CopyDirectory(afero.NewOsFs(), constants.RestoreDir, l.datadir); err != nil {
 		return fmt.Errorf("could not copy contents: %w", err)
 	}
 

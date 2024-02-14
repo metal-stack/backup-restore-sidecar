@@ -72,6 +72,10 @@ start-meilisearch:
 start-redis:
 	$(MAKE)	start	DB=redis
 
+.PHONY: start-localfs
+start-localfs:
+	$(MAKE)	start	DB=localfs	
+
 .PHONY: start
 start: kind-cluster-create
 	kind --name backup-restore-sidecar load docker-image ghcr.io/metal-stack/backup-restore-sidecar:latest

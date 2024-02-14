@@ -80,3 +80,24 @@ func IsCommandPresent(command string) bool {
 
 	return true
 }
+
+func CopyDirectory(osfs afero.Fs, dir string, dest string) error {
+
+	contents, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+
+	for _, content := range contents {
+		if content.Type().IsDir() {
+			err = CopyDirectory(osfs, dir+"/"+content.Name(), dest+"/"+content.Name())
+		} else {
+			err = Copy(osfs, dir+"/"+content.Name(), dest+"/"+content.Name())
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
