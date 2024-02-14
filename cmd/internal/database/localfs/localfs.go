@@ -12,9 +12,8 @@ import (
 )
 
 type LocalFS struct {
-	datadir   string
-	fileNames []string
-	log       *slog.Logger
+	datadir string
+	log     *slog.Logger
 }
 
 func New(log *slog.Logger, datadir string) *LocalFS {

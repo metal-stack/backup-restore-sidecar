@@ -427,7 +427,7 @@ func execCommand(ctx context.Context, containerName string, cmd []string) (strin
 	if err != nil {
 		return "", "", err
 	}
-	err = exec.StreamWithContext(context.Background(), remotecommand.StreamOptions{
+	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
 		Stdin:  nil,
 		Stdout: &stdout,
 		Stderr: &stderr,
