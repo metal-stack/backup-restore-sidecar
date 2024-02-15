@@ -16,7 +16,7 @@ Probably, it does not make sense to use this project with large databases. Howev
 | meilisearch | >= 1.2.0     | alpha  |       ✅        |
 | redis       | >= 6.0       | alpha  |       ❌        |
 | keydb       | >= 6.0       | alpha  |       ❌        |
-| localfs     | alpine       | alpha  |       ❌        |
+| localfs     |              | alpha  |       ❌        |
 
 Postgres also supports updates when using the TimescaleDB extension. Please consider the integration test for supported upgrade paths.
 
