@@ -22,12 +22,14 @@ func Test_Localfs_Restore(t *testing.T) {
 }
 
 func addLocalfsTestData(t *testing.T, ctx context.Context) {
-	_, err := execCommand(ctx, "backup-restore-sidecar", []string{"sh", "-c", "echo 'I am precious' > /data/test.txt"})
+	namespace := namespaceName(t)
+	_, err := execCommand(ctx, "localfs-0", namespace, "backup-restore-sidecar", []string{"sh", "-c", "echo 'I am precious' > /data/test.txt"})
 	require.NoError(t, err)
 }
 
 func verifyLocalfsTestData(t *testing.T, ctx context.Context) {
-	resp, err := execCommand(ctx, "backup-restore-sidecar", []string{"cat", "/data/test.txt"})
+	namespace := namespaceName(t)
+	resp, err := execCommand(ctx, "localfs-0", namespace, "backup-restore-sidecar", []string{"cat", "/data/test.txt"})
 	require.NoError(t, err)
 
 	assert.Equal(t, "I am precious", resp)

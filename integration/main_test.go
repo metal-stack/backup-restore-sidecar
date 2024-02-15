@@ -49,7 +49,6 @@ type upgradeFlowSpec struct {
 var (
 	restConfig *rest.Config
 	c          client.Client
-	pod        *corev1.Pod
 )
 
 func TestMain(m *testing.M) {
@@ -332,7 +331,7 @@ func newKubernetesClient() (client.Client, error) {
 
 func waitForPodRunning(ctx context.Context, name, namespace string) error {
 	return retry.Do(func() error {
-		pod = &corev1.Pod{
+		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: namespace,
@@ -402,14 +401,14 @@ func waitUntilNotFound(ctx context.Context, obj client.Object) error {
 	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
 }
 
-func execCommand(ctx context.Context, containerName string, cmd []string) (string, error) {
+func execCommand(ctx context.Context, podName string, namespace string, containerName string, cmd []string) (string, error) {
 	var stdout, stderr bytes.Buffer
 	client, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
 		return "", err
 	}
 
-	req := client.CoreV1().RESTClient().Post().Resource("pods").Name(pod.Name).Namespace(pod.Namespace).SubResource("exec")
+	req := client.CoreV1().RESTClient().Post().Resource("pods").Name(podName).Namespace(namespace).SubResource("exec")
 	option := &corev1.PodExecOptions{
 		Command:   cmd,
 		Stdin:     false,
@@ -427,7 +426,7 @@ func execCommand(ctx context.Context, containerName string, cmd []string) (strin
 	if err != nil {
 		return "", err
 	}
-	err = exec.StreamWithContext(context.WithoutCancel(ctx), remotecommand.StreamOptions{
+	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
 		Stdin:  nil,
 		Stdout: &stdout,
 		Stderr: &stderr,

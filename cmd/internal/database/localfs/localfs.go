@@ -8,7 +8,6 @@ import (
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
-	"github.com/spf13/afero"
 )
 
 type LocalFS struct {
@@ -39,8 +38,6 @@ func (l *LocalFS) Check(ctx context.Context) (bool, error) {
 
 // put Datadir into constants.BackupDir directory
 func (l *LocalFS) Backup(ctx context.Context) error {
-	//ToDo: put Datadir into compressed archive
-
 	if err := os.RemoveAll(constants.BackupDir); err != nil {
 		return fmt.Errorf("could not clean backup directory: %w", err)
 	}
@@ -49,7 +46,7 @@ func (l *LocalFS) Backup(ctx context.Context) error {
 		return fmt.Errorf("could not create backup directory: %w", err)
 	}
 
-	if err := utils.CopyDirectory(afero.NewOsFs(), l.datadir, constants.BackupDir); err != nil {
+	if err := utils.CopyFS(constants.BackupDir, os.DirFS(l.datadir)); err != nil {
 		return fmt.Errorf("could not copy contents: %w", err)
 	}
 
@@ -59,12 +56,11 @@ func (l *LocalFS) Backup(ctx context.Context) error {
 
 // get data from constants.RestoreDir
 func (l *LocalFS) Recover(ctx context.Context) error {
-	//ToDo: decompress archive into Datadir
 	if err := utils.RemoveContents(l.datadir); err != nil {
 		return fmt.Errorf("Could not cleanup Datadir: %w", err)
 	}
 
-	if err := utils.CopyDirectory(afero.NewOsFs(), constants.RestoreDir, l.datadir); err != nil {
+	if err := utils.CopyFS(l.datadir, os.DirFS(constants.RestoreDir)); err != nil {
 		return fmt.Errorf("could not copy contents: %w", err)
 	}
 
