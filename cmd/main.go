@@ -18,6 +18,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/etcd"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/localfs"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/meilisearch"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/postgres"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/redis"
@@ -273,7 +274,7 @@ func init() {
 	rootCmd.AddCommand(startCmd, waitCmd, restoreCmd, createBackupCmd)
 
 	rootCmd.PersistentFlags().StringP(logLevelFlg, "", "info", "sets the application log level")
-	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb|etcd|meilisearch|redis|keydb]")
+	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb|etcd|meilisearch|redis|keydb|localfs]")
 	rootCmd.PersistentFlags().StringP(databaseDatadirFlg, "", "", "the directory where the database stores its data in")
 
 	err := viper.BindPFlags(rootCmd.PersistentFlags())
@@ -459,6 +460,11 @@ func initDatabase() error {
 		if err != nil {
 			return err
 		}
+	case "localfs":
+		db = localfs.New(
+			logger.WithGroup("localfs"),
+			datadir,
+		)
 	default:
 		return fmt.Errorf("unsupported database type: %s", dbString)
 	}

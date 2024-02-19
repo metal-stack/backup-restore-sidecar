@@ -3,6 +3,7 @@
 package integration_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -23,7 +24,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/remotecommand"
 )
 
 type flowSpec struct {
@@ -395,4 +399,40 @@ func waitUntilNotFound(ctx context.Context, obj client.Object) error {
 
 		return fmt.Errorf("resource is still running: %s", obj.GetName())
 	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
+}
+
+func execCommand(ctx context.Context, podName string, namespace string, containerName string, cmd []string) (string, error) {
+	var stdout, stderr bytes.Buffer
+	client, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return "", err
+	}
+
+	req := client.CoreV1().RESTClient().Post().Resource("pods").Name(podName).Namespace(namespace).SubResource("exec")
+	option := &corev1.PodExecOptions{
+		Command:   cmd,
+		Stdin:     false,
+		Stdout:    true,
+		Stderr:    true,
+		TTY:       true,
+		Container: containerName,
+	}
+
+	req.VersionedParams(
+		option,
+		scheme.ParameterCodec,
+	)
+	exec, err := remotecommand.NewSPDYExecutor(restConfig, "POST", req.URL())
+	if err != nil {
+		return "", err
+	}
+	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
+		Stdin:  nil,
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(stdout.String()), nil
 }

@@ -49,6 +49,11 @@ func main() {
 			sts:     examples.KeyDBSts,
 			backing: examples.KeyDBBackingResources,
 		},
+		{
+			db:      examples.Localfs,
+			sts:     examples.LocalfsSts,
+			backing: examples.LocalfsBackingResources,
+		},
 	} {
 		err := dumpToExamples(localExample.db+"-local.yaml", append([]client.Object{localExample.sts("default")}, localExample.backing("default")...)...)
 		if err != nil {
