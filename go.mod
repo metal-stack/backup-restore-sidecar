@@ -2,8 +2,6 @@ module github.com/metal-stack/backup-restore-sidecar
 
 go 1.22
 
-toolchain go1.22.1
-
 require (
 	cloud.google.com/go/storage v1.39.1
 	github.com/Masterminds/semver/v3 v3.2.1
