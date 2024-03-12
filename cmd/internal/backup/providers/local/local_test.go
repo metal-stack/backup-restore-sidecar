@@ -46,7 +46,7 @@ func Test_BackupProviderLocal(t *testing.T) {
 			}
 
 			t.Run("verify upload", func(t *testing.T) {
-				for i := 0; i < backupAmount; i++ {
+				for i := range backupAmount {
 					backupName := p.GetNextBackupName(ctx) + ".tar.gz"
 					backupPath := path.Join(constants.UploadDir, backupName)
 					backupContent := fmt.Sprintf("precious data %d", i)
