@@ -46,16 +46,16 @@ type BackupProviderConfigS3 struct {
 
 func (c *BackupProviderConfigS3) validate() error {
 	if c.BucketName == "" {
-		return errors.New("s3v1 bucket name must not be empty")
+		return errors.New("s3 bucket name must not be empty")
 	}
 	if c.Endpoint == "" {
-		return errors.New("s3v1 endpoint must not be empty")
+		return errors.New("s3 endpoint must not be empty")
 	}
 	if c.AccessKey == "" {
-		return errors.New("s3v1 accesskey must not be empty")
+		return errors.New("s3 accesskey must not be empty")
 	}
 	if c.SecretKey == "" {
-		return errors.New("s3v1 secretkey must not be empty")
+		return errors.New("s3 secretkey must not be empty")
 	}
 
 	return nil
@@ -64,7 +64,7 @@ func (c *BackupProviderConfigS3) validate() error {
 // New returns a S3 backup provider
 func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, error) {
 	if cfg == nil {
-		return nil, errors.New("s3v1 backup provider requires a provider config")
+		return nil, errors.New("s3 backup provider requires a provider config")
 	}
 
 	if cfg.ObjectsToKeep == 0 {
