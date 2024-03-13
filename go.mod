@@ -27,7 +27,7 @@ require (
 	golang.org/x/sync v0.6.0
 	google.golang.org/api v0.162.0
 	google.golang.org/grpc v1.61.0
-	google.golang.org/protobuf v1.32.0
+	google.golang.org/protobuf v1.33.0
 	gopkg.in/rethinkdb/rethinkdb-go.v6 v6.2.2
 	k8s.io/api v0.28.3
 	k8s.io/apimachinery v0.28.3
