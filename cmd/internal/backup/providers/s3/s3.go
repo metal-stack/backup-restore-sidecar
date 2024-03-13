@@ -86,6 +86,7 @@ func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, erro
 	s3Cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, "")),
 		config.WithRegion(cfg.Region),
+		config.WithClientLogMode(aws.LogRequest),
 	)
 	if err != nil {
 		return nil, err
