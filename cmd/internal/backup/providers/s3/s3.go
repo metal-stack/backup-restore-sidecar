@@ -2,23 +2,22 @@ package s3
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"path"
 	"path/filepath"
 	"strings"
 
-	"errors"
-
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
 const (
@@ -29,8 +28,7 @@ const (
 type BackupProviderS3 struct {
 	fs     afero.Fs
 	log    *slog.Logger
-	c      *s3.S3
-	sess   *session.Session
+	c      *s3.Client
 	config *BackupProviderConfigS3
 }
 
@@ -43,7 +41,7 @@ type BackupProviderConfigS3 struct {
 	SecretKey     string
 	BackupName    string
 	ObjectPrefix  string
-	ObjectsToKeep int64
+	ObjectsToKeep int32
 	FS            afero.Fs
 }
 
@@ -65,123 +63,99 @@ func (c *BackupProviderConfigS3) validate() error {
 }
 
 // New returns a S3 backup provider
-func New(log *slog.Logger, config *BackupProviderConfigS3) (*BackupProviderS3, error) {
-	if config == nil {
+func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, error) {
+	if cfg == nil {
 		return nil, errors.New("s3 backup provider requires a provider config")
 	}
 
-	if config.ObjectsToKeep == 0 {
-		config.ObjectsToKeep = constants.DefaultObjectsToKeep
+	if cfg.ObjectsToKeep == 0 {
+		cfg.ObjectsToKeep = constants.DefaultObjectsToKeep
 	}
-	if config.BackupName == "" {
-		config.BackupName = defaultBackupName
+	if cfg.BackupName == "" {
+		cfg.BackupName = defaultBackupName
 	}
-	if config.FS == nil {
-		config.FS = afero.NewOsFs()
+	if cfg.FS == nil {
+		cfg.FS = afero.NewOsFs()
 	}
 
-	err := config.validate()
+	err := cfg.validate()
 	if err != nil {
 		return nil, err
 	}
-	s3Config := &aws.Config{
-		Credentials:      credentials.NewStaticCredentials(config.AccessKey, config.SecretKey, ""),
-		Endpoint:         aws.String(config.Endpoint),
-		Region:           aws.String(config.Region),
-		S3ForcePathStyle: aws.Bool(true),
-	}
-	newSession, err := session.NewSession(s3Config)
+
+	s3Cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, "")),
+		config.WithRegion(cfg.Region),
+		config.WithClientLogMode(aws.LogRequestWithBody|aws.LogResponseWithBody),
+	)
 	if err != nil {
 		return nil, err
 	}
-	client := s3.New(newSession)
-	if err != nil {
-		return nil, err
-	}
+	client := s3.NewFromConfig(s3Cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(cfg.Endpoint)
+		o.UsePathStyle = true
+	})
 
 	return &BackupProviderS3{
 		c:      client,
-		sess:   newSession,
-		config: config,
+		config: cfg,
 		log:    log,
-		fs:     config.FS,
+		fs:     cfg.FS,
 	}, nil
 }
 
 // EnsureBackupBucket ensures a backup bucket at the backup provider
 func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
-	bucket := aws.String(b.config.BucketName)
-
 	// create bucket
-	cparams := &s3.CreateBucketInput{
-		Bucket: bucket,
-	}
-
-	_, err := b.c.CreateBucketWithContext(ctx, cparams)
+	_, err := b.c.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(b.config.BucketName),
+	})
 	if err != nil {
-		// FIXME check how to migrate to errors.As
-		//nolint
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case s3.ErrCodeBucketAlreadyExists:
-			case s3.ErrCodeBucketAlreadyOwnedByYou:
-			default:
-				return err
-			}
-		} else {
+		var bucketAlreadyExists *types.BucketAlreadyExists
+		var bucketAlreadyOwnerByYou *types.BucketAlreadyOwnedByYou
+		if !errors.As(err, &bucketAlreadyExists) && !errors.As(err, &bucketAlreadyOwnerByYou) {
 			return err
 		}
 	}
 
 	// enable versioning
-	versioning := &s3.PutBucketVersioningInput{
-		Bucket: bucket,
-		VersioningConfiguration: &s3.VersioningConfiguration{
-			Status: aws.String("Enabled"),
+	_, err = b.c.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
+		Bucket: aws.String(b.config.BucketName),
+		VersioningConfiguration: &types.VersioningConfiguration{
+			Status: types.BucketVersioningStatusEnabled,
 		},
-	}
-	_, err = b.c.PutBucketVersioningWithContext(ctx, versioning)
+	})
 	if err != nil {
-		// FIXME check how to migrate to errors.As
-		//nolint
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				return err
-			}
-		} else {
-			return err
-		}
+		return err
 	}
 
 	// add lifecyle policy
-	lifecycle := &s3.PutBucketLifecycleConfigurationInput{
-		Bucket: bucket,
-		LifecycleConfiguration: &s3.BucketLifecycleConfiguration{
-			Rules: []*s3.LifecycleRule{
+	_, err = b.c.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
+		Bucket: aws.String(b.config.BucketName),
+		LifecycleConfiguration: &types.BucketLifecycleConfiguration{
+			Rules: []types.LifecycleRule{
 				{
-					NoncurrentVersionExpiration: &s3.NoncurrentVersionExpiration{
+					NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
 						NoncurrentDays: &b.config.ObjectsToKeep,
 					},
-					Status: aws.String("Enabled"),
+					Status: types.ExpirationStatusEnabled,
 					ID:     aws.String("backup-restore-lifecycle"),
-					Prefix: &b.config.ObjectPrefix,
+					Filter: &types.LifecycleRuleFilterMemberPrefix{
+						Value: b.config.ObjectPrefix,
+					},
 				},
 			},
 		},
-	}
-	_, err = b.c.PutBucketLifecycleConfigurationWithContext(ctx, lifecycle)
+	})
 	if err != nil {
-		// FIXME check how to migrate to errors.As
-		//nolint
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				return err
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) {
+			if apiErr.ErrorCode() == "NotImplemented" {
+				b.log.Warn("missing support for automatic clean up of expired backups", err)
+				return nil
 			}
-		} else {
-			return err
 		}
+		return err
 	}
 	return nil
 }
@@ -194,8 +168,6 @@ func (b *BackupProviderS3) CleanupBackups(_ context.Context) error {
 
 // DownloadBackup downloads the given backup version to the restoration folder
 func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *providers.BackupVersion) error {
-	bucket := aws.String(b.config.BucketName)
-
 	downloadFileName := version.Name
 	if strings.Contains(downloadFileName, "/") {
 		downloadFileName = filepath.Base(downloadFileName)
@@ -209,16 +181,12 @@ func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *provider
 	}
 	defer f.Close()
 
-	downloader := s3manager.NewDownloader(b.sess)
-
-	_, err = downloader.DownloadWithContext(
-		ctx,
-		f,
-		&s3.GetObjectInput{
-			Bucket:    bucket,
-			Key:       &version.Name,
-			VersionId: &version.Version,
-		})
+	downloader := manager.NewDownloader(b.c)
+	_, err = downloader.Download(ctx, f, &s3.GetObjectInput{
+		Bucket:    aws.String(b.config.BucketName),
+		Key:       &version.Name,
+		VersionId: &version.Version,
+	})
 	if err != nil {
 		return err
 	}
@@ -228,8 +196,6 @@ func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *provider
 
 // UploadBackup uploads a backup to the backup provider
 func (b *BackupProviderS3) UploadBackup(ctx context.Context, sourcePath string) error {
-	bucket := aws.String(b.config.BucketName)
-
 	r, err := b.fs.Open(sourcePath)
 	if err != nil {
 		return err
@@ -243,9 +209,9 @@ func (b *BackupProviderS3) UploadBackup(ctx context.Context, sourcePath string) 
 
 	b.log.Debug("uploading object", "src", sourcePath, "dest", destination)
 
-	uploader := s3manager.NewUploader(b.sess)
-	_, err = uploader.UploadWithContext(ctx, &s3manager.UploadInput{
-		Bucket: bucket,
+	uploader := manager.NewUploader(b.c)
+	_, err = uploader.Upload(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(b.config.BucketName),
 		Key:    aws.String(destination),
 		Body:   r,
 	})
@@ -264,10 +230,8 @@ func (b *BackupProviderS3) GetNextBackupName(_ context.Context) string {
 
 // ListBackups lists the available backups of the backup provider
 func (b *BackupProviderS3) ListBackups(ctx context.Context) (providers.BackupVersions, error) {
-	bucket := aws.String(b.config.BucketName)
-
-	it, err := b.c.ListObjectVersionsWithContext(ctx, &s3.ListObjectVersionsInput{
-		Bucket: bucket,
+	it, err := b.c.ListObjectVersions(ctx, &s3.ListObjectVersionsInput{
+		Bucket: aws.String(b.config.BucketName),
 		Prefix: &b.config.ObjectPrefix,
 	})
 	if err != nil {
