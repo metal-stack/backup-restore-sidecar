@@ -1,13 +1,14 @@
 package examples
 
 import (
-	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
-	"github.com/metal-stack/metal-lib/pkg/pointer"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 )
 
 var (
@@ -30,7 +31,7 @@ func RedisSts(namespace string) *appsv1.StatefulSet {
 		},
 		Spec: appsv1.StatefulSetSpec{
 			ServiceName: "redis",
-			Replicas:    pointer.Pointer(int32(1)),
+			Replicas:    ptr.To(int32(1)),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"app": "redis",
