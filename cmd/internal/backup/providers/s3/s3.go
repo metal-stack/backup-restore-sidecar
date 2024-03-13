@@ -64,29 +64,29 @@ func (c *BackupProviderConfigS3) validate() error {
 }
 
 // New returns a S3 backup provider
-func New(log *slog.Logger, config *BackupProviderConfigS3) (*BackupProviderS3, error) {
-	if config == nil {
+func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, error) {
+	if cfg == nil {
 		return nil, errors.New("s3v1 backup provider requires a provider config")
 	}
 
-	if config.ObjectsToKeep == 0 {
-		config.ObjectsToKeep = constants.DefaultObjectsToKeep
+	if cfg.ObjectsToKeep == 0 {
+		cfg.ObjectsToKeep = constants.DefaultObjectsToKeep
 	}
-	if config.BackupName == "" {
-		config.BackupName = defaultBackupName
+	if cfg.BackupName == "" {
+		cfg.BackupName = defaultBackupName
 	}
-	if config.FS == nil {
-		config.FS = afero.NewOsFs()
+	if cfg.FS == nil {
+		cfg.FS = afero.NewOsFs()
 	}
 
-	err := config.validate()
+	err := cfg.validate()
 	if err != nil {
 		return nil, err
 	}
 	s3Config := &awsv1.Config{
-		Credentials:      credentialsv1.NewStaticCredentials(config.AccessKey, config.SecretKey, ""),
-		Endpoint:         awsv1.String(config.Endpoint),
-		Region:           awsv1.String(config.Region),
+		Credentials:      credentialsv1.NewStaticCredentials(cfg.AccessKey, cfg.SecretKey, ""),
+		Endpoint:         awsv1.String(cfg.Endpoint),
+		Region:           awsv1.String(cfg.Region),
 		S3ForcePathStyle: awsv1.Bool(true),
 	}
 	newSession, err := sessionv1.NewSession(s3Config)
@@ -101,9 +101,9 @@ func New(log *slog.Logger, config *BackupProviderConfigS3) (*BackupProviderS3, e
 	return &BackupProviderS3{
 		c:      client,
 		sess:   newSession,
-		config: config,
+		config: cfg,
 		log:    log,
-		fs:     config.FS,
+		fs:     cfg.FS,
 	}, nil
 }
 
