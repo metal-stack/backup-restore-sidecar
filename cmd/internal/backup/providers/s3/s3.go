@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"net/http"
 	"path"
 	"path/filepath"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
@@ -147,11 +147,9 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 		},
 	})
 	if err != nil {
-		var responseError interface {
-			HTTPStatusCode() int
-		}
-		if errors.As(err, &responseError) {
-			if responseError.HTTPStatusCode() == http.StatusNotImplemented {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) {
+			if apiErr.ErrorCode() == "NotImplemented" {
 				b.log.Warn("backups cannot be automatically cleaned", err)
 				return nil
 			}
