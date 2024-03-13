@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 )
 
 // BackupVersionsS3 contains the list of available backup versions
 type BackupVersionsS3 struct {
-	objectAttrs []*s3.ObjectVersion
+	objectAttrs []types.ObjectVersion
 }
 
 // Latest returns latest backup version
