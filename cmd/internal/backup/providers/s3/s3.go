@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 	"path"
 	"path/filepath"
 	"strings"
@@ -146,6 +147,15 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 		},
 	})
 	if err != nil {
+		var responseError interface {
+			HTTPStatusCode() int
+		}
+		if errors.As(err, &responseError) {
+			if responseError.HTTPStatusCode() == http.StatusNotImplemented {
+				b.log.Warn("backups cannot be automatically cleaned", err)
+				return nil
+			}
+		}
 		return err
 	}
 	return nil
