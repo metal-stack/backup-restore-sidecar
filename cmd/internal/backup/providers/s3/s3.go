@@ -150,7 +150,7 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 		var apiErr smithy.APIError
 		if errors.As(err, &apiErr) {
 			if apiErr.ErrorCode() == "NotImplemented" {
-				b.log.Warn("backups cannot be automatically cleaned", err)
+				b.log.Warn("missing support for automatic clean up of expired backups", err)
 				return nil
 			}
 		}
