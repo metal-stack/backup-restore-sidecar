@@ -67,7 +67,7 @@ func EtcdSts(namespace string) *appsv1.StatefulSet {
 								ProbeHandler: corev1.ProbeHandler{
 									HTTPGet: &corev1.HTTPGetAction{
 										Path:   "/health",
-										Port:   intstr.FromInt(32381),
+										Port:   intstr.FromInt32(32381),
 										Scheme: corev1.URISchemeHTTP,
 									},
 								},
