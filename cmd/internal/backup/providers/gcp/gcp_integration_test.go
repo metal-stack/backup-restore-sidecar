@@ -85,7 +85,7 @@ func Test_BackupProviderGCP(t *testing.T) {
 	}
 
 	t.Run("verify upload", func(t *testing.T) {
-		for i := 0; i < backupAmount; i++ {
+		for i := range backupAmount {
 			backupName := p.GetNextBackupName(ctx) + ".tar.gz"
 			assert.Equal(t, expectedBackupName, backupName)
 

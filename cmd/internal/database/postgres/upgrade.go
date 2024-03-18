@@ -227,7 +227,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 		return fmt.Errorf("unable to rename upgraded datadir to destination, a full restore is required: %w", err)
 	}
 
-	db.log.Info("pg_upgrade done and new data in place", "took", time.Since(start))
+	db.log.Info("pg_upgrade done and new data in place", "took", time.Since(start).String())
 
 	return nil
 }
