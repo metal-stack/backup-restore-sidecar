@@ -80,7 +80,7 @@ func (db *Meilisearch) Upgrade(ctx context.Context) error {
 		db.log.Error("unable cleanup old version data dir, consider manual cleanup", "error", err)
 	}
 
-	db.log.Info("meilisearch upgrade done and new data in place", "duration", time.Since(start))
+	db.log.Info("meilisearch upgrade done and new data in place", "took", time.Since(start).String())
 
 	return nil
 }
