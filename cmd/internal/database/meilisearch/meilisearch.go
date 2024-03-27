@@ -87,7 +87,8 @@ func (db *Meilisearch) Backup(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	db.log.Info("dump created successfully", "duration", dumpTask.Duration)
+	dumpDuration := dumpTask.FinishedAt.Sub(dumpTask.EnqueuedAt)
+	db.log.Info("dump created successfully", "duration", dumpDuration.String())
 
 	dumps, err := filepath.Glob(constants.BackupDir + "/*.dump")
 	if err != nil {
