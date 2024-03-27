@@ -82,7 +82,7 @@ func (db *Meilisearch) Backup(ctx context.Context) error {
 
 	dumpTask, err := db.client.WaitForTask(dumpResponse.TaskUID, meilisearch.WaitParams{
 		Context:  ctx,
-		Interval: time.Millisecond * 50,
+		Interval: time.Second,
 	})
 	if err != nil {
 		return err
