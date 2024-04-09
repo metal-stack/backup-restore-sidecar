@@ -95,9 +95,6 @@ func New(log *slog.Logger, config *BackupProviderConfigS3) (*BackupProviderS3, e
 		return nil, err
 	}
 	client := s3.New(newSession)
-	if err != nil {
-		return nil, err
-	}
 
 	return &BackupProviderS3{
 		c:      client,
@@ -154,7 +151,7 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 		}
 	}
 
-	// add lifecyle policy
+	// add lifecycle policy
 	lifecycle := &s3.PutBucketLifecycleConfigurationInput{
 		Bucket: bucket,
 		LifecycleConfiguration: &s3.BucketLifecycleConfiguration{

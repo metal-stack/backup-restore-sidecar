@@ -50,7 +50,7 @@ func (l *LocalFS) Backup(ctx context.Context) error {
 		return fmt.Errorf("could not copy contents: %w", err)
 	}
 
-	l.log.Debug("Sucessfully took backup of localfs")
+	l.log.Debug("Successfully took backup of localfs")
 	return nil
 }
 
