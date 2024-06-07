@@ -91,7 +91,7 @@ func (i *Initializer) Start(ctx context.Context) {
 
 	lis, err := net.Listen("tcp", i.addr)
 	if err != nil {
-		i.log.Error("failed to listen: %v", err)
+		i.log.Error("failed to listen", "error", err)
 		panic(err)
 	}
 
@@ -103,7 +103,7 @@ func (i *Initializer) Start(ctx context.Context) {
 
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
-			i.log.Error("failed to serve: %v", err)
+			i.log.Error("failed to serve", "error", err)
 			panic(err)
 		}
 	}()

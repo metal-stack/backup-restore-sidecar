@@ -32,10 +32,9 @@ func New(ctx context.Context, rawurl string) (Client, error) {
 
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	}
 
-	conn, err := grpc.DialContext(ctx, parsedurl.Host, opts...)
+	conn, err := grpc.NewClient(parsedurl.Host, opts...)
 	if err != nil {
 		return nil, err
 	}

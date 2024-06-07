@@ -13,7 +13,7 @@ import (
 
 var (
 	Etcd               = "etcd"
-	etcdContainerImage = "quay.io/coreos/etcd:v3.5.7"
+	etcdContainerImage = "quay.io/coreos/etcd:v3.5.14"
 )
 
 func EtcdSts(namespace string) *appsv1.StatefulSet {
