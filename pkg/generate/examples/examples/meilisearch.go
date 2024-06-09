@@ -15,7 +15,7 @@ const (
 	Meilisearch         = "meilisearch"
 	MeilisearchPassword = "test123!"
 
-	meilisearchContainerImage = "getmeili/meilisearch:v1.3.0"
+	meilisearchContainerImage = "getmeili/meilisearch:v1.8.1"
 )
 
 func MeilisearchSts(namespace string) *appsv1.StatefulSet {

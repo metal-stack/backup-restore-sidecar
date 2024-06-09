@@ -24,7 +24,7 @@ spec:
       - command:
         - backup-restore-sidecar
         - wait
-        image: getmeili/meilisearch:v1.3.0
+        image: getmeili/meilisearch:v1.8.1
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 6
@@ -80,7 +80,7 @@ spec:
             secretKeyRef:
               key: MEILISEARCH_URL
               name: meilisearch
-        image: getmeili/meilisearch:v1.3.0
+        image: getmeili/meilisearch:v1.8.1
         name: backup-restore-sidecar
         ports:
         - containerPort: 8000
