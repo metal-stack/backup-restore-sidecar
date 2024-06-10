@@ -53,7 +53,7 @@ func New(log *slog.Logger, addr string, db database.Database, bp providers.Backu
 }
 
 // Start starts the initializer, which includes a server component and the initializer itself, which is potentially restoring a backup
-func (i *Initializer) Start(ctx context.Context) {
+func (i *Initializer) Start(ctx context.Context) error {
 	opts := []grpc.ServerOption{
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
 			grpc_ctxtags.StreamServerInterceptor(),
@@ -92,7 +92,7 @@ func (i *Initializer) Start(ctx context.Context) {
 	lis, err := net.Listen("tcp", i.addr)
 	if err != nil {
 		i.log.Error("failed to listen", "error", err)
-		panic(err)
+		return err
 	}
 
 	go func() {
@@ -111,7 +111,7 @@ func (i *Initializer) Start(ctx context.Context) {
 	err = i.initialize(ctx)
 	if err != nil {
 		i.log.Error("error initializing database, shutting down", "error", err)
-		panic(err)
+		return err
 	}
 
 	i.currentStatus.Status = v1.StatusResponse_UPGRADING
@@ -119,12 +119,13 @@ func (i *Initializer) Start(ctx context.Context) {
 	err = i.db.Upgrade(ctx)
 	if err != nil {
 		i.log.Error("upgrade database failed", "error", err)
-		panic(err)
+		return err
 	}
 
 	i.log.Info("initializer done")
 	i.currentStatus.Status = v1.StatusResponse_DONE
 	i.currentStatus.Message = "done"
+	return nil
 }
 
 func (i *Initializer) initialize(ctx context.Context) error {
