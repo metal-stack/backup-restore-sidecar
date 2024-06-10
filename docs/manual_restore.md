@@ -42,7 +42,7 @@ The advantage of the backup-restore-sidecar is that it automatically restores th
          - command:
          - backup-restore-sidecar
          - restore
-         - "0"
+         - "<desired version e.g. 0>"
          - --log-level=debug
    ```
 
