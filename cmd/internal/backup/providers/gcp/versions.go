@@ -1,7 +1,6 @@
 package gcp
 
 import (
-	"fmt"
 	"strconv"
 
 	"cloud.google.com/go/storage"
@@ -14,17 +13,13 @@ type backupVersionsGCP struct {
 }
 
 func (b backupVersionsGCP) Latest() *providers.BackupVersion {
-	result := b.List()
-	if len(result) == 0 {
-		return nil
-	}
-	return result[0]
+	return common.Latest(b.List())
 }
 
 func (b backupVersionsGCP) List() []*providers.BackupVersion {
 	var result []*providers.BackupVersion
 
-	tmp := make(map[int64]bool)
+	tmp := make(map[int64]bool, len(result))
 	for _, attr := range b.objectAttrs {
 		ok := tmp[attr.Generation]
 		if !ok {
@@ -43,10 +38,5 @@ func (b backupVersionsGCP) List() []*providers.BackupVersion {
 }
 
 func (b backupVersionsGCP) Get(version string) (*providers.BackupVersion, error) {
-	for _, backup := range b.List() {
-		if version == backup.Version {
-			return backup, nil
-		}
-	}
-	return nil, fmt.Errorf("version %q not found", version)
+	return common.Get(b, version)
 }

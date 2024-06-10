@@ -1,7 +1,6 @@
 package local
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 
@@ -14,12 +13,7 @@ type backupVersionsLocal struct {
 }
 
 func (b backupVersionsLocal) Latest() *providers.BackupVersion {
-	result := b.List()
-	if len(result) == 0 {
-		return nil
-	}
-	common.Sort(result, false)
-	return result[0]
+	return common.Latest(b.List())
 }
 
 func (b backupVersionsLocal) List() []*providers.BackupVersion {
@@ -42,10 +36,5 @@ func (b backupVersionsLocal) List() []*providers.BackupVersion {
 }
 
 func (b backupVersionsLocal) Get(version string) (*providers.BackupVersion, error) {
-	for _, backup := range b.List() {
-		if version == backup.Version {
-			return backup, nil
-		}
-	}
-	return nil, fmt.Errorf("version %q not found", version)
+	return common.Get(b, version)
 }
