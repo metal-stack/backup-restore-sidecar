@@ -18,7 +18,7 @@ const (
 	PostgresPassword = "test123!"
 	PostgresUser     = "postgres"
 
-	postgresContainerImage = "postgres:12-alpine"
+	postgresContainerImage = "postgres:16-alpine"
 )
 
 func PostgresSts(namespace string) *appsv1.StatefulSet {

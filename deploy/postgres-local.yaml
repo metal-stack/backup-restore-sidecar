@@ -45,7 +45,7 @@ spec:
             secretKeyRef:
               key: POSTGRES_DATA
               name: postgres
-        image: postgres:12-alpine
+        image: postgres:16-alpine
         livenessProbe:
           exec:
             command:
@@ -107,7 +107,7 @@ spec:
             secretKeyRef:
               key: POSTGRES_USER
               name: postgres
-        image: postgres:12-alpine
+        image: postgres:16-alpine
         name: backup-restore-sidecar
         ports:
         - containerPort: 8000

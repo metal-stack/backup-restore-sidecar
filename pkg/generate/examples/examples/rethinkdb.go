@@ -16,7 +16,7 @@ const (
 
 	RethinkDbPassword = "test123!"
 
-	rethinkDbContainerImage = "rethinkdb:2.4.0"
+	rethinkDbContainerImage = "rethinkdb:2.4.4-bookworm-slim"
 )
 
 func RethinkDbSts(namespace string) *appsv1.StatefulSet {

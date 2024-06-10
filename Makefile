@@ -32,7 +32,7 @@ test: build
 	go test -cover ./...
 
 .PHONY: generate-examples
-generate-examples:
+generate-examples: proto
 	go run ./pkg/generate/examples/dump.go
 
 .PHONY: test-integration
