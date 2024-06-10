@@ -30,7 +30,7 @@ spec:
             secretKeyRef:
               key: rethinkdb-password
               name: rethinkdb
-        image: rethinkdb:2.4.4
+        image: rethinkdb:2.4.4-bookworm-slim
         name: rethinkdb
         ports:
         - containerPort: 8080
@@ -48,7 +48,7 @@ spec:
         - backup-restore-sidecar
         - start
         - --log-level=debug
-        image: rethinkdb:2.4.4
+        image: rethinkdb:2.4.4-bookworm-slim
         name: backup-restore-sidecar
         ports:
         - containerPort: 8000
