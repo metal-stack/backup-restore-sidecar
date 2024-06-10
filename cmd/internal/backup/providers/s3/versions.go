@@ -2,10 +2,10 @@ package s3
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/common"
 )
 
 // backupVersionsS3 contains the list of available backup versions
@@ -34,19 +34,9 @@ func (b backupVersionsS3) List() []*providers.BackupVersion {
 		})
 	}
 
-	b.Sort(result, false)
+	common.Sort(result, false)
 
 	return result
-}
-
-// Sort returns the backup versions sorted by date
-func (b backupVersionsS3) Sort(versions []*providers.BackupVersion, asc bool) {
-	sort.Slice(versions, func(i, j int) bool {
-		if asc {
-			return versions[i].Date.Before(versions[j].Date)
-		}
-		return versions[i].Date.After(versions[j].Date)
-	})
 }
 
 // Get returns the backup entry of the given version

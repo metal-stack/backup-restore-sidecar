@@ -16,7 +16,6 @@ type BackupProvider interface {
 
 type BackupVersions interface {
 	Latest() *BackupVersion
-	Sort(versions []*BackupVersion, asc bool)
 	List() []*BackupVersion
 	Get(version string) (*BackupVersion, error)
 }

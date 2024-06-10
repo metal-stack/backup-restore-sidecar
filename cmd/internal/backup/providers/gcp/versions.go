@@ -2,11 +2,11 @@ package gcp
 
 import (
 	"fmt"
-	"sort"
 	"strconv"
 
 	"cloud.google.com/go/storage"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/common"
 )
 
 type backupVersionsGCP struct {
@@ -37,18 +37,9 @@ func (b backupVersionsGCP) List() []*providers.BackupVersion {
 		}
 	}
 
-	b.Sort(result, false)
+	common.Sort(result, false)
 
 	return result
-}
-
-func (b backupVersionsGCP) Sort(versions []*providers.BackupVersion, asc bool) {
-	sort.Slice(versions, func(i, j int) bool {
-		if asc {
-			return versions[i].Date.Before(versions[j].Date)
-		}
-		return versions[i].Date.After(versions[j].Date)
-	})
 }
 
 func (b backupVersionsGCP) Get(version string) (*providers.BackupVersion, error) {

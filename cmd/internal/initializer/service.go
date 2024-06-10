@@ -6,6 +6,7 @@ import (
 
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/common"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -44,7 +45,7 @@ func (s *backupService) ListBackups(ctx context.Context, _ *v1.ListBackupsReques
 	}
 
 	backups := versions.List()
-	versions.Sort(backups, false)
+	common.Sort(backups, false)
 
 	response := &v1.BackupListResponse{}
 	for _, b := range backups {
