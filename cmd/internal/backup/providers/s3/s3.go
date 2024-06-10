@@ -271,7 +271,7 @@ func (b *BackupProviderS3) ListBackups(ctx context.Context) (providers.BackupVer
 		return nil, err
 	}
 
-	return BackupVersionsS3{
+	return backupVersionsS3{
 		objectAttrs: it.Versions,
 	}, nil
 }

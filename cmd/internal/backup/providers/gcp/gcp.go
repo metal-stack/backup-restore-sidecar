@@ -242,7 +242,7 @@ func (b *BackupProviderGCP) ListBackups(ctx context.Context) (providers.BackupVe
 		objectAttrs = append(objectAttrs, attrs)
 	}
 
-	return BackupVersionsGCP{
+	return backupVersionsGCP{
 		objectAttrs: objectAttrs,
 	}, nil
 }

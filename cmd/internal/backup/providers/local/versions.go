@@ -9,11 +9,11 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 )
 
-type BackupVersionsLocal struct {
+type backupVersionsLocal struct {
 	files []os.FileInfo
 }
 
-func (b BackupVersionsLocal) Latest() *providers.BackupVersion {
+func (b backupVersionsLocal) Latest() *providers.BackupVersion {
 	result := b.List()
 	if len(result) == 0 {
 		return nil
@@ -22,7 +22,7 @@ func (b BackupVersionsLocal) Latest() *providers.BackupVersion {
 	return result[0]
 }
 
-func (b BackupVersionsLocal) List() []*providers.BackupVersion {
+func (b backupVersionsLocal) List() []*providers.BackupVersion {
 	var result []*providers.BackupVersion
 
 	for _, file := range b.files {
@@ -41,7 +41,7 @@ func (b BackupVersionsLocal) List() []*providers.BackupVersion {
 	return result
 }
 
-func (b BackupVersionsLocal) Sort(versions []*providers.BackupVersion, oldestFirst bool) {
+func (b backupVersionsLocal) Sort(versions []*providers.BackupVersion, oldestFirst bool) {
 	sort.Slice(versions, func(i, j int) bool {
 		if oldestFirst {
 			return versions[i].Date.Before(versions[j].Date)
@@ -50,7 +50,7 @@ func (b BackupVersionsLocal) Sort(versions []*providers.BackupVersion, oldestFir
 	})
 }
 
-func (b BackupVersionsLocal) Get(version string) (*providers.BackupVersion, error) {
+func (b backupVersionsLocal) Get(version string) (*providers.BackupVersion, error) {
 	for _, backup := range b.List() {
 		if version == backup.Version {
 			return backup, nil

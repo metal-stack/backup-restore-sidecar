@@ -9,11 +9,11 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 )
 
-type BackupVersionsGCP struct {
+type backupVersionsGCP struct {
 	objectAttrs []*storage.ObjectAttrs
 }
 
-func (b BackupVersionsGCP) Latest() *providers.BackupVersion {
+func (b backupVersionsGCP) Latest() *providers.BackupVersion {
 	result := b.List()
 	if len(result) == 0 {
 		return nil
@@ -21,7 +21,7 @@ func (b BackupVersionsGCP) Latest() *providers.BackupVersion {
 	return result[0]
 }
 
-func (b BackupVersionsGCP) List() []*providers.BackupVersion {
+func (b backupVersionsGCP) List() []*providers.BackupVersion {
 	var result []*providers.BackupVersion
 
 	tmp := make(map[int64]bool)
@@ -42,7 +42,7 @@ func (b BackupVersionsGCP) List() []*providers.BackupVersion {
 	return result
 }
 
-func (b BackupVersionsGCP) Sort(versions []*providers.BackupVersion, asc bool) {
+func (b backupVersionsGCP) Sort(versions []*providers.BackupVersion, asc bool) {
 	sort.Slice(versions, func(i, j int) bool {
 		if asc {
 			return versions[i].Date.Before(versions[j].Date)
@@ -51,7 +51,7 @@ func (b BackupVersionsGCP) Sort(versions []*providers.BackupVersion, asc bool) {
 	})
 }
 
-func (b BackupVersionsGCP) Get(version string) (*providers.BackupVersion, error) {
+func (b backupVersionsGCP) Get(version string) (*providers.BackupVersion, error) {
 	for _, backup := range b.List() {
 		if version == backup.Version {
 			return backup, nil

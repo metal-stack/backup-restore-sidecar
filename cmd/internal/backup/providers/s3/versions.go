@@ -8,13 +8,13 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 )
 
-// BackupVersionsS3 contains the list of available backup versions
-type BackupVersionsS3 struct {
+// backupVersionsS3 contains the list of available backup versions
+type backupVersionsS3 struct {
 	objectAttrs []*s3.ObjectVersion
 }
 
 // Latest returns latest backup version
-func (b BackupVersionsS3) Latest() *providers.BackupVersion {
+func (b backupVersionsS3) Latest() *providers.BackupVersion {
 	result := b.List()
 	if len(result) == 0 {
 		return nil
@@ -23,7 +23,7 @@ func (b BackupVersionsS3) Latest() *providers.BackupVersion {
 }
 
 // List return a list of all backup versions
-func (b BackupVersionsS3) List() []*providers.BackupVersion {
+func (b backupVersionsS3) List() []*providers.BackupVersion {
 	var result []*providers.BackupVersion
 
 	for _, attr := range b.objectAttrs {
@@ -40,7 +40,7 @@ func (b BackupVersionsS3) List() []*providers.BackupVersion {
 }
 
 // Sort returns the backup versions sorted by date
-func (b BackupVersionsS3) Sort(versions []*providers.BackupVersion, asc bool) {
+func (b backupVersionsS3) Sort(versions []*providers.BackupVersion, asc bool) {
 	sort.Slice(versions, func(i, j int) bool {
 		if asc {
 			return versions[i].Date.Before(versions[j].Date)
@@ -50,7 +50,7 @@ func (b BackupVersionsS3) Sort(versions []*providers.BackupVersion, asc bool) {
 }
 
 // Get returns the backup entry of the given version
-func (b BackupVersionsS3) Get(version string) (*providers.BackupVersion, error) {
+func (b backupVersionsS3) Get(version string) (*providers.BackupVersion, error) {
 	for _, backup := range b.List() {
 		if version == backup.Version {
 			return backup, nil
