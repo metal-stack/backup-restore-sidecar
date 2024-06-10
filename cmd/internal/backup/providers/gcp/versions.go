@@ -32,7 +32,7 @@ func (b backupVersionsGCP) List() []*providers.BackupVersion {
 		}
 	}
 
-	common.Sort(result, false)
+	common.Sort(result)
 
 	return result
 }

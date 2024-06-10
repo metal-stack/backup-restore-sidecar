@@ -2,24 +2,21 @@ package common
 
 import (
 	"fmt"
-	"slices"
+	"sort"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 )
 
 // Sort the given list of backup versions
-func Sort(versions []*providers.BackupVersion, oldestFirst bool) {
-	slices.SortFunc(versions, func(a, b *providers.BackupVersion) int {
-		if oldestFirst {
-			return b.Date.Compare(a.Date)
-		}
-		return a.Date.Compare(b.Date)
+func Sort(versions []*providers.BackupVersion) {
+	sort.Slice(versions, func(i, j int) bool {
+		return versions[i].Date.After(versions[j].Date)
 	})
 }
 
 // Latest returns latest backup version
 func Latest(versions []*providers.BackupVersion) *providers.BackupVersion {
-	Sort(versions, true)
+	Sort(versions)
 	if len(versions) == 0 {
 		return nil
 	}

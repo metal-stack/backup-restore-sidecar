@@ -49,7 +49,7 @@ func Test_BackupProviderLocal(t *testing.T) {
 				for i := range backupAmount {
 					backupName := p.GetNextBackupName(ctx) + ".tar.gz"
 					backupPath := path.Join(constants.UploadDir, backupName)
-					backupContent := fmt.Sprintf("precious data %d", i)
+					backupContent := fmt.Sprintf("precious data %d", i+1)
 
 					err = afero.WriteFile(fs, backupPath, []byte(backupContent), 0600)
 					require.NoError(t, err)
@@ -102,8 +102,6 @@ func Test_BackupProviderLocal(t *testing.T) {
 				require.Len(t, allVersions, amount)
 
 				for i, v := range allVersions {
-					v := v
-
 					assert.True(t, strings.HasSuffix(v.Name, ".tar.gz"))
 					assert.NotZero(t, v.Date)
 
@@ -139,7 +137,7 @@ func Test_BackupProviderLocal(t *testing.T) {
 				gotContent, err := afero.ReadFile(fs, downloadPath)
 				require.NoError(t, err)
 
-				require.Equal(t, fmt.Sprintf("precious data %d", backupAmount-1), string(gotContent))
+				require.Equal(t, fmt.Sprintf("precious data %d", backupAmount), string(gotContent))
 
 				// cleaning up after test
 				err = fs.Remove(downloadPath)

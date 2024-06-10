@@ -46,7 +46,7 @@ func (s *backupService) ListBackups(ctx context.Context, _ *v1.ListBackupsReques
 
 	// List internally sorts the backups
 	backups := versions.List()
-	common.Sort(backups, false)
+	common.Sort(backups)
 
 	response := &v1.BackupListResponse{}
 	for _, b := range backups {

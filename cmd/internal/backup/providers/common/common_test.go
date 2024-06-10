@@ -15,15 +15,14 @@ func TestSort(t *testing.T) {
 		name           string
 		versions       []*providers.BackupVersion
 		wantedVersions []*providers.BackupVersion
-		oldestFirst    bool
 	}{
 		{
-			name: "ascending",
+			name: "mixed",
 			versions: []*providers.BackupVersion{
-				{Name: "0.tgz", Date: now},
 				{Name: "2.tgz", Date: now.Add(2 * time.Hour)},
 				{Name: "1.tgz", Date: now.Add(1 * time.Hour)},
 				{Name: "5.tgz", Date: now.Add(5 * time.Hour)},
+				{Name: "0.tgz", Date: now},
 				{Name: "3.tgz", Date: now.Add(3 * time.Hour)},
 			},
 			wantedVersions: []*providers.BackupVersion{
@@ -33,30 +32,11 @@ func TestSort(t *testing.T) {
 				{Name: "3.tgz", Date: now.Add(3 * time.Hour)},
 				{Name: "5.tgz", Date: now.Add(5 * time.Hour)},
 			},
-			oldestFirst: true,
-		},
-		{
-			name: "descending",
-			versions: []*providers.BackupVersion{
-				{Name: "0.tgz", Date: now},
-				{Name: "2.tgz", Date: now.Add(2 * time.Hour)},
-				{Name: "1.tgz", Date: now.Add(1 * time.Hour)},
-				{Name: "5.tgz", Date: now.Add(5 * time.Hour)},
-				{Name: "3.tgz", Date: now.Add(3 * time.Hour)},
-			},
-			wantedVersions: []*providers.BackupVersion{
-				{Name: "5.tgz", Date: now.Add(5 * time.Hour)},
-				{Name: "3.tgz", Date: now.Add(3 * time.Hour)},
-				{Name: "2.tgz", Date: now.Add(2 * time.Hour)},
-				{Name: "1.tgz", Date: now.Add(1 * time.Hour)},
-				{Name: "0.tgz", Date: now},
-			},
-			oldestFirst: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			Sort(tt.versions, tt.oldestFirst)
+			Sort(tt.versions)
 			require.ElementsMatch(t, tt.versions, tt.wantedVersions)
 		})
 	}
@@ -72,8 +52,8 @@ func TestLatest(t *testing.T) {
 	}{
 		{
 			versions: []*providers.BackupVersion{
-				{Name: "0.tgz", Date: now},
 				{Name: "2.tgz", Date: now.Add(2 * time.Hour)},
+				{Name: "0.tgz", Date: now},
 				{Name: "1.tgz", Date: now.Add(1 * time.Hour)},
 				newestBackup,
 				{Name: "3.tgz", Date: now.Add(3 * time.Hour)},
