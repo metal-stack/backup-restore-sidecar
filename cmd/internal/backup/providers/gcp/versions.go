@@ -38,5 +38,5 @@ func (b backupVersionsGCP) List() []*providers.BackupVersion {
 }
 
 func (b backupVersionsGCP) Get(version string) (*providers.BackupVersion, error) {
-	return common.Get(b, version)
+	return common.Get(b.List(), version)
 }

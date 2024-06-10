@@ -7,10 +7,6 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 )
 
-type backupVersionLister interface {
-	List() []*providers.BackupVersion
-}
-
 // Sort the given list of backup versions
 func Sort(versions []*providers.BackupVersion, oldestFirst bool) {
 	slices.SortFunc(versions, func(a, b *providers.BackupVersion) int {
@@ -31,8 +27,8 @@ func Latest(versions []*providers.BackupVersion) *providers.BackupVersion {
 }
 
 // Latest returns the backup version at given version
-func Get(b backupVersionLister, version string) (*providers.BackupVersion, error) {
-	for _, backup := range b.List() {
+func Get(versions []*providers.BackupVersion, version string) (*providers.BackupVersion, error) {
+	for _, backup := range versions {
 		if version == backup.Version {
 			return backup, nil
 		}

@@ -35,5 +35,5 @@ func (b backupVersionsS3) List() []*providers.BackupVersion {
 
 // Get returns the backup entry of the given version
 func (b backupVersionsS3) Get(version string) (*providers.BackupVersion, error) {
-	return common.Get(b, version)
+	return common.Get(b.List(), version)
 }
