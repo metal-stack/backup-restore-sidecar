@@ -6,122 +6,100 @@ metadata:
     app: rethinkdb
   name: rethinkdb
 spec:
+  serviceName: rethinkdb
   replicas: 1
   selector:
     matchLabels:
       app: rethinkdb
-  serviceName: rethinkdb
   template:
     metadata:
       labels:
         app: rethinkdb
     spec:
       containers:
-      - command:
-        - backup-restore-sidecar
-        - restore
-        - "0"
-        - --log-level=debug
+      - image: rethinkdb:2.4.0
+        name: backup-restore-sidecar
+        command:
+        - tail
+        - -f
+        - /etc/os-release
         env:
-        - name: RETHINKDB_PASSWORD
+        - name: BACKUP_RESTORE_SIDECAR_GCP_PROJECT
           valueFrom:
             secretKeyRef:
-              key: rethinkdb-password
-              name: rethinkdb
-        image: rethinkdb:2.4.4-bookworm-slim
-        name: rethinkdb
-        ports:
-        - containerPort: 8080
-        - containerPort: 28015
-        resources: {}
+              key: projectID
+              name: backup-restore-sidecar-backup-provider-config
+        - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_NAME
+          valueFrom:
+            secretKeyRef:
+              key: bucketName
+              name: backup-restore-sidecar-backup-provider-config
+        - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_LOCATION
+          valueFrom:
+            secretKeyRef:
+              key: bucketLocation
+              name: backup-restore-sidecar-backup-provider-config
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: /gcp/credentials/serviceaccount.json
         volumeMounts:
-        - mountPath: /data
-          name: data
-        - mountPath: /usr/local/bin/backup-restore-sidecar
-          name: bin-provision
+        - name: rethinkdb
+          mountPath: /data
+        - name: rethinkdb-credentials
+          mountPath: /rethinkdb-secret
+        - name: backup-restore-sidecar-config
+          mountPath: /etc/backup-restore-sidecar
+        - name: bin-provision
           subPath: backup-restore-sidecar
-        - mountPath: /etc/backup-restore-sidecar
-          name: backup-restore-sidecar-config
-      - command:
-        - backup-restore-sidecar
-        - start
-        - --log-level=debug
-        image: rethinkdb:2.4.4-bookworm-slim
-        name: backup-restore-sidecar
-        ports:
-        - containerPort: 8000
-          name: grpc
-        resources: {}
-        volumeMounts:
-        - mountPath: /backup
-          name: backup
-        - mountPath: /data
-          name: data
-        - mountPath: /rethinkdb-secret
-          name: rethinkdb-credentials
-        - mountPath: /etc/backup-restore-sidecar
-          name: backup-restore-sidecar-config
-        - mountPath: /usr/local/bin/backup-restore-sidecar
-          name: bin-provision
-          subPath: backup-restore-sidecar
-        - mountPath: /usr/local/bin/rethinkdb-dump
-          name: bin-provision
+          mountPath: /usr/local/bin/backup-restore-sidecar
+        - name: bin-provision
           subPath: rethinkdb-dump
-        - mountPath: /usr/local/bin/rethinkdb-restore
-          name: bin-provision
+          mountPath: /usr/local/bin/rethinkdb-dump
+        - name: bin-provision
           subPath: rethinkdb-restore
+          mountPath: /usr/local/bin/rethinkdb-restore
+        - name: gcp-credentials
+          mountPath: /gcp/credentials
+          readOnly: true
       initContainers:
-      - command:
+      - name: backup-restore-sidecar-provider
+        image: ghcr.io/metal-stack/backup-restore-sidecar:latest
+        imagePullPolicy: IfNotPresent
+        command:
         - cp
         - /backup-restore-sidecar
         - /rethinkdb/rethinkdb-dump
         - /rethinkdb/rethinkdb-restore
         - /bin-provision
-        image: ghcr.io/metal-stack/backup-restore-sidecar:latest
-        imagePullPolicy: IfNotPresent
-        name: backup-restore-sidecar-provider
-        resources: {}
         volumeMounts:
-        - mountPath: /bin-provision
-          name: bin-provision
+        - name: bin-provision
+          mountPath: /bin-provision
       volumes:
-      - name: data
+      - name: rethinkdb
         persistentVolumeClaim:
-          claimName: data
-      - name: backup
-        persistentVolumeClaim:
-          claimName: backup
+          claimName: rethinkdb
       - name: rethinkdb-credentials
         secret:
+          secretName: rethinkdb
           items:
           - key: rethinkdb-password
             path: rethinkdb-password.txt
-          secretName: rethinkdb
-      - configMap:
+      - name: backup-restore-sidecar-config
+        configMap:
           name: backup-restore-sidecar-config-rethinkdb
-        name: backup-restore-sidecar-config
-      - emptyDir: {}
-        name: bin-provision
-  updateStrategy: {}
+      - name: gcp-credentials
+        secret:
+          secretName: backup-restore-sidecar-backup-provider-config
+          items:
+          - key: serviceaccount.json
+            path: serviceaccount.json
+      - name: bin-provision
+        emptyDir: {}
   volumeClaimTemplates:
   - metadata:
-      name: data
+      name: rethinkdb
     spec:
       accessModes:
       - ReadWriteOnce
       resources:
         requests:
           storage: 1Gi
-    status: {}
-  - metadata:
-      name: backup
-    spec:
-      accessModes:
-      - ReadWriteOnce
-      resources:
-        requests:
-          storage: 1Gi
-    status: {}
-status:
-  availableReplicas: 0
-  replicas: 0

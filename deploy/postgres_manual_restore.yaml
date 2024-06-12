@@ -6,95 +6,39 @@ metadata:
     app: postgres
   name: postgres
 spec:
+  serviceName: postgres
   replicas: 1
   selector:
     matchLabels:
       app: postgres
-  serviceName: postgres
   template:
     metadata:
       labels:
         app: postgres
     spec:
       containers:
-      - command:
-        - backup-restore-sidecar
-        - restore
-        - "0"
-        - --log-level=debug
+      - image: postgres:12-alpine
+        name: backup-restore-sidecar
+        command:
+        - tail
+        - -f
+        - /etc/os-release
         env:
-        - name: POSTGRES_DB
+        - name: BACKUP_RESTORE_SIDECAR_GCP_PROJECT
           valueFrom:
             secretKeyRef:
-              key: POSTGRES_DB
-              name: postgres
-        - name: POSTGRES_USER
+              key: projectID
+              name: backup-restore-sidecar-backup-provider-config
+        - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_NAME
           valueFrom:
             secretKeyRef:
-              key: POSTGRES_USER
-              name: postgres
-        - name: POSTGRES_PASSWORD
+              key: bucketName
+              name: backup-restore-sidecar-backup-provider-config
+        - name: BACKUP_RESTORE_SIDECAR_GCP_BUCKET_LOCATION
           valueFrom:
             secretKeyRef:
-              key: POSTGRES_PASSWORD
-              name: postgres
-        - name: PGDATA
-          valueFrom:
-            secretKeyRef:
-              key: POSTGRES_DATA
-              name: postgres
-        image: postgres:16-alpine
-        livenessProbe:
-          exec:
-            command:
-            - /bin/sh
-            - -c
-            - exec
-            - pg_isready
-            - -U
-            - postgres
-            - -h
-            - 127.0.0.1
-            - -p
-            - "5432"
-          failureThreshold: 6
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          successThreshold: 1
-          timeoutSeconds: 5
-        name: postgres
-        ports:
-        - containerPort: 5432
-        readinessProbe:
-          exec:
-            command:
-            - /bin/sh
-            - -c
-            - exec
-            - pg_isready
-            - -U
-            - postgres
-            - -h
-            - 127.0.0.1
-            - -p
-            - "5432"
-          initialDelaySeconds: 5
-          periodSeconds: 10
-          timeoutSeconds: 5
-        resources: {}
-        volumeMounts:
-        - mountPath: /data
-          name: data
-        - mountPath: /usr/local/bin/backup-restore-sidecar
-          name: bin-provision
-          subPath: backup-restore-sidecar
-        - mountPath: /etc/backup-restore-sidecar
-          name: backup-restore-sidecar-config
-      - command:
-        - backup-restore-sidecar
-        - start
-        - --log-level=debug
-        env:
+              key: bucketLocation
+              name: backup-restore-sidecar-backup-provider-config
         - name: BACKUP_RESTORE_SIDECAR_POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
@@ -105,66 +49,51 @@ spec:
             secretKeyRef:
               key: POSTGRES_USER
               name: postgres
-        image: postgres:16-alpine
-        name: backup-restore-sidecar
-        ports:
-        - containerPort: 8000
-          name: grpc
-        resources: {}
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: /gcp/credentials/serviceaccount.json
         volumeMounts:
-        - mountPath: /backup
-          name: backup
-        - mountPath: /data
-          name: data
-        - mountPath: /etc/backup-restore-sidecar
-          name: backup-restore-sidecar-config
-        - mountPath: /usr/local/bin/backup-restore-sidecar
-          name: bin-provision
+        - name: postgres
+          mountPath: /data
+        - name: bin-provision
           subPath: backup-restore-sidecar
+          mountPath: /usr/local/bin/backup-restore-sidecar
+        - name: backup-restore-sidecar-config
+          mountPath: /etc/backup-restore-sidecar
+        - name: gcp-credentials
+          mountPath: /gcp/credentials
+          readOnly: true
       initContainers:
-      - command:
+      - name: backup-restore-sidecar-provider
+        image: ghcr.io/metal-stack/backup-restore-sidecar:latest
+        imagePullPolicy: IfNotPresent
+        command:
         - cp
         - /backup-restore-sidecar
         - /bin-provision
-        image: ghcr.io/metal-stack/backup-restore-sidecar:latest
-        imagePullPolicy: IfNotPresent
-        name: backup-restore-sidecar-provider
-        resources: {}
         volumeMounts:
-        - mountPath: /bin-provision
-          name: bin-provision
+        - name: bin-provision
+          mountPath: /bin-provision
       volumes:
-      - name: data
+      - name: postgres
         persistentVolumeClaim:
-          claimName: data
-      - name: backup
-        persistentVolumeClaim:
-          claimName: backup
-      - configMap:
+          claimName: postgres
+      - name: backup-restore-sidecar-config
+        configMap:
           name: backup-restore-sidecar-config-postgres
-        name: backup-restore-sidecar-config
-      - emptyDir: {}
-        name: bin-provision
-  updateStrategy: {}
+      - name: gcp-credentials
+        secret:
+          secretName: backup-restore-sidecar-backup-provider-config
+          items:
+          - key: serviceaccount.json
+            path: serviceaccount.json
+      - name: bin-provision
+        emptyDir: {}
   volumeClaimTemplates:
   - metadata:
-      name: data
+      name: postgres
     spec:
       accessModes:
       - ReadWriteOnce
       resources:
         requests:
           storage: 1Gi
-    status: {}
-  - metadata:
-      name: backup
-    spec:
-      accessModes:
-      - ReadWriteOnce
-      resources:
-        requests:
-          storage: 1Gi
-    status: {}
-status:
-  availableReplicas: 0
-  replicas: 0
