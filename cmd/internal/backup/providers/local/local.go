@@ -145,7 +145,7 @@ func (b *BackupProviderLocal) ListBackups(_ context.Context) (providers.BackupVe
 		files = append(files, info)
 	}
 
-	return BackupVersionsLocal{
+	return backupVersionsLocal{
 		files: files,
 	}, nil
 }
