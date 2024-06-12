@@ -17,7 +17,7 @@ type BackupProvider interface {
 type BackupVersions interface {
 	// Latest returns the most recent backup
 	Latest() *BackupVersion
-	// List returns all backups sorted by date descending, e.g. the newes backup comes first
+	// List returns all backups sorted by date descending, e.g. the newest backup comes first
 	List() []*BackupVersion
 	// Get a backup at the specified version
 	Get(version string) (*BackupVersion, error)
