@@ -104,7 +104,7 @@ func addPostgresTestDataWithIndex(t *testing.T, ctx context.Context, index int) 
 		createStmt = `CREATE TABLE backuprestore (
 			data text NOT NULL
 		 );`
-		insertStmt = fmt.Sprintf("INSERT INTO backuprestore(\"indexdata\") VALUES (\"idx-%d\");", index)
+		insertStmt = fmt.Sprintf("INSERT INTO backuprestore(\"data\") VALUES (\"idx-%d\");", index)
 	)
 
 	_, err := db.Exec(createStmt)
@@ -118,7 +118,7 @@ func verifyPostgresTestDataWithIndex(t *testing.T, ctx context.Context, index in
 	db := newPostgresSession(t, ctx)
 	defer db.Close()
 
-	rows, err := db.Query(`SELECT "indexdata" FROM backuprestore;`)
+	rows, err := db.Query(`SELECT "data" FROM backuprestore;`)
 	require.NoError(t, err)
 	require.NoError(t, rows.Err())
 	defer rows.Close()
