@@ -33,10 +33,12 @@ import (
 type flowSpec struct {
 	databaseType string
 
-	sts              func(namespace string) *appsv1.StatefulSet
-	backingResources func(namespace string) []client.Object
-	addTestData      func(t *testing.T, ctx context.Context)
-	verifyTestData   func(t *testing.T, ctx context.Context)
+	sts                     func(namespace string) *appsv1.StatefulSet
+	backingResources        func(namespace string) []client.Object
+	addTestData             func(t *testing.T, ctx context.Context)
+	addTestDataWithIndex    func(t *testing.T, ctx context.Context, index int)
+	verifyTestData          func(t *testing.T, ctx context.Context)
+	verifyTestDataWithIndex func(t *testing.T, ctx context.Context, index int)
 }
 
 type upgradeFlowSpec struct {
@@ -173,6 +175,123 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 	t.Log("verify that data gets restored")
 
 	spec.verifyTestData(t, ctx)
+}
+
+func restoreWithEmptyDatadirFlow(t *testing.T, spec *flowSpec) {
+	t.Log("running restore with empty datadir flow")
+	var (
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+		ns          = testNamespace(t)
+	)
+
+	defer cancel()
+
+	cleanup := func() {
+		t.Log("running cleanup")
+
+		err := c.Delete(ctx, ns)
+		require.NoError(t, client.IgnoreNotFound(err), "cleanup did not succeed")
+
+		err = waitUntilNotFound(ctx, &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: ns.Name,
+			},
+		})
+		require.NoError(t, err, "cleanup did not succeed")
+	}
+	cleanup()
+	defer cleanup()
+
+	err := c.Create(ctx, ns)
+	require.NoError(t, client.IgnoreAlreadyExists(err))
+
+	t.Log("applying resource manifests")
+
+	objects := func() []client.Object {
+		objects := []client.Object{spec.sts(ns.Name)}
+		objects = append(objects, spec.backingResources(ns.Name)...)
+		return objects
+	}
+
+	for _, o := range objects() {
+		o := o
+		err = c.Create(ctx, o)
+		require.NoError(t, err)
+	}
+
+	podName := spec.sts(ns.Name).Name + "-0"
+
+	err = waitForPodRunning(ctx, podName, ns.Name)
+	require.NoError(t, err)
+
+	t.Log("adding multiple test data to database")
+
+	brsc, err := brsclient.New(ctx, "http://localhost:8000")
+	require.NoError(t, err)
+
+	lastindex := 0
+	for i := range 10 {
+		t.Log("adding test data", "index", i)
+		spec.addTestDataWithIndex(t, ctx, i)
+
+		t.Log("taking a backup")
+		_, err = brsc.DatabaseServiceClient().CreateBackup(ctx, &v1.CreateBackupRequest{})
+		if err != nil && !errors.Is(err, constants.ErrBackupAlreadyInProgress) {
+			require.NoError(t, err)
+		}
+		lastindex = i
+	}
+
+	var backup *v1.Backup
+	err = retry.Do(func() error {
+		backups, err := brsc.BackupServiceClient().ListBackups(ctx, &v1.ListBackupsRequest{})
+		if err != nil {
+			return err
+		}
+
+		if len(backups.GetBackups()) == 0 {
+			return fmt.Errorf("no backups were made yet")
+		}
+
+		backup = backups.GetBackups()[0]
+
+		return nil
+	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
+	require.NoError(t, err)
+	require.NotNil(t, backup)
+
+	t.Log("remove sts and delete data volume")
+
+	err = c.Delete(ctx, spec.sts(ns.Name))
+	require.NoError(t, err)
+
+	err = c.Delete(ctx, &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "data-" + podName,
+			Namespace: ns.Name,
+		},
+	})
+	require.NoError(t, err)
+
+	err = waitUntilNotFound(ctx, &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: ns.Name,
+		},
+	})
+	require.NoError(t, err)
+
+	t.Log("recreate sts")
+
+	err = c.Create(ctx, spec.sts(ns.Name))
+	require.NoError(t, err)
+
+	err = waitForPodRunning(ctx, podName, ns.Name)
+	require.NoError(t, err)
+
+	t.Log("verify that data gets restored")
+
+	spec.verifyTestDataWithIndex(t, ctx, lastindex)
 }
 
 func upgradeFlow(t *testing.T, spec *upgradeFlowSpec) {
