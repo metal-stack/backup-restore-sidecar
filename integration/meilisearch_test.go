@@ -5,6 +5,7 @@ package integration_test
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/avast/retry-go/v4"
@@ -25,6 +26,16 @@ func Test_Meilisearch_Restore(t *testing.T) {
 		backingResources: examples.MeilisearchBackingResources,
 		addTestData:      addMeilisearchTestData,
 		verifyTestData:   verifyMeilisearchTestData,
+	})
+}
+
+func Test_Meilisearch_RestoreLatestFromMultipleBackups(t *testing.T) {
+	restoreLatestFromMultipleBackupsFlow(t, &flowSpec{
+		databaseType:            examples.Meilisearch,
+		sts:                     examples.MeilisearchSts,
+		backingResources:        examples.MeilisearchBackingResources,
+		addTestDataWithIndex:    addMeilisearchTestDataWithIndex,
+		verifyTestDataWithIndex: verifyMeilisearchTestDataWithIndex,
 	})
 }
 
@@ -94,4 +105,35 @@ func verifyMeilisearchTestData(t *testing.T, ctx context.Context) {
 	err = index.GetDocument("1", &meilisearch.DocumentQuery{}, &testdata)
 	require.NoError(t, err)
 	assert.Equal(t, "I am precious", testdata["key"])
+}
+
+func addMeilisearchTestDataWithIndex(t *testing.T, ctx context.Context, i int) {
+	client := newMeilisearchSession(t, ctx)
+	creationTask, err := client.CreateIndex(&meilisearch.IndexConfig{
+		Uid:        meilisearchIndex,
+		PrimaryKey: "id",
+	})
+	require.NoError(t, err)
+	_, err = client.WaitForTask(creationTask.TaskUID)
+	require.NoError(t, err)
+
+	index := client.Index(meilisearchIndex)
+	testdata := map[string]any{
+		"id":  strconv.Itoa(i),
+		"key": fmt.Sprintf("idx-%d", i),
+	}
+	indexTask, err := index.AddDocuments(testdata, "id")
+	require.NoError(t, err)
+	_, err = client.WaitForTask(indexTask.TaskUID)
+	require.NoError(t, err)
+}
+
+func verifyMeilisearchTestDataWithIndex(t *testing.T, ctx context.Context, i int) {
+	client := newMeilisearchSession(t, ctx)
+	index, err := client.GetIndex(meilisearchIndex)
+	require.NoError(t, err)
+	testdata := make(map[string]any)
+	err = index.GetDocument(strconv.Itoa(i), &meilisearch.DocumentQuery{}, &testdata)
+	require.NoError(t, err)
+	assert.Equal(t, fmt.Sprintf("idx-%d", i), testdata["key"])
 }
