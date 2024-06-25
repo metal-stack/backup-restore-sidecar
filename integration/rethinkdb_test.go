@@ -5,6 +5,7 @@ package integration_test
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/metal-stack/backup-restore-sidecar/pkg/generate/examples/examples"
@@ -32,6 +33,16 @@ func Test_RethinkDB_Restore(t *testing.T) {
 		backingResources: examples.RethinkDbBackingResources,
 		addTestData:      addRethinkDbTestData,
 		verifyTestData:   verifyRethinkDbTestData,
+	})
+}
+
+func Test_RethinkDB_RestoreWithEmptyDatadir(t *testing.T) {
+	restoreWithEmptyDatadirFlow(t, &flowSpec{
+		databaseType:            examples.RethinkDB,
+		sts:                     examples.RethinkDbSts,
+		backingResources:        examples.RethinkDbBackingResources,
+		addTestDataWithIndex:    addRethinkDbTestDataWithIndex,
+		verifyTestDataWithIndex: verifyRethinkDbTestDataWithIndex,
 	})
 }
 
@@ -102,4 +113,56 @@ func verifyRethinkDbTestData(t *testing.T, ctx context.Context) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "i am precious", d2.Data)
+}
+
+func addRethinkDbTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
+	session := newRethinkdbSession(t, ctx)
+
+	_, err := r.Expr([]string{rethinkDbDatabaseName}).Difference(r.DBList()).ForEach(func(x r.Term) r.Term {
+		return r.DBCreate(rethinkDbDatabaseName)
+	}).RunWrite(session)
+	require.NoError(t, err)
+
+	db := r.DB(rethinkDbDatabaseName)
+
+	_, err = r.Expr([]string{rethinkDbTable}).Difference(db.TableList()).ForEach(func(r r.Term) r.Term {
+		return db.TableCreate(r)
+	}).RunWrite(session)
+	require.NoError(t, err)
+
+	_, err = r.DB(rethinkDbDatabaseName).Table(rethinkDbTable).Insert(rethinkDbTestData{
+		ID:   strconv.Itoa(index),
+		Data: fmt.Sprintf("idx-%d", index),
+	}).RunWrite(session)
+	require.NoError(t, err)
+
+	cursor, err := r.DB(rethinkDbDatabaseName).Table(rethinkDbTable).Get(strconv.Itoa(index)).Run(session)
+	require.NoError(t, err)
+
+	var d1 rethinkDbTestData
+	err = cursor.One(&d1)
+	require.NoError(t, err)
+	require.Equal(t, fmt.Sprintf("idx-%d", index), d1.Data)
+}
+
+func verifyRethinkDbTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
+	session := newRethinkdbSession(t, ctx)
+
+	var d2 rethinkDbTestData
+	err := retry.Do(func() error {
+		cursor, err := r.DB(rethinkDbDatabaseName).Table(rethinkDbTable).Get(strconv.Itoa(index)).Run(session)
+		if err != nil {
+			return err
+		}
+
+		err = cursor.One(&d2)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, fmt.Sprintf("idx-%d", index), d2.Data)
 }
