@@ -27,8 +27,8 @@ func Test_Postgres_Restore(t *testing.T) {
 	})
 }
 
-func Test_Postgres_RestoreWithEmptyDatadir(t *testing.T) {
-	restoreWithEmptyDatadirFlow(t, &flowSpec{
+func Test_Postgres_RestoreLatestFromMultipleBackups(t *testing.T) {
+	restoreLatestFromMultipleBackupsFlow(t, &flowSpec{
 		databaseType:            examples.Postgres,
 		sts:                     examples.PostgresSts,
 		backingResources:        examples.PostgresBackingResources,

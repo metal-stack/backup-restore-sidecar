@@ -17,3 +17,13 @@ func Test_KeyDB_Restore(t *testing.T) {
 		verifyTestData:   verifyRedisTestData,
 	})
 }
+
+func Test_KeyDB_RestoreLatestFromMultipleBackups(t *testing.T) {
+	restoreLatestFromMultipleBackupsFlow(t, &flowSpec{
+		databaseType:            examples.Redis,
+		sts:                     examples.RedisSts,
+		backingResources:        examples.RedisBackingResources,
+		addTestDataWithIndex:    addRedisTestDataWithIndex,
+		verifyTestDataWithIndex: verifyRedisTestDataWithIndex,
+	})
+}

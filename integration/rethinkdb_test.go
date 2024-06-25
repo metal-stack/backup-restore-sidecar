@@ -36,8 +36,8 @@ func Test_RethinkDB_Restore(t *testing.T) {
 	})
 }
 
-func Test_RethinkDB_RestoreWithEmptyDatadir(t *testing.T) {
-	restoreWithEmptyDatadirFlow(t, &flowSpec{
+func Test_RethinkDB_RestoreLatestFromMultipleBackups(t *testing.T) {
+	restoreLatestFromMultipleBackupsFlow(t, &flowSpec{
 		databaseType:            examples.RethinkDB,
 		sts:                     examples.RethinkDbSts,
 		backingResources:        examples.RethinkDbBackingResources,

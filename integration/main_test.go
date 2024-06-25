@@ -177,7 +177,7 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 	spec.verifyTestData(t, ctx)
 }
 
-func restoreWithEmptyDatadirFlow(t *testing.T, spec *flowSpec) {
+func restoreLatestFromMultipleBackupsFlow(t *testing.T, spec *flowSpec) {
 	t.Log("running restore with empty datadir flow")
 	var (
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
