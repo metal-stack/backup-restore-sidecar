@@ -26,7 +26,7 @@ require (
 	go.etcd.io/etcd/client/v3 v3.5.14
 	golang.org/x/sync v0.7.0
 	google.golang.org/api v0.185.0
-	google.golang.org/grpc v1.64.0
+	google.golang.org/grpc v1.64.1
 	google.golang.org/protobuf v1.34.2
 	gopkg.in/rethinkdb/rethinkdb-go.v6 v6.2.2
 	k8s.io/api v0.29.3
