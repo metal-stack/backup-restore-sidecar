@@ -49,9 +49,9 @@ func Test_Meilisearch_Upgrade(t *testing.T) {
 			verifyTestData:   verifyMeilisearchTestData,
 		},
 		databaseImages: []string{
-			"getmeili/meilisearch:v1.7.0",
-			"getmeili/meilisearch:v1.7.1",
+			"getmeili/meilisearch:v1.8.0",
 			"getmeili/meilisearch:v1.8.1",
+			"getmeili/meilisearch:v1.9.0",
 		},
 	})
 }
