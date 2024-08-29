@@ -72,11 +72,11 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 		return nil
 	}
 
-	if pgVersion == binaryVersionMajor {
+	if uint64(pgVersion) == binaryVersionMajor {
 		db.log.Info("no version difference, no upgrade required", "database-version", pgVersion, "binary-version", binaryVersionMajor)
 		return nil
 	}
-	if pgVersion > binaryVersionMajor {
+	if uint64(pgVersion) > binaryVersionMajor {
 		db.log.Error("database is newer than postgres binary, aborting", "database-version", pgVersion, "binary-version", binaryVersionMajor)
 		return fmt.Errorf("database is newer than postgres binary")
 	}
@@ -97,7 +97,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 		return nil
 	}
 
-	if oldBinaryVersionMajor != pgVersion {
+	if oldBinaryVersionMajor != uint64(pgVersion) {
 		db.log.Error("database version and old binary version do not match, skipping upgrade", "old database", pgVersion, "old binary", oldBinaryVersionMajor)
 		return nil
 	}
@@ -138,7 +138,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Credential: &syscall.Credential{Uid: uint32(uid)},
+		Credential: &syscall.Credential{Uid: uint32(uid)}, // nolint:gosec
 	}
 	err = cmd.Run()
 	if err != nil {
@@ -203,7 +203,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Credential: &syscall.Credential{Uid: uint32(uid)},
+		Credential: &syscall.Credential{Uid: uint32(uid)}, // nolint:gosec
 	}
 	cmd.Dir = pgUser.HomeDir
 
@@ -234,7 +234,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 
 // Helpers
 
-func (db *Postgres) getBinaryVersion(ctx context.Context, pgConfigCmd string) (int, error) {
+func (db *Postgres) getBinaryVersion(ctx context.Context, pgConfigCmd string) (uint64, error) {
 	// pg_config  --version
 	// PostgreSQL 12.16
 	cmd := exec.CommandContext(ctx, pgConfigCmd, "--version")
@@ -253,7 +253,7 @@ func (db *Postgres) getBinaryVersion(ctx context.Context, pgConfigCmd string) (i
 		return 0, fmt.Errorf("unable to parse postgres binary version in %q: %w", binaryVersionString, err)
 	}
 
-	return int(v.Major()), nil
+	return v.Major(), nil
 }
 
 func (db *Postgres) getDatabaseVersion(pgVersionFile string) (int, error) {
