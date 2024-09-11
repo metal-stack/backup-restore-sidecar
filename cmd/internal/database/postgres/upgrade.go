@@ -72,11 +72,11 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 		return nil
 	}
 
-	if uint64(pgVersion) == binaryVersionMajor {
+	if uint64(pgVersion) == binaryVersionMajor { // nolint:gosec
 		db.log.Info("no version difference, no upgrade required", "database-version", pgVersion, "binary-version", binaryVersionMajor)
 		return nil
 	}
-	if uint64(pgVersion) > binaryVersionMajor {
+	if uint64(pgVersion) > binaryVersionMajor { // nolint:gosec
 		db.log.Error("database is newer than postgres binary, aborting", "database-version", pgVersion, "binary-version", binaryVersionMajor)
 		return fmt.Errorf("database is newer than postgres binary")
 	}
@@ -97,7 +97,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 		return nil
 	}
 
-	if oldBinaryVersionMajor != uint64(pgVersion) {
+	if oldBinaryVersionMajor != uint64(pgVersion) { // nolint:gosec
 		db.log.Error("database version and old binary version do not match, skipping upgrade", "old database", pgVersion, "old binary", oldBinaryVersionMajor)
 		return nil
 	}
