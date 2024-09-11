@@ -138,7 +138,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Credential: &syscall.Credential{Uid: uint32(uid)},
+		Credential: &syscall.Credential{Uid: uint32(uid)}, //nolint:gosec
 	}
 	err = cmd.Run()
 	if err != nil {
@@ -203,7 +203,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Credential: &syscall.Credential{Uid: uint32(uid)},
+		Credential: &syscall.Credential{Uid: uint32(uid)}, //nolint:gosec
 	}
 	cmd.Dir = pgUser.HomeDir
 
@@ -253,7 +253,7 @@ func (db *Postgres) getBinaryVersion(ctx context.Context, pgConfigCmd string) (i
 		return 0, fmt.Errorf("unable to parse postgres binary version in %q: %w", binaryVersionString, err)
 	}
 
-	return int(v.Major()), nil
+	return int(v.Major()), nil //nolint:gosec
 }
 
 func (db *Postgres) getDatabaseVersion(pgVersionFile string) (int, error) {
