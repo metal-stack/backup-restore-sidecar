@@ -53,7 +53,7 @@ func New(log *slog.Logger, addr string, db database.Database, bp providers.Backu
 }
 
 // Start starts the initializer, which includes a server component and the initializer itself, which is potentially restoring a backup
-func (i *Initializer) Start(ctx context.Context) error {
+func (i *Initializer) Start(ctx context.Context, backuper *backup.Backuper) error {
 	opts := []grpc.ServerOption{
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
 			grpc_ctxtags.StreamServerInterceptor(),
@@ -72,14 +72,6 @@ func (i *Initializer) Start(ctx context.Context) error {
 	initializerService := newInitializerService(i.currentStatus)
 	backupService := newBackupProviderService(i.bp, i.Restore)
 	databaseService := newDatabaseService(func() error {
-		backuper := backup.New(&backup.BackuperConfig{
-			Log:            i.log,
-			DatabaseProber: i.db,
-			BackupProvider: i.bp,
-			Metrics:        i.metrics,
-			Compressor:     i.comp,
-		})
-
 		return backuper.CreateBackup(ctx)
 	})
 
