@@ -201,8 +201,8 @@ type connectionDetails struct {
 func startFakeGcsContainer(t testing.TB, ctx context.Context) (testcontainers.Container, *connectionDetails) {
 	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "fsouza/fake-gcs-server", // tested with fsouza/fake-gcs-server:1.47.4
-			ExposedPorts: []string{"4443"},
+			Image: "fsouza/fake-gcs-server", // tested with fsouza/fake-gcs-server:1.47.4
+			// ExposedPorts: []string{"4443"},
 			HostConfigModifier: func(hc *container.HostConfig) {
 				// Unfortunately we must use host network as the public host must exactly match the client endpoint
 				// see for example: https://github.com/fsouza/fake-gcs-server/issues/196
@@ -212,7 +212,8 @@ func startFakeGcsContainer(t testing.TB, ctx context.Context) (testcontainers.Co
 			},
 			Cmd: []string{"-backend", "memory", "-log-level", "debug", "-public-host", "localhost:4443"},
 			WaitingFor: wait.ForAll(
-				wait.ForListeningPort("4443/tcp"),
+				// wait.ForListeningPort("4443/tcp"),
+				wait.ForLog("server started"),
 			),
 		},
 		Started: true,

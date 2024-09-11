@@ -29,7 +29,7 @@ func (b backupVersionsLocal) List() []*providers.BackupVersion {
 	common.Sort(result)
 
 	for i, backup := range result {
-		backup.Version = strconv.FormatInt(int64(i), 10)
+		backup.Version = strconv.FormatInt(int64(i), 10) // nolint:gosec
 	}
 
 	return result
