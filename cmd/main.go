@@ -150,14 +150,6 @@ var startCmd = &cobra.Command{
 		metrics := metrics.New()
 		metrics.Start(logger.WithGroup("metrics"))
 
-		if err := initializer.New(logger.WithGroup("initializer"), addr, db, bp, comp, metrics, viper.GetString(databaseDatadirFlg)).Start(stop); err != nil {
-			return err
-		}
-
-		if err := probe.Start(stop, logger.WithGroup("probe"), db); err != nil {
-			return err
-		}
-
 		backuper := backup.New(&backup.BackuperConfig{
 			Log:            logger.WithGroup("backup"),
 			BackupSchedule: viper.GetString(backupCronScheduleFlg),
@@ -166,6 +158,14 @@ var startCmd = &cobra.Command{
 			Metrics:        metrics,
 			Compressor:     comp,
 		})
+
+		if err := initializer.New(logger.WithGroup("initializer"), addr, db, bp, comp, metrics, viper.GetString(databaseDatadirFlg)).Start(stop, backuper); err != nil {
+			return err
+		}
+
+		if err := probe.Start(stop, logger.WithGroup("probe"), db); err != nil {
+			return err
+		}
 
 		return backuper.Start(stop)
 	},
