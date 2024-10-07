@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"errors"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/common"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
 
@@ -148,10 +148,10 @@ func (b *BackupProviderGCP) CleanupBackups(_ context.Context) error {
 }
 
 // DownloadBackup downloads the given backup version to the restoration folder
-func (b *BackupProviderGCP) DownloadBackup(ctx context.Context, version *providers.BackupVersion) error {
+func (b *BackupProviderGCP) DownloadBackup(ctx context.Context, version *providers.BackupVersion, outPath string) (string, error) {
 	gen, err := strconv.ParseInt(version.Version, 10, 64)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	bucket := b.c.Bucket(b.config.BucketName)
@@ -160,28 +160,29 @@ func (b *BackupProviderGCP) DownloadBackup(ctx context.Context, version *provide
 	if strings.Contains(downloadFileName, "/") {
 		downloadFileName = filepath.Base(downloadFileName)
 	}
-	backupFilePath := path.Join(constants.DownloadDir, downloadFileName)
+
+	backupFilePath := common.DeterminBackupFilePath(outPath, constants.DownloadDir, downloadFileName)
 
 	b.log.Info("downloading", "object", version.Name, "gen", gen, "to", backupFilePath)
 
 	r, err := bucket.Object(version.Name).Generation(gen).NewReader(ctx)
 	if err != nil {
-		return fmt.Errorf("backup not found: %w", err)
+		return "", fmt.Errorf("backup not found: %w", err)
 	}
 	defer r.Close()
 
 	f, err := b.fs.Create(backupFilePath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer f.Close()
 
 	_, err = io.Copy(f, r)
 	if err != nil {
-		return fmt.Errorf("error writing file from gcp to filesystem: %w", err)
+		return "", fmt.Errorf("error writing file from gcp to filesystem: %w", err)
 	}
 
-	return nil
+	return backupFilePath, nil
 }
 
 // UploadBackup uploads a backup to the backup provider

@@ -15,6 +15,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 
@@ -34,9 +35,10 @@ type Initializer struct {
 	comp          *compress.Compressor
 	metrics       *metrics.Metrics
 	dbDataDir     string
+	encrypter     *encryption.Encrypter
 }
 
-func New(log *slog.Logger, addr string, db database.Database, bp providers.BackupProvider, comp *compress.Compressor, metrics *metrics.Metrics, dbDataDir string) *Initializer {
+func New(log *slog.Logger, addr string, db database.Database, bp providers.BackupProvider, comp *compress.Compressor, metrics *metrics.Metrics, dbDataDir string, encrypter *encryption.Encrypter) *Initializer {
 	return &Initializer{
 		currentStatus: &v1.StatusResponse{
 			Status:  v1.StatusResponse_CHECKING,
@@ -49,6 +51,7 @@ func New(log *slog.Logger, addr string, db database.Database, bp providers.Backu
 		comp:      comp,
 		dbDataDir: dbDataDir,
 		metrics:   metrics,
+		encrypter: encrypter,
 	}
 }
 
@@ -163,7 +166,7 @@ func (i *Initializer) initialize(ctx context.Context) error {
 		return nil
 	}
 
-	err = i.Restore(ctx, latestBackup)
+	err = i.Restore(ctx, latestBackup, false)
 	if err != nil {
 		return fmt.Errorf("unable to restore database: %w", err)
 	}
@@ -172,7 +175,7 @@ func (i *Initializer) initialize(ctx context.Context) error {
 }
 
 // Restore restores the database with the given backup version
-func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVersion) error {
+func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVersion, downloadOnly bool) error {
 	i.log.Info("restoring backup", "version", version.Version, "date", version.Date.String())
 
 	i.currentStatus.Status = v1.StatusResponse_RESTORING
@@ -197,15 +200,27 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 		return fmt.Errorf("could not delete priorly downloaded file: %w", err)
 	}
 
-	err := i.bp.DownloadBackup(ctx, version)
+	_, err := i.bp.DownloadBackup(ctx, version, "")
 	if err != nil {
 		return fmt.Errorf("unable to download backup: %w", err)
+	}
+
+	if i.encrypter != nil {
+		backupFilePath, err = i.encrypter.Decrypt(backupFilePath)
+		if err != nil {
+			return fmt.Errorf("unable to decrypt backup: %w", err)
+		}
 	}
 
 	i.currentStatus.Message = "uncompressing backup"
 	err = i.comp.Decompress(backupFilePath)
 	if err != nil {
 		return fmt.Errorf("unable to uncompress backup: %w", err)
+	}
+
+	if downloadOnly {
+		i.log.Info("downloadOnly was specified, skipping database recovery")
+		return nil
 	}
 
 	i.currentStatus.Message = "restoring backup"

@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
@@ -31,4 +32,15 @@ func Get(versions []*providers.BackupVersion, version string) (*providers.Backup
 		}
 	}
 	return nil, fmt.Errorf("version %q not found", version)
+}
+
+// Determines whether a filepath is specified or not (uses default downloadDir)
+func DeterminBackupFilePath(outPath string, downloadDir string, fileName string) string {
+	backupFilePath := ""
+	if outPath == "" {
+		backupFilePath = filepath.Join(downloadDir, fileName)
+	} else {
+		backupFilePath = filepath.Join(outPath, fileName)
+	}
+	return backupFilePath
 }

@@ -28,10 +28,10 @@ func (s *initializerService) Status(context.Context, *v1.StatusRequest) (*v1.Sta
 
 type backupService struct {
 	bp        providers.BackupProvider
-	restoreFn func(ctx context.Context, version *providers.BackupVersion) error
+	restoreFn func(ctx context.Context, version *providers.BackupVersion, downloadOnly bool) error
 }
 
-func newBackupProviderService(bp providers.BackupProvider, restoreFn func(ctx context.Context, version *providers.BackupVersion) error) *backupService {
+func newBackupProviderService(bp providers.BackupProvider, restoreFn func(ctx context.Context, version *providers.BackupVersion, downloadOnly bool) error) *backupService {
 	return &backupService{
 		bp:        bp,
 		restoreFn: restoreFn,
@@ -76,12 +76,32 @@ func (s *backupService) RestoreBackup(ctx context.Context, req *v1.RestoreBackup
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	err = s.restoreFn(ctx, version)
+	//TODO -> check false value here
+	err = s.restoreFn(ctx, version, false)
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("error restoring backup: %s", err))
 	}
 
 	return &v1.RestoreBackupResponse{}, nil
+}
+
+func (s *backupService) GetBackupByVersion(ctx context.Context, req *v1.GetBackupByVersionRequest) (*v1.GetBackupByVersionResponse, error) {
+	if req.GetVersion() == "" {
+		return nil, status.Error(codes.InvalidArgument, "version to get must be defined explicitly")
+	}
+
+	versions, err := s.bp.ListBackups(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	version, err := versions.Get(req.GetVersion())
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &v1.GetBackupByVersionResponse{Backup: &v1.Backup{Name: version.Name, Version: version.Version, Timestamp: timestamppb.New(version.Date)}}, nil
+
 }
 
 type databaseService struct {

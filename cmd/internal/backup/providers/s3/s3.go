@@ -3,13 +3,13 @@ package s3
 import (
 	"context"
 	"log/slog"
-	"path"
 	"path/filepath"
 	"strings"
 
 	"errors"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/common"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
 
@@ -190,7 +190,7 @@ func (b *BackupProviderS3) CleanupBackups(_ context.Context) error {
 }
 
 // DownloadBackup downloads the given backup version to the restoration folder
-func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *providers.BackupVersion) error {
+func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *providers.BackupVersion, outPath string) (string, error) {
 	bucket := aws.String(b.config.BucketName)
 
 	downloadFileName := version.Name
@@ -198,11 +198,11 @@ func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *provider
 		downloadFileName = filepath.Base(downloadFileName)
 	}
 
-	backupFilePath := path.Join(constants.DownloadDir, downloadFileName)
+	backupFilePath := common.DeterminBackupFilePath(outPath, constants.DownloadDir, downloadFileName)
 
 	f, err := b.fs.Create(backupFilePath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer f.Close()
 
@@ -217,10 +217,10 @@ func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *provider
 			VersionId: &version.Version,
 		})
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
+	return backupFilePath, nil
 }
 
 // UploadBackup uploads a backup to the backup provider
