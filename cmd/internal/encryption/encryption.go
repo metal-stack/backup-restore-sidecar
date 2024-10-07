@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -85,7 +86,7 @@ func (e *Encrypter) Encrypt(input string) (string, error) {
 			}
 		}
 
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 
@@ -165,7 +166,7 @@ func (e *Encrypter) Decrypt(input string) (string, error) {
 			}
 		}
 
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 

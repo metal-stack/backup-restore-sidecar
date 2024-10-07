@@ -162,7 +162,7 @@ var startCmd = &cobra.Command{
 		if key != "" {
 			encrypter, err = encryption.New(logger.WithGroup("encryption"), key)
 			if err != nil {
-				return fmt.Errorf("unable to initialize encryption:%v", err)
+				return fmt.Errorf("unable to initialize encryption: %w", err)
 			}
 			logger.Info("successfully initialized encrypter")
 		} else {
@@ -317,7 +317,7 @@ var downloadBackupCmd = &cobra.Command{
 			copyPath = args[1]
 		}
 
-		destination, err := bp.DownloadBackup(context.Background(), &providers.BackupVersion{Name: backup.Backup.Name}, copyPath)
+		destination, err := bp.DownloadBackup(context.Background(), &providers.BackupVersion{Name: backup.GetBackup().GetName()}, copyPath)
 
 		if err != nil {
 			return fmt.Errorf("failed downloading backup: %w", err)
@@ -556,7 +556,7 @@ func initEncrypter() error {
 	if key != "" {
 		encrypter, err = encryption.New(logger.WithGroup("encryption"), key)
 		if err != nil {
-			return fmt.Errorf("unable to initialize encryption:%v", err)
+			return fmt.Errorf("unable to initialize encryption: %w", err)
 		}
 		logger.Info("initialized encrypter")
 	}
