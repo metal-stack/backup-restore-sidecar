@@ -1,5 +1,3 @@
-//go:build integration
-
 package gcp
 
 import (
@@ -153,18 +151,17 @@ func Test_BackupProviderGCP(t *testing.T) {
 		latestVersion := versions.Latest()
 		require.NotNil(t, latestVersion)
 
-		err = p.DownloadBackup(ctx, latestVersion)
+		backupFilePath, err := p.DownloadBackup(ctx, latestVersion, "")
 		require.NoError(t, err)
 
-		downloadPath := path.Join(constants.DownloadDir, expectedBackupName)
-		gotContent, err := afero.ReadFile(fs, downloadPath)
+		gotContent, err := afero.ReadFile(fs, backupFilePath)
 		require.NoError(t, err)
 
 		backupContent := fmt.Sprintf("precious data %d", backupAmount-1)
 		require.Equal(t, backupContent, string(gotContent))
 
 		// cleaning up after test
-		err = fs.Remove(downloadPath)
+		err = fs.Remove(backupFilePath)
 		require.NoError(t, err)
 	})
 

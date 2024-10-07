@@ -28,10 +28,10 @@ func (s *initializerService) Status(context.Context, *v1.StatusRequest) (*v1.Sta
 
 type backupService struct {
 	bp        providers.BackupProvider
-	restoreFn func(ctx context.Context, version *providers.BackupVersion, downloadOnly bool) error
+	restoreFn func(ctx context.Context, version *providers.BackupVersion) error
 }
 
-func newBackupProviderService(bp providers.BackupProvider, restoreFn func(ctx context.Context, version *providers.BackupVersion, downloadOnly bool) error) *backupService {
+func newBackupProviderService(bp providers.BackupProvider, restoreFn func(ctx context.Context, version *providers.BackupVersion) error) *backupService {
 	return &backupService{
 		bp:        bp,
 		restoreFn: restoreFn,
@@ -76,8 +76,7 @@ func (s *backupService) RestoreBackup(ctx context.Context, req *v1.RestoreBackup
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	//TODO -> check false value here
-	err = s.restoreFn(ctx, version, false)
+	err = s.restoreFn(ctx, version)
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("error restoring backup: %s", err))
 	}

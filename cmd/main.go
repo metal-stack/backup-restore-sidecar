@@ -50,7 +50,6 @@ const (
 
 	databaseFlg        = "db"
 	databaseDatadirFlg = "db-data-directory"
-	downloadOnlyFlg    = "download-only"
 
 	preExecCommandsFlg  = "pre-exec-cmds"
 	postExecCommandsFlg = "post-exec-cmds"
