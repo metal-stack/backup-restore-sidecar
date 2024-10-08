@@ -69,27 +69,3 @@ func TestLatest(t *testing.T) {
 		})
 	}
 }
-
-func TestDetermineBackupFilePath(t *testing.T) {
-	outPath1 := ""
-	outPath2 := "/backup/test"
-	downloadDir := "/backup/restore"
-	fileName := "0.tar.aes"
-
-	wantBackupFilePath1 := "/backup/restore/0.tar.aes"
-	wantBackupFilePath2 := "/backup/test/0.tar.aes"
-
-	t.Run("empty-outpath", func(t *testing.T) {
-		backupFilePath := DeterminBackupFilePath(outPath1, downloadDir, fileName)
-		if backupFilePath != wantBackupFilePath1 {
-			t.Errorf("DetermineBackupFilePath() = %v, want %v", backupFilePath, wantBackupFilePath1)
-		}
-	})
-
-	t.Run("filled-outpath", func(t *testing.T) {
-		backupFilePath := DeterminBackupFilePath(outPath2, downloadDir, fileName)
-		if backupFilePath != wantBackupFilePath2 {
-			t.Errorf("DetermineBackupFilePath() = %v, want %v", backupFilePath, wantBackupFilePath2)
-		}
-	})
-}

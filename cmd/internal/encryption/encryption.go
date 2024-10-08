@@ -16,7 +16,7 @@ import (
 )
 
 // Suffix is appended on encryption and removed on decryption from given input
-const Suffix = ".aes"
+const suffix = ".aes"
 
 // Encrypter is used to encrypt/decrypt backups
 type Encrypter struct {
@@ -45,7 +45,7 @@ func New(log *slog.Logger, key string) (*Encrypter, error) {
 }
 
 func (e *Encrypter) Encrypt(input string) (string, error) {
-	output := input + Suffix
+	output := input + suffix
 	e.log.Info("encrypt", "input", input, "output", output)
 	infile, err := os.Open(input)
 	if err != nil {
@@ -109,10 +109,10 @@ func (e *Encrypter) Encrypt(input string) (string, error) {
 // Decrypt input file with key and store decrypted result with suffix removed
 // if input does not end with suffix, it is assumed that the file was not encrypted.
 func (e *Encrypter) Decrypt(input string) (string, error) {
-	output := strings.TrimSuffix(input, Suffix)
-	e.log.Info("decrypt", "input", input, "output", output)
+	output := strings.TrimSuffix(input, suffix)
+	e.log.Debug("decrypt", "input", input, "output", output)
 	extension := filepath.Ext(input)
-	if extension != Suffix {
+	if extension != suffix {
 		return input, fmt.Errorf("input is not encrypted")
 	}
 	infile, err := os.Open(input)

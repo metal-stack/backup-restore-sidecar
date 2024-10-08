@@ -34,7 +34,7 @@ func TestEncrypter(t *testing.T) {
 	output, err := e.Encrypt(input.Name())
 	require.NoError(t, err)
 
-	require.Equal(t, input.Name()+Suffix, output)
+	require.Equal(t, input.Name()+suffix, output)
 
 	cleartextFile, err := e.Decrypt(output)
 	require.NoError(t, err)

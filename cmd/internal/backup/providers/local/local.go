@@ -11,7 +11,6 @@ import (
 	"errors"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/common"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
@@ -86,13 +85,13 @@ func (b *BackupProviderLocal) CleanupBackups(_ context.Context) error {
 	return nil
 }
 
-// DownloadBackup downloads the given backup version to the restoration folder
-func (b *BackupProviderLocal) DownloadBackup(_ context.Context, version *providers.BackupVersion, outPath string) (string, error) {
+// DownloadBackup downloads the given backup version to the specified folder
+func (b *BackupProviderLocal) DownloadBackup(_ context.Context, version *providers.BackupVersion, outDir string) (string, error) {
 	b.log.Info("download backup called for provider local")
 
 	source := filepath.Join(b.config.LocalBackupPath, version.Name)
 
-	backupFilePath := common.DeterminBackupFilePath(outPath, constants.DownloadDir, version.Name)
+	backupFilePath := filepath.Join(outDir, version.Name)
 
 	err := utils.Copy(b.fs, source, backupFilePath)
 	if err != nil {

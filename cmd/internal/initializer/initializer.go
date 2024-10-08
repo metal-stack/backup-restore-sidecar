@@ -200,7 +200,7 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 		return fmt.Errorf("could not delete priorly downloaded file: %w", err)
 	}
 
-	_, err := i.bp.DownloadBackup(ctx, version, "")
+	backupFilePath, err := i.bp.DownloadBackup(ctx, version, constants.DownloadDir)
 	if err != nil {
 		return fmt.Errorf("unable to download backup: %w", err)
 	}

@@ -9,7 +9,6 @@ import (
 	"errors"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/common"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
 
@@ -189,8 +188,8 @@ func (b *BackupProviderS3) CleanupBackups(_ context.Context) error {
 	return nil
 }
 
-// DownloadBackup downloads the given backup version to the restoration folder
-func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *providers.BackupVersion, outPath string) (string, error) {
+// DownloadBackup downloads the given backup version to the specified folder
+func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *providers.BackupVersion, outDir string) (string, error) {
 	bucket := aws.String(b.config.BucketName)
 
 	downloadFileName := version.Name
@@ -198,7 +197,7 @@ func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *provider
 		downloadFileName = filepath.Base(downloadFileName)
 	}
 
-	backupFilePath := common.DeterminBackupFilePath(outPath, constants.DownloadDir, downloadFileName)
+	backupFilePath := filepath.Join(outDir, downloadFileName)
 
 	f, err := b.fs.Create(backupFilePath)
 	if err != nil {
