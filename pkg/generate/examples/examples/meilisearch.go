@@ -279,6 +279,7 @@ backup-provider: local
 backup-cron-schedule: "*/1 * * * *"
 object-prefix: meilisearch-test
 compression-method: targz
+encryption-key: "01234567891234560123456789123456"
 post-exec-cmds:
 - meilisearch --db-path=/data/data.ms/ --dump-dir=/backup/upload/files
 `,
