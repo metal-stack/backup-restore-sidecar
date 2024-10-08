@@ -46,7 +46,7 @@ func New(log *slog.Logger, key string) (*Encrypter, error) {
 
 func (e *Encrypter) Encrypt(input string) (string, error) {
 	output := input + suffix
-	e.log.Info("encrypt", "input", input, "output", output)
+	e.log.Debug("encrypt", "input", input, "output", output)
 	infile, err := os.Open(input)
 	if err != nil {
 		return "", err
