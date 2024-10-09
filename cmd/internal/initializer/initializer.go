@@ -139,6 +139,12 @@ func (i *Initializer) initialize(ctx context.Context) error {
 		return fmt.Errorf("unable to ensure backup bucket: %w", err)
 	}
 
+	i.log.Info("ensuring default download directory")
+	err = os.MkdirAll(constants.DownloadDir, 0755)
+	if err != nil {
+		return fmt.Errorf("unable to ensure default download directory: %w", err)
+	}
+
 	i.log.Info("checking database")
 	i.currentStatus.Status = v1.StatusResponse_CHECKING
 	i.currentStatus.Message = "checking database"

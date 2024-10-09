@@ -95,7 +95,9 @@ const (
 
 	compressionMethod = "compression-method"
 
-	encryptionKey = "encryption-key"
+	encryptionKeyFlg = "encryption-key"
+
+	downloadOutputFlg = "output"
 )
 
 var (
@@ -156,18 +158,6 @@ var startCmd = &cobra.Command{
 
 		metrics := metrics.New()
 		metrics.Start(logger.WithGroup("metrics"))
-
-		var encrypter *encryption.Encrypter
-		key := viper.GetString(encryptionKey)
-		if key != "" {
-			encrypter, err = encryption.New(logger.WithGroup("encryption"), key)
-			if err != nil {
-				return fmt.Errorf("unable to initialize encryption: %w", err)
-			}
-			logger.Info("successfully initialized encrypter")
-		} else {
-			logger.Info("no encrypter found")
-		}
 
 		backuper := backup.New(&backup.BackuperConfig{
 			Log:            logger.WithGroup("backup"),
@@ -283,7 +273,7 @@ var waitCmd = &cobra.Command{
 }
 
 var downloadBackupCmd = &cobra.Command{
-	Use:   "download",
+	Use:   "download <version>",
 	Short: "downloads backup without restoring",
 	PreRunE: func(cm *cobra.Command, args []string) error {
 		err := initEncrypter()
@@ -308,16 +298,9 @@ var downloadBackupCmd = &cobra.Command{
 			return fmt.Errorf("error getting backup by version: %w", err)
 		}
 
-		copyPath, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("error getting current dir: %w", err)
-		}
+		output := viper.GetString(downloadOutputFlg)
 
-		if len(args) == 2 {
-			copyPath = args[1]
-		}
-
-		destination, err := bp.DownloadBackup(context.Background(), &providers.BackupVersion{Name: backup.GetBackup().GetName()}, copyPath)
+		destination, err := bp.DownloadBackup(context.Background(), &providers.BackupVersion{Name: backup.GetBackup().GetName()}, output)
 
 		if err != nil {
 			return fmt.Errorf("failed downloading backup: %w", err)
@@ -394,7 +377,7 @@ func init() {
 
 	startCmd.Flags().StringP(compressionMethod, "", "targz", "the compression method to use to compress the backups (tar|targz|tarlz4)")
 
-	startCmd.Flags().StringP(encryptionKey, "", "01234567891234560123456789123456", "the encryption key for aes")
+	startCmd.Flags().StringP(encryptionKeyFlg, "", "", "the encryption key for aes")
 
 	err = viper.BindPFlags(startCmd.Flags())
 	if err != nil {
@@ -413,6 +396,13 @@ func init() {
 	}
 
 	restoreCmd.AddCommand(restoreListCmd)
+
+	downloadBackupCmd.Flags().StringP(downloadOutputFlg, "o", constants.DownloadDir, "the target directory for the downloaded backup")
+	err = viper.BindPFlags(downloadBackupCmd.Flags())
+	if err != nil {
+		fmt.Printf("unable to construct download command: %v", err)
+		os.Exit(1)
+	}
 }
 
 func initConfig() {
@@ -552,11 +542,11 @@ func initDatabase() error {
 
 func initEncrypter() error {
 	var err error
-	key := viper.GetString(encryptionKey)
+	key := viper.GetString(encryptionKeyFlg)
 	if key != "" {
-		encrypter, err = encryption.New(logger.WithGroup("encryption"), key)
+		encrypter, err = encryption.New(logger.WithGroup("encrypter"), &encryption.EncrypterConfig{Key: key})
 		if err != nil {
-			return fmt.Errorf("unable to initialize encryption: %w", err)
+			return fmt.Errorf("unable to initialize encrypter: %w", err)
 		}
 		logger.Info("initialized encrypter")
 	}

@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/spf13/afero"
 )
 
 // Suffix is appended on encryption and removed on decryption from given input
@@ -20,163 +22,110 @@ const suffix = ".aes"
 
 // Encrypter is used to encrypt/decrypt backups
 type Encrypter struct {
+	fs  afero.Fs
 	key string
 	log *slog.Logger
 }
 
+type EncrypterConfig struct {
+	FS  afero.Fs
+	Key string
+}
+
 // New creates a new Encrypter with the given key.
-// The key should be 16 bytes (AES-128), 24 bytes (AES-192) or
-// 32 bytes (AES-256)
-func New(log *slog.Logger, key string) (*Encrypter, error) {
-	switch len(key) {
-	case 16, 24, 32:
-	default:
-		return nil, fmt.Errorf("key length:%d invalid, must be 16,24 or 32 bytes", len(key))
+// The key should be 32 bytes (AES-256)
+func New(log *slog.Logger, config *EncrypterConfig) (*Encrypter, error) {
+	if len(config.Key) != 32 {
+		return nil, fmt.Errorf("key length: %d invalid, must be 32 bytes", len(config.Key))
 	}
-	if !isASCII(key) {
+	if !isASCII(config.Key) {
 		return nil, fmt.Errorf("key must only contain ascii characters")
+	}
+	if config.FS == nil {
+		config.FS = afero.NewOsFs()
 	}
 
 	return &Encrypter{
-		key: key,
 		log: log,
+		key: config.Key,
+		fs:  config.FS,
 	}, nil
 
 }
 
-func (e *Encrypter) Encrypt(input string) (string, error) {
-	output := input + suffix
-	e.log.Debug("encrypt", "input", input, "output", output)
-	infile, err := os.Open(input)
+// Encrypt input file with key and store encrypted result with suffix
+func (e *Encrypter) Encrypt(inputPath string) (string, error) {
+	output := inputPath + suffix
+	e.log.Debug("encrypt", "input", inputPath, "output", output)
+	infile, err := e.fs.Open(inputPath)
 	if err != nil {
 		return "", err
 	}
 	defer infile.Close()
 
-	key := []byte(e.key)
-	block, err := aes.NewCipher(key)
+	block, err := e.createCipher()
 	if err != nil {
 		return "", err
 	}
 
-	// Never use more than 2^32 random nonces with a given key
-	// because of the risk of repeat.
-	iv := make([]byte, block.BlockSize())
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+	iv, err := e.generateIV(block)
+	if err != nil {
 		return "", err
 	}
 
-	outfile, err := os.OpenFile(output, os.O_RDWR|os.O_CREATE, 0777)
+	outfile, err := e.openOutputFile(output)
 	if err != nil {
 		return "", err
 	}
 	defer outfile.Close()
 
-	// The buffer size must be multiple of 16 bytes
-	buf := make([]byte, 1024)
-	stream := cipher.NewCTR(block, iv)
-	for {
-		n, err := infile.Read(buf)
-		if n > 0 {
-			stream.XORKeyStream(buf, buf[:n])
-			// Write into file
-			_, err = outfile.Write(buf[:n])
-			if err != nil {
-				return "", err
-			}
-		}
-
-		if errors.Is(err, io.EOF) {
-			break
-		}
-
-		if err != nil {
-			e.log.Info("Read %d bytes: %v", strconv.Itoa(n), err)
-			break
-		}
+	if err := e.encryptFile(infile, outfile, block, iv); err != nil {
+		return "", err
 	}
-	// Append the IV
-	_, err = outfile.Write(iv)
-	if err == nil {
-		err := os.Remove(input)
-		if err != nil {
-			e.log.Warn("unable to remove input", "error", err)
-		}
+
+	if err := e.fs.Remove(inputPath); err != nil {
+		e.log.Warn("unable to remove input", "error", err)
 	}
-	return output, err
+
+	return output, nil
 }
 
 // Decrypt input file with key and store decrypted result with suffix removed
 // if input does not end with suffix, it is assumed that the file was not encrypted.
-func (e *Encrypter) Decrypt(input string) (string, error) {
-	output := strings.TrimSuffix(input, suffix)
-	e.log.Debug("decrypt", "input", input, "output", output)
-	extension := filepath.Ext(input)
-	if extension != suffix {
-		return input, fmt.Errorf("input is not encrypted")
+func (e *Encrypter) Decrypt(inputPath string) (string, error) {
+	output := strings.TrimSuffix(inputPath, suffix)
+	e.log.Debug("decrypt", "input", inputPath, "output", output)
+
+	if err := e.validateInput(inputPath); err != nil {
+		return "", err
 	}
-	infile, err := os.Open(input)
+
+	infile, err := e.fs.Open(inputPath)
 	if err != nil {
 		return "", err
 	}
 	defer infile.Close()
 
-	key := []byte(e.key)
-	block, err := aes.NewCipher(key)
+	block, err := e.createCipher()
 	if err != nil {
 		return "", err
 	}
 
-	// Never use more than 2^32 random nonces with a given key
-	// because of the risk of repeat.
-	fi, err := infile.Stat()
+	iv, msgLen, err := e.readIVAndMessageLength(infile, block)
 	if err != nil {
 		return "", err
 	}
 
-	iv := make([]byte, block.BlockSize())
-	msgLen := fi.Size() - int64(len(iv))
-	_, err = infile.ReadAt(iv, msgLen)
+	outfile, err := e.openOutputFile(output)
 	if err != nil {
 		return "", err
 	}
 
-	outfile, err := os.OpenFile(output, os.O_RDWR|os.O_CREATE, 0777)
-	if err != nil {
+	if err := e.decryptFile(infile, outfile, block, iv, msgLen); err != nil {
 		return "", err
 	}
-	defer outfile.Close()
 
-	// The buffer size must be multiple of 16 bytes
-	buf := make([]byte, 1024)
-	stream := cipher.NewCTR(block, iv)
-	for {
-		n, err := infile.Read(buf)
-		if n > 0 {
-			// The last bytes are the IV, don't belong the original message
-			if n > int(msgLen) {
-				n = int(msgLen)
-			}
-			msgLen -= int64(n)
-			stream.XORKeyStream(buf, buf[:n])
-			// Write into file
-			_, err = outfile.Write(buf[:n])
-			if err != nil {
-				return "", err
-			}
-		}
-
-		if errors.Is(err, io.EOF) {
-			break
-		}
-
-		if err != nil {
-			e.log.Info("Read %d bytes: %v", strconv.Itoa(n), err)
-			break
-		}
-	}
-	err = os.Remove(input)
-	if err != nil {
+	if err := e.fs.Remove(inputPath); err != nil {
 		e.log.Warn("unable to remove input", "error", err)
 	}
 	return output, nil
@@ -189,4 +138,106 @@ func isASCII(s string) bool {
 		}
 	}
 	return true
+}
+
+// createCipher() returns new cipher block for encryption/decryption based on encryption-key
+func (e *Encrypter) createCipher() (cipher.Block, error) {
+	key := []byte(e.key)
+	return aes.NewCipher(key)
+}
+
+func (e *Encrypter) openOutputFile(output string) (afero.File, error) {
+	return e.fs.OpenFile(output, os.O_RDWR|os.O_CREATE, 0644)
+}
+
+// generateIV() returns unique initalization vector of same size as cipher block for encryption
+func (e *Encrypter) generateIV(block cipher.Block) ([]byte, error) {
+	iv := make([]byte, block.BlockSize())
+	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		return nil, err
+	}
+	return iv, nil
+}
+
+// encryptFile() encrypts infile to outfile using CTR mode (cipher and iv) and appends iv for decryption
+func (e *Encrypter) encryptFile(infile, outfile afero.File, block cipher.Block, iv []byte) error {
+	buf := make([]byte, 1024)
+	stream := cipher.NewCTR(block, iv)
+
+	for {
+		n, err := infile.Read(buf)
+		if n > 0 {
+			stream.XORKeyStream(buf, buf[:n])
+			if _, err := outfile.Write(buf[:n]); err != nil {
+				return err
+			}
+		}
+
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			e.log.Info("Read %d bytes: %v", strconv.Itoa(n), err)
+			break
+		}
+	}
+
+	if _, err := outfile.Write(iv); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateInput() throws error if input file doesn't have encryption suffix
+func (e *Encrypter) validateInput(input string) error {
+	if filepath.Ext(input) != suffix {
+		return fmt.Errorf("input is not encrypted")
+	}
+	return nil
+}
+
+// readIVAndMessageLength() returns initialization vector and message length for decryption
+func (e *Encrypter) readIVAndMessageLength(infile afero.File, block cipher.Block) ([]byte, int64, error) {
+	fi, err := infile.Stat()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	iv := make([]byte, block.BlockSize())
+	msgLen := fi.Size() - int64(len(iv))
+	if _, err := infile.ReadAt(iv, msgLen); err != nil {
+		return nil, 0, err
+	}
+
+	return iv, msgLen, nil
+}
+
+// decryptFile() decrypts infile to outfile using CTR mode (cipher and iv)
+func (e *Encrypter) decryptFile(infile, outfile afero.File, block cipher.Block, iv []byte, msgLen int64) error {
+	buf := make([]byte, 1024)
+	stream := cipher.NewCTR(block, iv)
+
+	for {
+		n, err := infile.Read(buf)
+		if n > 0 {
+			if n > int(msgLen) {
+				n = int(msgLen)
+			}
+			msgLen -= int64(n)
+			stream.XORKeyStream(buf, buf[:n])
+			if _, err := outfile.Write(buf[:n]); err != nil {
+				return err
+			}
+		}
+
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			e.log.Info("Read %d bytes: %v", strconv.Itoa(n), err)
+			break
+		}
+	}
+
+	return nil
 }
