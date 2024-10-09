@@ -27,7 +27,6 @@ func TestEncrypter(t *testing.T) {
 
 	input, err := fs.Create("encrypt")
 	require.NoError(t, err)
-	defer fs.Remove(input.Name())
 
 	cleartextInput := []byte("This is the content of the file")
 	err = afero.WriteFile(fs, input.Name(), cleartextInput, 0600)
@@ -55,6 +54,11 @@ func TestEncrypter(t *testing.T) {
 	require.NoError(t, err)
 	_, err = e.Decrypt(bigEncFile)
 	require.NoError(t, err)
-	fs.Remove("bigfile.test")
-	fs.Remove("bigfile.test.aes")
+
+	err = fs.Remove(input.Name())
+	require.NoError(t, err)
+	err = fs.Remove("bigfile.test")
+	require.NoError(t, err)
+	err = fs.Remove("bigfile.test.aes")
+	require.NoError(t, err)
 }
