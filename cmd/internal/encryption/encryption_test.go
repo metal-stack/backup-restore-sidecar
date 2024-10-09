@@ -59,6 +59,4 @@ func TestEncrypter(t *testing.T) {
 	require.NoError(t, err)
 	err = fs.Remove("bigfile.test")
 	require.NoError(t, err)
-	err = fs.Remove("bigfile.test.aes")
-	require.NoError(t, err)
 }
