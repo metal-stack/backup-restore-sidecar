@@ -10,6 +10,7 @@ import (
 	backuproviders "github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	cron "github.com/robfig/cron/v3"
@@ -23,6 +24,7 @@ type BackuperConfig struct {
 	BackupProvider backuproviders.BackupProvider
 	Metrics        *metrics.Metrics
 	Compressor     *compress.Compressor
+	Encrypter      *encryption.Encrypter
 }
 
 type Backuper struct {
@@ -33,6 +35,7 @@ type Backuper struct {
 	metrics        *metrics.Metrics
 	comp           *compress.Compressor
 	sem            *semaphore.Weighted
+	encrypter      *encryption.Encrypter
 }
 
 func New(config *BackuperConfig) *Backuper {
@@ -44,7 +47,8 @@ func New(config *BackuperConfig) *Backuper {
 		metrics:        config.Metrics,
 		comp:           config.Compressor,
 		// sem guards backups to be taken concurrently
-		sem: semaphore.NewWeighted(1),
+		sem:       semaphore.NewWeighted(1),
+		encrypter: config.Encrypter,
 	}
 }
 
@@ -104,6 +108,15 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 	}
 
 	b.log.Info("compressed backup")
+
+	if b.encrypter != nil {
+		filename, err = b.encrypter.Encrypt(filename)
+		if err != nil {
+			b.metrics.CountError("encrypt")
+			return fmt.Errorf("error encrypting backup: %w", err)
+		}
+		b.log.Info("encrypted backup")
+	}
 
 	err = b.bp.UploadBackup(ctx, filename)
 	if err != nil {

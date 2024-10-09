@@ -7,6 +7,7 @@ import "google/protobuf/timestamp.proto";
 service BackupService {
   rpc ListBackups(ListBackupsRequest) returns (BackupListResponse);
   rpc RestoreBackup(RestoreBackupRequest) returns (RestoreBackupResponse);
+  rpc GetBackupByVersion(GetBackupByVersionRequest) returns (GetBackupByVersionResponse);
 }
 
 message ListBackupsRequest {}
@@ -26,3 +27,11 @@ message RestoreBackupRequest {
 }
 
 message RestoreBackupResponse {}
+
+message GetBackupByVersionRequest {
+  string version = 1;
+}
+
+message GetBackupByVersionResponse {
+  Backup backup = 1;
+}
