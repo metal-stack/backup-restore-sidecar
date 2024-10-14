@@ -143,7 +143,7 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 	require.NoError(t, err)
 	require.NotNil(t, backup)
 
-	require.True(t, strings.HasSuffix(backup.Name, ".aes"))
+	require.True(t, strings.HasSuffix(backup.GetName(), ".aes"))
 
 	t.Log("remove sts and delete data volume")
 
