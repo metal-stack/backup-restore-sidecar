@@ -149,6 +149,23 @@ func (i *Initializer) initialize(ctx context.Context) error {
 	i.currentStatus.Status = v1.StatusResponse_CHECKING
 	i.currentStatus.Message = "checking database"
 
+	versions, err := i.bp.ListBackups(ctx)
+	if err != nil {
+		return fmt.Errorf("unable retrieve backup versions: %w", err)
+	}
+
+	latestBackup := versions.Latest()
+	if latestBackup == nil {
+		i.log.Info("there are no backups available, it's a fresh database. allow database to start")
+		return nil
+	}
+
+	if i.encrypter == nil {
+		if encryption.IsEncrypted(latestBackup.Name) {
+			return fmt.Errorf("latest backup is encrypted, but no encryption/decryption is configured")
+		}
+	}
+
 	needsBackup, err := i.db.Check(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to check data of database: %w", err)
@@ -160,17 +177,6 @@ func (i *Initializer) initialize(ctx context.Context) error {
 	}
 
 	i.log.Info("database potentially needs to be restored, looking for backup")
-
-	versions, err := i.bp.ListBackups(ctx)
-	if err != nil {
-		return fmt.Errorf("unable retrieve backup versions: %w", err)
-	}
-
-	latestBackup := versions.Latest()
-	if latestBackup == nil {
-		i.log.Info("there are no backups available, it's a fresh database. allow database to start")
-		return nil
-	}
 
 	err = i.Restore(ctx, latestBackup)
 	if err != nil {
@@ -212,10 +218,13 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 	}
 
 	if i.encrypter != nil {
-		backupFilePath, err = i.encrypter.Decrypt(backupFilePath)
-		if err != nil {
-			return fmt.Errorf("unable to decrypt backup: %w", err)
+		if encryption.IsEncrypted(backupFilePath) {
+			backupFilePath, err = i.encrypter.Decrypt(backupFilePath)
+			if err != nil {
+				return fmt.Errorf("unable to decrypt backup: %w", err)
+			}
 		}
+		i.log.Info("restoring unencrypted backup with configured encryption - skipping decryption...")
 	}
 
 	i.currentStatus.Message = "uncompressing backup"

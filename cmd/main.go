@@ -307,12 +307,14 @@ var downloadBackupCmd = &cobra.Command{
 		}
 
 		if encrypter != nil {
-			_, err = encrypter.Decrypt(destination)
-			if err != nil {
-				return fmt.Errorf("failed to decrypt: %w", err)
+			if encryption.IsEncrypted(destination) {
+				_, err = encrypter.Decrypt(destination)
+				if err != nil {
+					return fmt.Errorf("unable to decrypt backup: %w", err)
+				}
 			}
+			logger.Info("downloading unencrypted backup with configured encryption - skipping decryption...")
 		}
-
 		return nil
 	},
 }

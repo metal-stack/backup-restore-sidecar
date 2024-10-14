@@ -17,7 +17,7 @@ import (
 	"github.com/spf13/afero"
 )
 
-// Suffix is appended on encryption and removed on decryption from given input
+// suffix is appended on encryption and removed on decryption from given input
 const suffix = ".aes"
 
 // Encrypter is used to encrypt/decrypt backups
@@ -96,8 +96,8 @@ func (e *Encrypter) Decrypt(inputPath string) (string, error) {
 	output := strings.TrimSuffix(inputPath, suffix)
 	e.log.Debug("decrypt", "input", inputPath, "output", output)
 
-	if err := e.validateInput(inputPath); err != nil {
-		return "", err
+	if IsEncrypted(inputPath) {
+		return "", fmt.Errorf("input is not encrypted")
 	}
 
 	infile, err := e.fs.Open(inputPath)
@@ -177,23 +177,21 @@ func (e *Encrypter) encryptFile(infile, outfile afero.File, block cipher.Block, 
 			break
 		}
 		if err != nil {
-			e.log.Info("Read %d bytes: %v", strconv.Itoa(n), err)
+			e.log.Info("read %d bytes: %s", strconv.Itoa(n), err)
 			break
 		}
 	}
 
 	if _, err := outfile.Write(iv); err != nil {
-		return err
+		return fmt.Errorf("could not append iv: %w", err)
 	}
+
 	return nil
 }
 
-// validateInput() throws error if input file doesn't have encryption suffix
-func (e *Encrypter) validateInput(input string) error {
-	if filepath.Ext(input) != suffix {
-		return fmt.Errorf("input is not encrypted")
-	}
-	return nil
+// IsEncrypted() tests if target file is encrypted
+func IsEncrypted(path string) bool {
+	return filepath.Ext(path) == suffix
 }
 
 // readIVAndMessageLength() returns initialization vector and message length for decryption
@@ -234,7 +232,7 @@ func (e *Encrypter) decryptFile(infile, outfile afero.File, block cipher.Block, 
 			break
 		}
 		if err != nil {
-			e.log.Info("Read %d bytes: %v", strconv.Itoa(n), err)
+			e.log.Info("read %d bytes: %s", strconv.Itoa(n), err)
 			break
 		}
 	}
