@@ -49,7 +49,7 @@ With `--compression-method` you can define how generated backups are compressed 
 ## Encryption
 
 For all three storage providers AES encryption is supported and can be enabled with `--encryption-key=<YOUR_KEY>`.
-The key must be either 16 bytes (AES-128), 24 bytes (AES-192) or 32 bytes (AES-256) long.
+The key must be 32 bytes (AES-256) long.
 The backups are stored at the storage provider with the `.aes` suffix. If the file does not have this suffix, decryption is skipped.
 
 ## How it works
