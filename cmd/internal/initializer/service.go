@@ -84,6 +84,25 @@ func (s *backupService) RestoreBackup(ctx context.Context, req *v1.RestoreBackup
 	return &v1.RestoreBackupResponse{}, nil
 }
 
+func (s *backupService) GetBackupByVersion(ctx context.Context, req *v1.GetBackupByVersionRequest) (*v1.GetBackupByVersionResponse, error) {
+	if req.GetVersion() == "" {
+		return nil, status.Error(codes.InvalidArgument, "version to get must be defined explicitly")
+	}
+
+	versions, err := s.bp.ListBackups(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	version, err := versions.Get(req.GetVersion())
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &v1.GetBackupByVersionResponse{Backup: &v1.Backup{Name: version.Name, Version: version.Version, Timestamp: timestamppb.New(version.Date)}}, nil
+
+}
+
 type databaseService struct {
 	backupFn func() error
 }

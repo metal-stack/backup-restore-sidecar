@@ -145,6 +145,7 @@ data:
     backup-cron-schedule: "*/1 * * * *"
     object-prefix: etcd-test
     etcd-endpoints: http://localhost:32379
+    encryption-key: "01234567891234560123456789123456"
     post-exec-cmds:
     - etcd --data-dir=/data/etcd --listen-client-urls http://0.0.0.0:32379 --advertise-client-urls http://0.0.0.0:32379 --listen-peer-urls http://0.0.0.0:32380 --initial-advertise-peer-urls http://0.0.0.0:32380 --initial-cluster default=http://0.0.0.0:32380 --listen-metrics-urls http://0.0.0.0:32381
 kind: ConfigMap
