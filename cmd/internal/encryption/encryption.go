@@ -96,7 +96,7 @@ func (e *Encrypter) Decrypt(inputPath string) (string, error) {
 	output := strings.TrimSuffix(inputPath, suffix)
 	e.log.Debug("decrypt", "input", inputPath, "output", output)
 
-	if IsEncrypted(inputPath) {
+	if !IsEncrypted(inputPath) {
 		return "", fmt.Errorf("input is not encrypted")
 	}
 
