@@ -10,7 +10,7 @@ type BackupProvider interface {
 	ListBackups(ctx context.Context) (BackupVersions, error)
 	CleanupBackups(ctx context.Context) error
 	GetNextBackupName(ctx context.Context) string
-	DownloadBackup(ctx context.Context, version *BackupVersion) error
+	DownloadBackup(ctx context.Context, version *BackupVersion, outDir string) (string, error)
 	UploadBackup(ctx context.Context, sourcePath string) error
 }
 

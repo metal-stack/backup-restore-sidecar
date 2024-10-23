@@ -309,6 +309,7 @@ backup-provider: local
 backup-cron-schedule: "*/1 * * * *"
 object-prefix: postgres-test
 compression-method: tar
+encryption-key: "01234567891234560123456789123456"
 post-exec-cmds:
 - docker-entrypoint.sh postgres
 `,

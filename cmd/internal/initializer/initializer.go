@@ -15,6 +15,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 
@@ -34,9 +35,10 @@ type Initializer struct {
 	comp          *compress.Compressor
 	metrics       *metrics.Metrics
 	dbDataDir     string
+	encrypter     *encryption.Encrypter
 }
 
-func New(log *slog.Logger, addr string, db database.Database, bp providers.BackupProvider, comp *compress.Compressor, metrics *metrics.Metrics, dbDataDir string) *Initializer {
+func New(log *slog.Logger, addr string, db database.Database, bp providers.BackupProvider, comp *compress.Compressor, metrics *metrics.Metrics, dbDataDir string, encrypter *encryption.Encrypter) *Initializer {
 	return &Initializer{
 		currentStatus: &v1.StatusResponse{
 			Status:  v1.StatusResponse_CHECKING,
@@ -49,6 +51,7 @@ func New(log *slog.Logger, addr string, db database.Database, bp providers.Backu
 		comp:      comp,
 		dbDataDir: dbDataDir,
 		metrics:   metrics,
+		encrypter: encrypter,
 	}
 }
 
@@ -136,6 +139,12 @@ func (i *Initializer) initialize(ctx context.Context) error {
 		return fmt.Errorf("unable to ensure backup bucket: %w", err)
 	}
 
+	i.log.Info("ensuring default download directory")
+	err = os.MkdirAll(constants.DownloadDir, 0755)
+	if err != nil {
+		return fmt.Errorf("unable to ensure default download directory: %w", err)
+	}
+
 	i.log.Info("checking database")
 	i.currentStatus.Status = v1.StatusResponse_CHECKING
 	i.currentStatus.Message = "checking database"
@@ -161,6 +170,12 @@ func (i *Initializer) initialize(ctx context.Context) error {
 	if latestBackup == nil {
 		i.log.Info("there are no backups available, it's a fresh database. allow database to start")
 		return nil
+	}
+
+	if i.encrypter == nil {
+		if encryption.IsEncrypted(latestBackup.Name) {
+			return fmt.Errorf("latest backup is encrypted, but no encryption/decryption is configured")
+		}
 	}
 
 	err = i.Restore(ctx, latestBackup)
@@ -197,9 +212,20 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 		return fmt.Errorf("could not delete priorly downloaded file: %w", err)
 	}
 
-	err := i.bp.DownloadBackup(ctx, version)
+	backupFilePath, err := i.bp.DownloadBackup(ctx, version, constants.DownloadDir)
 	if err != nil {
 		return fmt.Errorf("unable to download backup: %w", err)
+	}
+
+	if i.encrypter != nil {
+		if encryption.IsEncrypted(backupFilePath) {
+			backupFilePath, err = i.encrypter.Decrypt(backupFilePath)
+			if err != nil {
+				return fmt.Errorf("unable to decrypt backup: %w", err)
+			}
+		} else {
+			i.log.Info("restoring unencrypted backup with configured encryption - skipping decryption...")
+		}
 	}
 
 	i.currentStatus.Message = "uncompressing backup"

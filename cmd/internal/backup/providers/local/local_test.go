@@ -130,17 +130,16 @@ func Test_BackupProviderLocal(t *testing.T) {
 				latestVersion := versions.Latest()
 				require.NotNil(t, latestVersion)
 
-				err = p.DownloadBackup(ctx, latestVersion)
+				backupFilePath, err := p.DownloadBackup(ctx, latestVersion, "")
 				require.NoError(t, err)
 
-				downloadPath := path.Join(constants.DownloadDir, latestVersion.Name)
-				gotContent, err := afero.ReadFile(fs, downloadPath)
+				gotContent, err := afero.ReadFile(fs, backupFilePath)
 				require.NoError(t, err)
 
 				require.Equal(t, fmt.Sprintf("precious data %d", backupAmount), string(gotContent))
 
 				// cleaning up after test
-				err = fs.Remove(downloadPath)
+				err = fs.Remove(backupFilePath)
 				require.NoError(t, err)
 			})
 

@@ -88,7 +88,7 @@ endif
 	kubectl --kubeconfig $(KUBECONFIG) delete -f "deploy/$(DB)-$(BACKUP_PROVIDER).yaml" || true # for idempotence
 	kubectl --kubeconfig $(KUBECONFIG) apply -f "deploy/$(DB)-$(BACKUP_PROVIDER).yaml"
 	# tailing
-	stern --kubeconfig $(KUBECONFIG) '.*'
+	kubectl stern --kubeconfig $(KUBECONFIG) '.*'
 
 .PHONY: kind-cluster-create
 kind-cluster-create: dockerimage

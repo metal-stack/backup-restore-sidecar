@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	BackupService_ListBackups_FullMethodName   = "/v1.BackupService/ListBackups"
-	BackupService_RestoreBackup_FullMethodName = "/v1.BackupService/RestoreBackup"
+	BackupService_ListBackups_FullMethodName        = "/v1.BackupService/ListBackups"
+	BackupService_RestoreBackup_FullMethodName      = "/v1.BackupService/RestoreBackup"
+	BackupService_GetBackupByVersion_FullMethodName = "/v1.BackupService/GetBackupByVersion"
 )
 
 // BackupServiceClient is the client API for BackupService service.
@@ -29,6 +30,7 @@ const (
 type BackupServiceClient interface {
 	ListBackups(ctx context.Context, in *ListBackupsRequest, opts ...grpc.CallOption) (*BackupListResponse, error)
 	RestoreBackup(ctx context.Context, in *RestoreBackupRequest, opts ...grpc.CallOption) (*RestoreBackupResponse, error)
+	GetBackupByVersion(ctx context.Context, in *GetBackupByVersionRequest, opts ...grpc.CallOption) (*GetBackupByVersionResponse, error)
 }
 
 type backupServiceClient struct {
@@ -59,12 +61,23 @@ func (c *backupServiceClient) RestoreBackup(ctx context.Context, in *RestoreBack
 	return out, nil
 }
 
+func (c *backupServiceClient) GetBackupByVersion(ctx context.Context, in *GetBackupByVersionRequest, opts ...grpc.CallOption) (*GetBackupByVersionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBackupByVersionResponse)
+	err := c.cc.Invoke(ctx, BackupService_GetBackupByVersion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BackupServiceServer is the server API for BackupService service.
 // All implementations should embed UnimplementedBackupServiceServer
 // for forward compatibility.
 type BackupServiceServer interface {
 	ListBackups(context.Context, *ListBackupsRequest) (*BackupListResponse, error)
 	RestoreBackup(context.Context, *RestoreBackupRequest) (*RestoreBackupResponse, error)
+	GetBackupByVersion(context.Context, *GetBackupByVersionRequest) (*GetBackupByVersionResponse, error)
 }
 
 // UnimplementedBackupServiceServer should be embedded to have
@@ -79,6 +92,9 @@ func (UnimplementedBackupServiceServer) ListBackups(context.Context, *ListBackup
 }
 func (UnimplementedBackupServiceServer) RestoreBackup(context.Context, *RestoreBackupRequest) (*RestoreBackupResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RestoreBackup not implemented")
+}
+func (UnimplementedBackupServiceServer) GetBackupByVersion(context.Context, *GetBackupByVersionRequest) (*GetBackupByVersionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetBackupByVersion not implemented")
 }
 func (UnimplementedBackupServiceServer) testEmbeddedByValue() {}
 
@@ -136,6 +152,24 @@ func _BackupService_RestoreBackup_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BackupService_GetBackupByVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBackupByVersionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackupServiceServer).GetBackupByVersion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackupService_GetBackupByVersion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackupServiceServer).GetBackupByVersion(ctx, req.(*GetBackupByVersionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BackupService_ServiceDesc is the grpc.ServiceDesc for BackupService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -150,6 +184,10 @@ var BackupService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RestoreBackup",
 			Handler:    _BackupService_RestoreBackup_Handler,
+		},
+		{
+			MethodName: "GetBackupByVersion",
+			Handler:    _BackupService_GetBackupByVersion_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
