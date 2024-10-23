@@ -16,7 +16,7 @@ func TestEncrypter(t *testing.T) {
 	require.EqualError(t, err, "key length: 11 invalid, must be 32 bytes")
 
 	// Key too long
-	_, err = New(slog.Default(), &EncrypterConfig{Key: "tooloooonoooooooooooooooooooooooooooongkey", FS: fs})
+	_, err = New(slog.Default(), &EncrypterConfig{Key: "toolooooooooooooooooooooooooooooooooongkey", FS: fs})
 	require.EqualError(t, err, "key length: 42 invalid, must be 32 bytes")
 
 	_, err = New(slog.Default(), &EncrypterConfig{Key: "äöüäöüäöüäöüäöüä", FS: fs})

@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"unicode"
 
@@ -177,8 +176,7 @@ func (e *Encrypter) encryptFile(infile, outfile afero.File, block cipher.Block, 
 			break
 		}
 		if err != nil {
-			e.log.Info("read %d bytes: %s", strconv.Itoa(n), err)
-			break
+			return fmt.Errorf("error reading from file (%d bytes read): %w", n, err)
 		}
 	}
 
@@ -232,8 +230,7 @@ func (e *Encrypter) decryptFile(infile, outfile afero.File, block cipher.Block, 
 			break
 		}
 		if err != nil {
-			e.log.Info("read %d bytes: %s", strconv.Itoa(n), err)
-			break
+			return fmt.Errorf("error reading from file (%d bytes read): %w", n, err)
 		}
 	}
 

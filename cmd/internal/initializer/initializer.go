@@ -149,6 +149,18 @@ func (i *Initializer) initialize(ctx context.Context) error {
 	i.currentStatus.Status = v1.StatusResponse_CHECKING
 	i.currentStatus.Message = "checking database"
 
+	needsBackup, err := i.db.Check(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to check data of database: %w", err)
+	}
+
+	if !needsBackup {
+		i.log.Info("database does not need to be restored")
+		return nil
+	}
+
+	i.log.Info("database potentially needs to be restored, looking for backup")
+
 	versions, err := i.bp.ListBackups(ctx)
 	if err != nil {
 		return fmt.Errorf("unable retrieve backup versions: %w", err)
@@ -165,18 +177,6 @@ func (i *Initializer) initialize(ctx context.Context) error {
 			return fmt.Errorf("latest backup is encrypted, but no encryption/decryption is configured")
 		}
 	}
-
-	needsBackup, err := i.db.Check(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to check data of database: %w", err)
-	}
-
-	if !needsBackup {
-		i.log.Info("database does not need to be restored")
-		return nil
-	}
-
-	i.log.Info("database potentially needs to be restored, looking for backup")
 
 	err = i.Restore(ctx, latestBackup)
 	if err != nil {
