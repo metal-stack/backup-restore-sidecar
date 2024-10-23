@@ -312,8 +312,9 @@ var downloadBackupCmd = &cobra.Command{
 				if err != nil {
 					return fmt.Errorf("unable to decrypt backup: %w", err)
 				}
+			} else {
+				logger.Info("downloading unencrypted backup with configured encryption - skipping decryption...")
 			}
-			logger.Info("downloading unencrypted backup with configured encryption - skipping decryption...")
 		}
 		return nil
 	},

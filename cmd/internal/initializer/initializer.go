@@ -223,8 +223,9 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 			if err != nil {
 				return fmt.Errorf("unable to decrypt backup: %w", err)
 			}
+		} else {
+			i.log.Info("restoring unencrypted backup with configured encryption - skipping decryption...")
 		}
-		i.log.Info("restoring unencrypted backup with configured encryption - skipping decryption...")
 	}
 
 	i.currentStatus.Message = "uncompressing backup"
