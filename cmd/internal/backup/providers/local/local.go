@@ -3,6 +3,7 @@ package local
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -11,7 +12,6 @@ import (
 	"errors"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
 )
@@ -86,28 +86,34 @@ func (b *BackupProviderLocal) CleanupBackups(_ context.Context) error {
 }
 
 // DownloadBackup downloads the given backup version to the specified folder
-func (b *BackupProviderLocal) DownloadBackup(_ context.Context, version *providers.BackupVersion, outDir string) (string, error) {
+func (b *BackupProviderLocal) DownloadBackup(_ context.Context, version *providers.BackupVersion, outputWriter io.Writer) error {
 	b.log.Info("download backup called for provider local")
 
 	source := filepath.Join(b.config.LocalBackupPath, version.Name)
 
-	backupFilePath := filepath.Join(outDir, version.Name)
-
-	err := utils.Copy(b.fs, source, backupFilePath)
+	infile, err := b.fs.Open(source)
 	if err != nil {
-		return "", err
+		return fmt.Errorf("error while opening source-file in download: %w", err)
+	}
+	_, err = io.Copy(outputWriter, infile)
+	if err != nil {
+		return err
 	}
 
-	return backupFilePath, err
+	return err
 }
 
 // UploadBackup uploads a backup to the backup provider
-func (b *BackupProviderLocal) UploadBackup(_ context.Context, sourcePath string) error {
+func (b *BackupProviderLocal) UploadBackup(_ context.Context, inputReader io.Reader, sourcePath string) error {
 	b.log.Info("upload backups called for provider local")
 
 	destination := filepath.Join(b.config.LocalBackupPath, filepath.Base(sourcePath))
+	output, err := b.fs.Create(destination)
+	if err != nil {
+		return fmt.Errorf("error while creating destination of upload: %w", err)
+	}
 
-	err := utils.Copy(b.fs, sourcePath, destination)
+	_, err = io.Copy(output, inputReader)
 	if err != nil {
 		return err
 	}

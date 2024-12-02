@@ -3,6 +3,7 @@ package initializer
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"os"
@@ -212,14 +213,16 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 		return fmt.Errorf("could not delete priorly downloaded file: %w", err)
 	}
 
-	backupFilePath, err := i.bp.DownloadBackup(ctx, version, constants.DownloadDir)
+	backupFile, err := os.Create(backupFilePath)
+	reader1, writer1 := io.Pipe()
+	err = i.bp.DownloadBackup(ctx, version, writer1)
 	if err != nil {
 		return fmt.Errorf("unable to download backup: %w", err)
 	}
 
 	if i.encrypter != nil {
 		if encryption.IsEncrypted(backupFilePath) {
-			backupFilePath, err = i.encrypter.Decrypt(backupFilePath)
+			_, err = i.encrypter.Decrypt(reader1, backupFile)
 			if err != nil {
 				return fmt.Errorf("unable to decrypt backup: %w", err)
 			}
@@ -229,7 +232,7 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 	}
 
 	i.currentStatus.Message = "uncompressing backup"
-	err = i.comp.Decompress(backupFilePath)
+	err = i.comp.Decompress(ctx, reader1)
 	if err != nil {
 		return fmt.Errorf("unable to uncompress backup: %w", err)
 	}

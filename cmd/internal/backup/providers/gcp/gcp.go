@@ -147,10 +147,10 @@ func (b *BackupProviderGCP) CleanupBackups(_ context.Context) error {
 }
 
 // DownloadBackup downloads the given backup version to the specified folder
-func (b *BackupProviderGCP) DownloadBackup(ctx context.Context, version *providers.BackupVersion, outDir string) (string, error) {
+func (b *BackupProviderGCP) DownloadBackup(ctx context.Context, version *providers.BackupVersion, outputWriter io.Writer) error {
 	gen, err := strconv.ParseInt(version.Version, 10, 64)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	bucket := b.c.Bucket(b.config.BucketName)
@@ -160,39 +160,23 @@ func (b *BackupProviderGCP) DownloadBackup(ctx context.Context, version *provide
 		downloadFileName = filepath.Base(downloadFileName)
 	}
 
-	backupFilePath := filepath.Join(outDir, downloadFileName)
-
-	b.log.Info("downloading", "object", version.Name, "gen", gen, "to", backupFilePath)
-
 	r, err := bucket.Object(version.Name).Generation(gen).NewReader(ctx)
 	if err != nil {
-		return "", fmt.Errorf("backup not found: %w", err)
+		return fmt.Errorf("backup not found: %w", err)
 	}
 	defer r.Close()
 
-	f, err := b.fs.Create(backupFilePath)
+	_, err = io.Copy(outputWriter, r)
 	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	_, err = io.Copy(f, r)
-	if err != nil {
-		return "", fmt.Errorf("error writing file from gcp to filesystem: %w", err)
+		return fmt.Errorf("error writing file from gcp to filesystem: %w", err)
 	}
 
-	return backupFilePath, nil
+	return nil
 }
 
 // UploadBackup uploads a backup to the backup provider
-func (b *BackupProviderGCP) UploadBackup(ctx context.Context, sourcePath string) error {
+func (b *BackupProviderGCP) UploadBackup(ctx context.Context, inputReader io.Reader, sourcePath string) error {
 	bucket := b.c.Bucket(b.config.BucketName)
-
-	r, err := b.fs.Open(sourcePath)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
 
 	destination := filepath.Base(sourcePath)
 	if b.config.ObjectPrefix != "" {
@@ -203,7 +187,7 @@ func (b *BackupProviderGCP) UploadBackup(ctx context.Context, sourcePath string)
 
 	obj := bucket.Object(destination)
 	w := obj.NewWriter(ctx)
-	if _, err := io.Copy(w, r); err != nil {
+	if _, err := io.Copy(w, inputReader); err != nil {
 		return err
 	}
 	defer w.Close()

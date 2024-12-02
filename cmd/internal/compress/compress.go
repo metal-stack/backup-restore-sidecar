@@ -1,48 +1,69 @@
 package compress
 
 import (
+	"context"
 	"fmt"
-	"path/filepath"
+	"io"
 
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
-	"github.com/mholt/archiver/v3"
+	"github.com/mholt/archives"
 )
 
-type (
-	// Compressor compress/decompress backup data before/after sending/receiving from storage
-	Compressor struct {
-		extension string
-	}
-)
+type Compressor struct {
+	compressor *archives.CompressedArchive
+	extension  string
+}
 
 // New Returns a new Compressor
 func New(method string) (*Compressor, error) {
-	c := &Compressor{}
+	c := &archives.CompressedArchive{}
 	switch method {
 	case "tar":
-		c.extension = ".tar"
+		c = &archives.CompressedArchive{
+			Archival: archives.Tar{},
+		}
 	case "targz":
-		c.extension = ".tar.gz"
+		c = &archives.CompressedArchive{
+			Compression: archives.Gz{},
+			Archival:    archives.Tar{},
+		}
 	case "tarlz4":
-		c.extension = ".tar.lz4"
+		c = &archives.CompressedArchive{
+			Compression: archives.Lz4{},
+			Archival:    archives.Tar{},
+		}
 	default:
 		return nil, fmt.Errorf("unsupported compression method: %s", method)
 	}
-	return c, nil
+	return &Compressor{compressor: c, extension: "." + method}, nil
 }
 
 // Compress the given backupFile and returns the full filename with the extension
-func (c *Compressor) Compress(backupFilePath string) (string, error) {
-	filename := backupFilePath + c.extension
-	return filename, archiver.Archive([]string{constants.BackupDir}, filename)
+func (c *Compressor) Compress(ctx context.Context, backupFilePath string, outputWriter io.Writer) error {
+	files, err := archives.FilesFromDisk(ctx, &archives.FromDiskOptions{}, map[string]string{
+		constants.BackupDir: backupFilePath + c.Extension(),
+	})
+
+	if err != nil {
+		return fmt.Errorf("error while reading file in compressor: %w", err)
+	}
+	err = c.compressor.Archive(ctx, outputWriter, files)
+	if err != nil {
+		fmt.Printf("error while compressing file in compressor: %v", err)
+	}
+	return nil
 }
 
 // Decompress the given backupFile
-func (c *Compressor) Decompress(backupFilePath string) error {
-	return archiver.Unarchive(backupFilePath, filepath.Dir(constants.RestoreDir))
+func (c *Compressor) Decompress(ctx context.Context, inputReader io.Reader) error {
+	err := c.compressor.Extract(ctx, inputReader, func(ctx context.Context, f archives.FileInfo) error {
+		// do something with the file here; or, if you only want a specific file or directory,
+		// just return until you come across the desired f.NameInArchive value(s)
+		return nil
+	})
+	return err
 }
 
-// Extension returns the file extension of the configured compressor, depending on the method
 func (c *Compressor) Extension() string {
 	return c.extension
 }

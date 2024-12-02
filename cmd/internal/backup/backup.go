@@ -3,6 +3,7 @@ package backup
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path"
@@ -80,6 +81,7 @@ func (b *Backuper) Start(ctx context.Context) error {
 }
 
 func (b *Backuper) CreateBackup(ctx context.Context) error {
+	fmt.Println("CreateBackup")
 	if !b.sem.TryAcquire(1) {
 		return constants.ErrBackupAlreadyInProgress
 	}
@@ -101,24 +103,44 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 		return fmt.Errorf("could not delete priorly uploaded backup: %w", err)
 	}
 
-	filename, err := b.comp.Compress(backupFilePath)
-	if err != nil {
-		b.metrics.CountError("compress")
-		return fmt.Errorf("unable to compress backup: %w", err)
-	}
+	filename := path.Base(backupFilePath) + b.comp.Extension()
+
+	reader1, writer1 := io.Pipe()
+	go func() {
+		defer writer1.Close()
+		err := b.comp.Compress(ctx, backupFilePath, writer1)
+		if err != nil {
+			b.metrics.CountError("compress")
+			b.log.Error("error compressing backup", "error", err)
+		}
+	}()
 
 	b.log.Info("compressed backup")
 
 	if b.encrypter != nil {
-		filename, err = b.encrypter.Encrypt(filename)
-		if err != nil {
-			b.metrics.CountError("encrypt")
-			return fmt.Errorf("error encrypting backup: %w", err)
-		}
-		b.log.Info("encrypted backup")
+		filename = filename + encryption.Suffix
 	}
 
-	err = b.bp.UploadBackup(ctx, filename)
+	reader2, writer2 := io.Pipe()
+	go func() {
+		defer writer2.Close()
+		if b.encrypter != nil {
+			err = b.encrypter.Encrypt(reader1, writer2)
+			if err != nil {
+				b.metrics.CountError("encrypt")
+				b.log.Error("error encrypting backup", "error", err)
+			}
+		} else {
+			_, err = io.Copy(writer2, reader1)
+			if err != nil {
+				b.metrics.CountError("streaming")
+				b.log.Error("error copying backup", "error", err)
+			}
+		}
+	}()
+
+	countingReader := &CountingReader{Reader: reader2}
+	err = b.bp.UploadBackup(ctx, countingReader, filename)
 	if err != nil {
 		b.metrics.CountError("upload")
 		return fmt.Errorf("error uploading backup: %w", err)
@@ -126,7 +148,7 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 
 	b.log.Info("uploaded backup to backup provider bucket")
 
-	b.metrics.CountBackup(filename)
+	b.metrics.CountBackup(countingReader.BytesRead)
 
 	err = b.bp.CleanupBackups(ctx)
 	if err != nil {
@@ -137,4 +159,15 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+type CountingReader struct {
+	io.Reader
+	BytesRead float64
+}
+
+func (r *CountingReader) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	r.BytesRead += float64(n)
+	return n, err
 }

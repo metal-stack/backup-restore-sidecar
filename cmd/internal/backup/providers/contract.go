@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"io"
 	"time"
 )
 
@@ -10,8 +11,8 @@ type BackupProvider interface {
 	ListBackups(ctx context.Context) (BackupVersions, error)
 	CleanupBackups(ctx context.Context) error
 	GetNextBackupName(ctx context.Context) string
-	DownloadBackup(ctx context.Context, version *BackupVersion, outDir string) (string, error)
-	UploadBackup(ctx context.Context, sourcePath string) error
+	DownloadBackup(ctx context.Context, version *BackupVersion, outputWriter io.Writer) error
+	UploadBackup(ctx context.Context, inputReader io.Reader, sourcePath string) error
 }
 
 type BackupVersions interface {

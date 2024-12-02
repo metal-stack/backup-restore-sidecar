@@ -3,7 +3,6 @@ package metrics
 import (
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -86,11 +85,10 @@ func (m *Metrics) Start(log *slog.Logger) {
 }
 
 // CountBackup updates metrics counter
-func (m *Metrics) CountBackup(backupFile string) {
-	s, _ := os.Stat(backupFile)
+func (m *Metrics) CountBackup(filesSize float64) {
 	m.totalBackups.Inc()
 	m.backupSuccess.Set(1)
-	m.backupSize.Set(float64(s.Size()))
+	m.backupSize.Set(filesSize)
 }
 
 // CountError increases error counter for the given operation
