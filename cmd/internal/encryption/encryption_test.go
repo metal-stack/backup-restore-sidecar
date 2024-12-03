@@ -27,21 +27,27 @@ func TestEncrypter(t *testing.T) {
 
 	//Prepare input for encryption
 	input, err := fs.Create("encrypt")
+	require.NoError(t, err)
 	output, err := fs.Create("encrypt.aes")
+	require.NoError(t, err)
 	cleartextInput := []byte("This is the content of the file")
 	err = afero.WriteFile(fs, input.Name(), cleartextInput, 0600)
+	require.NoError(t, err)
 
 	//Encrypt files
 	err = e.Encrypt(input, output)
 	require.NoError(t, err)
 	encryptedText, err := afero.ReadFile(fs, output.Name())
+	require.NoError(t, err)
 
 	require.Equal(t, input.Name()+Suffix, output.Name())
 	require.NotEqual(t, cleartextInput, encryptedText)
 
 	//Prepare input for decryption
 	inputDecrypted, err := fs.Open("encrypt.aes")
+	require.NoError(t, err)
 	outputDecrypted, err := fs.Create("decrypted")
+	require.NoError(t, err)
 
 	//Decrypt files
 	err = e.Decrypt(inputDecrypted, outputDecrypted)
@@ -71,15 +77,16 @@ func TestEncrypter(t *testing.T) {
 	err = e.Decrypt(inputBigDec, outputBigDec)
 	require.NoError(t, err)
 
-	fs.Remove(input.Name())
-	fs.Remove(output.Name())
-
-	fs.Remove(inputDecrypted.Name())
-	fs.Remove(outputDecrypted.Name())
-
-	fs.Remove(inputBigEnc.Name())
-	fs.Remove(outputBigEnc.Name())
-
-	fs.Remove(inputBigDec.Name())
-	fs.Remove(outputBigDec.Name())
+	err = fs.Remove(input.Name())
+	require.NoError(t, err)
+	err = fs.Remove(output.Name())
+	require.NoError(t, err)
+	err = fs.Remove(outputDecrypted.Name())
+	require.NoError(t, err)
+	err = fs.Remove(inputBigEnc.Name())
+	require.NoError(t, err)
+	err = fs.Remove(outputBigEnc.Name())
+	require.NoError(t, err)
+	err = fs.Remove(outputBigDec.Name())
+	require.NoError(t, err)
 }

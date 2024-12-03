@@ -96,6 +96,7 @@ func Test_BackupProviderGCP(t *testing.T) {
 			require.NoError(t, err)
 
 			backupFile, err := fs.Open(backupPath)
+			require.NoError(t, err)
 			err = p.UploadBackup(ctx, backupFile, backupPath)
 			require.NoError(t, err)
 
@@ -155,6 +156,7 @@ func Test_BackupProviderGCP(t *testing.T) {
 		require.NotNil(t, latestVersion)
 
 		outputfile, err := fs.Create("outputfile")
+		require.NoError(t, err)
 
 		err = p.DownloadBackup(ctx, latestVersion, outputfile)
 		require.NoError(t, err)

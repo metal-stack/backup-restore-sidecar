@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"errors"
 
@@ -154,11 +153,6 @@ func (b *BackupProviderGCP) DownloadBackup(ctx context.Context, version *provide
 	}
 
 	bucket := b.c.Bucket(b.config.BucketName)
-
-	downloadFileName := version.Name
-	if strings.Contains(downloadFileName, "/") {
-		downloadFileName = filepath.Base(downloadFileName)
-	}
 
 	r, err := bucket.Object(version.Name).Generation(gen).NewReader(ctx)
 	if err != nil {

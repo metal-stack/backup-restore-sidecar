@@ -80,10 +80,8 @@ func (e *Encrypter) Decrypt(inputReader io.Reader, outputWriter io.Writer) error
 		return err
 	}
 
-	// Erstelle einen Puffer, der den gesamten Input speichert
+	// needs to be a buffer to read the IV and message length
 	var buf bytes.Buffer
-
-	// Kopiere die Daten aus inputReader in den Puffer
 	_, err = io.Copy(&buf, inputReader)
 	if err != nil {
 		return err
