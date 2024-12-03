@@ -15,6 +15,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
+	"github.com/mholt/archives"
 	cron "github.com/robfig/cron/v3"
 	"golang.org/x/sync/semaphore"
 )
@@ -106,7 +107,12 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 
 	filename := path.Base(backupFilePath) + b.comp.Extension()
 
-	// pipe to compress and buffer compressed data
+	files, _ := os.ReadDir(constants.BackupDir)
+	for _, file := range files {
+		b.log.Info("backup file", "file", file.Name())
+	}
+
+	// pipe to compress and buffer compressed data in order to prevent deadlock of pipe and error-handling
 	reader1, writer1 := io.Pipe()
 	compressErr := make(chan error, 1)
 	compressBuffer := &bytes.Buffer{}
@@ -114,7 +120,8 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 		defer writer1.Close()
 		defer close(compressErr)
 
-		files, err := b.comp.BuildFilesForCompression(constants.BackupDir, backupArchiveName)
+		files, err := archives.FilesFromDisk(ctx, &archives.FromDiskOptions{}, map[string]string{constants.BackupDir: backupFilePath + b.comp.Extension()})
+		fmt.Println("files", files)
 		if err != nil {
 			b.metrics.CountError("build_files")
 			compressErr <- err

@@ -289,9 +289,14 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 	}
 
 	i.currentStatus.Message = "uncompressing backup"
-	err = i.comp.Decompress(ctx, decryptBuffer, constants.RestoreDir)
+	err = i.comp.Decompress(ctx, decryptBuffer)
 	if err != nil {
 		return fmt.Errorf("unable to uncompress backup: %w", err)
+	}
+
+	files, err := os.ReadDir(constants.RestoreDir)
+	for _, file := range files {
+		i.log.Info("restored file", "file", file.Name())
 	}
 
 	i.currentStatus.Message = "restoring backup"

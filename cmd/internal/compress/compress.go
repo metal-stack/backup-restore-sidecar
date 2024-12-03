@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/fs"
+	"path"
 
+	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/mholt/archives"
 	"github.com/spf13/afero"
 )
@@ -67,8 +68,9 @@ func (c *Compressor) Compress(ctx context.Context, outputWriter io.Writer, files
 }
 
 // Decompress the given backupFile
-func (c *Compressor) Decompress(ctx context.Context, inputReader io.Reader, restoreDir string) error {
+func (c *Compressor) Decompress(ctx context.Context, inputReader io.Reader) error {
 	err := c.compressor.Extract(ctx, inputReader, func(ctx context.Context, f archives.FileInfo) error {
+		fmt.Println("Extracting file: ", f.NameInArchive)
 		// open archive file
 		file, err := f.Open()
 		if err != nil {
@@ -76,7 +78,7 @@ func (c *Compressor) Decompress(ctx context.Context, inputReader io.Reader, rest
 		}
 		defer file.Close()
 		// create file in restore directory
-		outputFile, err := c.fs.Create(restoreDir + "/" + f.Name())
+		outputFile, err := c.fs.Create(constants.RestoreDir + "/" + path.Base(f.NameInArchive))
 		if err != nil {
 			return err
 		}
@@ -89,25 +91,6 @@ func (c *Compressor) Decompress(ctx context.Context, inputReader io.Reader, rest
 		return nil
 	})
 	return err
-}
-
-func (c *Compressor) BuildFilesForCompression(inputPath string, name string) ([]archives.FileInfo, error) {
-	files := []archives.FileInfo{}
-	stat, err := c.fs.Stat(inputPath)
-	if err != nil {
-		return nil, err
-	}
-
-	files = append(files, archives.FileInfo{
-		FileInfo:      stat,
-		Header:        c.extension,
-		NameInArchive: name,
-		Open: func() (fs.File, error) {
-			return c.fs.Open(inputPath)
-		},
-	})
-
-	return files, nil
 }
 
 func (c *Compressor) Extension() string {
