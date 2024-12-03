@@ -154,6 +154,7 @@ var startCmd = &cobra.Command{
 		logger.Info("starting backup-restore-sidecar", "version", v.V, "bind-addr", addr)
 
 		comp, err := compress.New(viper.GetString(compressionMethod))
+		logger.Info(comp.Extension())
 		if err != nil {
 			return err
 		}
@@ -318,7 +319,7 @@ var downloadBackupCmd = &cobra.Command{
 
 		if encrypter != nil {
 			if encryption.IsEncrypted(backup.GetBackup().GetName()) {
-				_, err = encrypter.Decrypt(reader1, outputFile)
+				err = encrypter.Decrypt(reader1, outputFile)
 				if err != nil {
 					return fmt.Errorf("unable to decrypt backup: %w", err)
 				}

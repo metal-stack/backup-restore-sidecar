@@ -44,7 +44,7 @@ func TestEncrypter(t *testing.T) {
 	outputDecrypted, err := fs.Create("decrypted")
 
 	//Decrypt files
-	_, err = e.Decrypt(inputDecrypted, outputDecrypted)
+	err = e.Decrypt(inputDecrypted, outputDecrypted)
 	require.NoError(t, err)
 	cleartext, err := afero.ReadFile(fs, outputDecrypted.Name())
 
@@ -68,7 +68,7 @@ func TestEncrypter(t *testing.T) {
 	require.NoError(t, err)
 	outputBigDec, err := fs.Create("decrypted_big.test.aes")
 	require.NoError(t, err)
-	_, err = e.Decrypt(inputBigDec, outputBigDec)
+	err = e.Decrypt(inputBigDec, outputBigDec)
 	require.NoError(t, err)
 
 	fs.Remove(input.Name())

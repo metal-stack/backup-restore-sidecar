@@ -49,7 +49,7 @@ func (c *Compressor) Compress(ctx context.Context, backupFilePath string, output
 	}
 	err = c.compressor.Archive(ctx, outputWriter, files)
 	if err != nil {
-		fmt.Printf("error while compressing file in compressor: %v", err)
+		return fmt.Errorf("error while compressing file in compressor: %v", err)
 	}
 	return nil
 }

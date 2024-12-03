@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -105,15 +106,37 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 
 	filename := path.Base(backupFilePath) + b.comp.Extension()
 
+	// pipe to compress and buffer compressed data
 	reader1, writer1 := io.Pipe()
+	compressErr := make(chan error, 1)
+	compressBuffer := &bytes.Buffer{}
 	go func() {
 		defer writer1.Close()
+		defer close(compressErr)
+
 		err := b.comp.Compress(ctx, backupFilePath, writer1)
 		if err != nil {
 			b.metrics.CountError("compress")
 			b.log.Error("error compressing backup", "error", err)
+			compressErr <- err
+		} else {
+			compressErr <- nil
 		}
 	}()
+
+	// buffer compressed data in order to prevent deadlock of pipe and error-handling
+	go func() {
+		_, err := io.Copy(compressBuffer, reader1)
+		if err != nil {
+			b.metrics.CountError("buffering")
+			b.log.Error("error buffering compressed data", "error", err)
+		}
+	}()
+
+	err = <-compressErr
+	if err != nil {
+		return fmt.Errorf("error compressing backup: %w", err)
+	}
 
 	b.log.Info("compressed backup")
 
@@ -121,32 +144,57 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 		filename = filename + encryption.Suffix
 	}
 
+	// pipe to encrypt and buffer encrypted data
 	reader2, writer2 := io.Pipe()
+	encryptErr := make(chan error)
+	encryptBuffer := &bytes.Buffer{}
 	go func() {
 		defer writer2.Close()
+		defer close(encryptErr)
+
 		if b.encrypter != nil {
-			err = b.encrypter.Encrypt(reader1, writer2)
+			err = b.encrypter.Encrypt(compressBuffer, writer2)
 			if err != nil {
 				b.metrics.CountError("encrypt")
 				b.log.Error("error encrypting backup", "error", err)
+				encryptErr <- err
+			} else {
+				encryptErr <- nil
 			}
 		} else {
-			_, err = io.Copy(writer2, reader1)
+			_, err = io.Copy(writer2, compressBuffer)
 			if err != nil {
 				b.metrics.CountError("streaming")
 				b.log.Error("error copying backup", "error", err)
+				encryptErr <- err
+			} else {
+				encryptErr <- nil
 			}
 		}
 	}()
 
-	countingReader := &CountingReader{Reader: reader2}
+	// buffer compressed data in order to prevent deadlock of pipe and error-handling
+	go func() {
+		_, err := io.Copy(encryptBuffer, reader2)
+		if err != nil {
+			b.metrics.CountError("buffering")
+			b.log.Error("error buffering compressed data", "error", err)
+		}
+	}()
+
+	err = <-encryptErr
+	if err != nil {
+		return fmt.Errorf("error encrypting backup: %w", err)
+	}
+
+	countingReader := &CountingReader{Reader: encryptBuffer}
 	err = b.bp.UploadBackup(ctx, countingReader, filename)
 	if err != nil {
 		b.metrics.CountError("upload")
 		return fmt.Errorf("error uploading backup: %w", err)
 	}
 
-	b.log.Info("uploaded backup to backup provider bucket")
+	b.log.Info("uploaded backup to backup provider bucket", "size", countingReader.BytesRead)
 
 	b.metrics.CountBackup(countingReader.BytesRead)
 
@@ -161,11 +209,13 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 	return nil
 }
 
+// CountingReader is a wrapper around io.Reader that counts the number of bytes read
 type CountingReader struct {
 	io.Reader
 	BytesRead float64
 }
 
+// Read reads from the underlying reader and counts the number of bytes read
 func (r *CountingReader) Read(p []byte) (int, error) {
 	n, err := r.Reader.Read(p)
 	r.BytesRead += float64(n)

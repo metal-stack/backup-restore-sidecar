@@ -74,11 +74,11 @@ func (e *Encrypter) Encrypt(inputReader io.Reader, outputWriter io.Writer) error
 
 // Decrypt input file with key and store decrypted result with suffix removed
 // if input does not end with suffix, it is assumed that the file was not encrypted.
-func (e *Encrypter) Decrypt(inputReader io.Reader, outputWriter io.Writer) (io.Writer, error) {
+func (e *Encrypter) Decrypt(inputReader io.Reader, outputWriter io.Writer) error {
 
 	block, err := e.createCipher()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Erstelle einen Puffer, der den gesamten Input speichert
@@ -87,18 +87,18 @@ func (e *Encrypter) Decrypt(inputReader io.Reader, outputWriter io.Writer) (io.W
 	// Kopiere die Daten aus inputReader in den Puffer
 	_, err = io.Copy(&buf, inputReader)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	iv, msgLen, err := e.readIVAndMessageLength(buf, block)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if err := e.decryptFile(bytes.NewReader(buf.Bytes()), outputWriter, block, iv, msgLen); err != nil {
-		return nil, err
+		return err
 	}
-	return outputWriter, nil
+	return nil
 }
 
 func isASCII(s string) bool {
