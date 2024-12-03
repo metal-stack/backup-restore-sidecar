@@ -1,6 +1,7 @@
 package encryption
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -8,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"strings"
 	"unicode"
@@ -17,7 +17,7 @@ import (
 )
 
 // suffix is appended on encryption and removed on decryption from given input
-const suffix = ".aes"
+const Suffix = ".aes"
 
 // Encrypter is used to encrypt/decrypt backups
 type Encrypter struct {
@@ -53,81 +53,49 @@ func New(log *slog.Logger, config *EncrypterConfig) (*Encrypter, error) {
 }
 
 // Encrypt input file with key and store encrypted result with suffix
-func (e *Encrypter) Encrypt(inputPath string) (string, error) {
-	output := inputPath + suffix
-	e.log.Debug("encrypt", "input", inputPath, "output", output)
-	infile, err := e.fs.Open(inputPath)
-	if err != nil {
-		return "", err
-	}
-	defer infile.Close()
-
+func (e *Encrypter) Encrypt(inputReader io.Reader, outputWriter io.Writer) error {
 	block, err := e.createCipher()
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	iv, err := e.generateIV(block)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	outfile, err := e.openOutputFile(output)
-	if err != nil {
-		return "", err
-	}
-	defer outfile.Close()
-
-	if err := e.encryptFile(infile, outfile, block, iv); err != nil {
-		return "", err
+	if err := e.encryptFile(inputReader, outputWriter, block, iv); err != nil {
+		return err
 	}
 
-	if err := e.fs.Remove(inputPath); err != nil {
-		e.log.Warn("unable to remove input", "error", err)
-	}
-
-	return output, nil
+	return nil
 }
 
 // Decrypt input file with key and store decrypted result with suffix removed
 // if input does not end with suffix, it is assumed that the file was not encrypted.
-func (e *Encrypter) Decrypt(inputPath string) (string, error) {
-	output := strings.TrimSuffix(inputPath, suffix)
-	e.log.Debug("decrypt", "input", inputPath, "output", output)
-
-	if !IsEncrypted(inputPath) {
-		return "", fmt.Errorf("input is not encrypted")
-	}
-
-	infile, err := e.fs.Open(inputPath)
-	if err != nil {
-		return "", err
-	}
-	defer infile.Close()
+func (e *Encrypter) Decrypt(inputReader io.Reader, outputWriter io.Writer) error {
 
 	block, err := e.createCipher()
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	iv, msgLen, err := e.readIVAndMessageLength(infile, block)
+	// needs to be a buffer to read the IV and message length
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, inputReader)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	outfile, err := e.openOutputFile(output)
+	iv, msgLen, err := e.readIVAndMessageLength(buf, block)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	if err := e.decryptFile(infile, outfile, block, iv, msgLen); err != nil {
-		return "", err
+	if err := e.decryptFile(bytes.NewReader(buf.Bytes()), outputWriter, block, iv, msgLen); err != nil {
+		return err
 	}
-
-	if err := e.fs.Remove(inputPath); err != nil {
-		e.log.Warn("unable to remove input", "error", err)
-	}
-	return output, nil
+	return nil
 }
 
 func isASCII(s string) bool {
@@ -145,10 +113,6 @@ func (e *Encrypter) createCipher() (cipher.Block, error) {
 	return aes.NewCipher(key)
 }
 
-func (e *Encrypter) openOutputFile(output string) (afero.File, error) {
-	return e.fs.OpenFile(output, os.O_RDWR|os.O_CREATE, 0644)
-}
-
 // generateIV() returns unique initalization vector of same size as cipher block for encryption
 func (e *Encrypter) generateIV(block cipher.Block) ([]byte, error) {
 	iv := make([]byte, block.BlockSize())
@@ -159,10 +123,9 @@ func (e *Encrypter) generateIV(block cipher.Block) ([]byte, error) {
 }
 
 // encryptFile() encrypts infile to outfile using CTR mode (cipher and iv) and appends iv for decryption
-func (e *Encrypter) encryptFile(infile, outfile afero.File, block cipher.Block, iv []byte) error {
+func (e *Encrypter) encryptFile(infile io.Reader, outfile io.Writer, block cipher.Block, iv []byte) error {
 	buf := make([]byte, 1024)
 	stream := cipher.NewCTR(block, iv)
-
 	for {
 		n, err := infile.Read(buf)
 		if n > 0 {
@@ -180,6 +143,7 @@ func (e *Encrypter) encryptFile(infile, outfile afero.File, block cipher.Block, 
 		}
 	}
 
+	// Append the IV to the outfile
 	if _, err := outfile.Write(iv); err != nil {
 		return fmt.Errorf("could not append iv: %w", err)
 	}
@@ -189,27 +153,31 @@ func (e *Encrypter) encryptFile(infile, outfile afero.File, block cipher.Block, 
 
 // IsEncrypted() tests if target file is encrypted
 func IsEncrypted(path string) bool {
-	return filepath.Ext(path) == suffix
+	return filepath.Ext(path) == Suffix
+}
+
+// TrimSuffix() removes encryption suffix from path
+func TrimSuffix(path string) string {
+	return strings.TrimSuffix(path, Suffix)
 }
 
 // readIVAndMessageLength() returns initialization vector and message length for decryption
-func (e *Encrypter) readIVAndMessageLength(infile afero.File, block cipher.Block) ([]byte, int64, error) {
-	fi, err := infile.Stat()
-	if err != nil {
-		return nil, 0, err
+func (e *Encrypter) readIVAndMessageLength(buf bytes.Buffer, block cipher.Block) ([]byte, int64, error) {
+	blockSize := block.BlockSize()
+
+	data := buf.Bytes()
+	if len(data) < blockSize {
+		return nil, 0, errors.New("data too short to contain iv")
 	}
 
-	iv := make([]byte, block.BlockSize())
-	msgLen := fi.Size() - int64(len(iv))
-	if _, err := infile.ReadAt(iv, msgLen); err != nil {
-		return nil, 0, err
-	}
+	iv := data[len(data)-blockSize:]
+	msgLen := int64(len(data) - blockSize)
 
 	return iv, msgLen, nil
 }
 
 // decryptFile() decrypts infile to outfile using CTR mode (cipher and iv)
-func (e *Encrypter) decryptFile(infile, outfile afero.File, block cipher.Block, iv []byte, msgLen int64) error {
+func (e *Encrypter) decryptFile(infile io.Reader, outfile io.Writer, block cipher.Block, iv []byte, msgLen int64) error {
 	buf := make([]byte, 1024)
 	stream := cipher.NewCTR(block, iv)
 

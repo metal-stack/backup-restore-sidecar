@@ -125,6 +125,8 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 		require.NoError(t, err)
 	}
 
+	t.Log("getting backup")
+
 	var backup *v1.Backup
 	err = retry.Do(func() error {
 		backups, err := brsc.BackupServiceClient().ListBackups(ctx, &v1.ListBackupsRequest{})
@@ -142,8 +144,6 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
 	require.NoError(t, err)
 	require.NotNil(t, backup)
-
-	require.True(t, strings.HasSuffix(backup.GetName(), ".aes"))
 
 	t.Log("remove sts and delete data volume")
 
@@ -170,6 +170,8 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 
 	err = c.Create(ctx, spec.sts(ns.Name))
 	require.NoError(t, err)
+
+	t.Log("wait for sts to be running")
 
 	err = waitForPodRunning(ctx, podName, ns.Name)
 	require.NoError(t, err)

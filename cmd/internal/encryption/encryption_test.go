@@ -25,23 +25,35 @@ func TestEncrypter(t *testing.T) {
 	e, err := New(slog.Default(), &EncrypterConfig{Key: "01234567891234560123456789123456", FS: fs})
 	require.NoError(t, err, "")
 
+	//Prepare input for encryption
 	input, err := fs.Create("encrypt")
 	require.NoError(t, err)
-
+	output, err := fs.Create("encrypt.aes")
+	require.NoError(t, err)
 	cleartextInput := []byte("This is the content of the file")
 	err = afero.WriteFile(fs, input.Name(), cleartextInput, 0600)
 	require.NoError(t, err)
-	output, err := e.Encrypt(input.Name())
+
+	//Encrypt files
+	err = e.Encrypt(input, output)
 	require.NoError(t, err)
-	encryptedText, err := afero.ReadFile(fs, output)
+	encryptedText, err := afero.ReadFile(fs, output.Name())
 	require.NoError(t, err)
 
-	require.Equal(t, input.Name()+suffix, output)
+	require.Equal(t, input.Name()+Suffix, output.Name())
 	require.NotEqual(t, cleartextInput, encryptedText)
 
-	cleartextFile, err := e.Decrypt(output)
+	//Prepare input for decryption
+	inputDecrypted, err := fs.Open("encrypt.aes")
 	require.NoError(t, err)
-	cleartext, err := afero.ReadFile(fs, cleartextFile)
+	outputDecrypted, err := fs.Create("decrypted")
+	require.NoError(t, err)
+
+	//Decrypt files
+	err = e.Decrypt(inputDecrypted, outputDecrypted)
+	require.NoError(t, err)
+	cleartext, err := afero.ReadFile(fs, outputDecrypted.Name())
+
 	require.NoError(t, err)
 	require.Equal(t, cleartextInput, cleartext)
 
@@ -50,13 +62,31 @@ func TestEncrypter(t *testing.T) {
 	err = afero.WriteFile(fs, "bigfile.test", bigBuff, 0600)
 	require.NoError(t, err)
 
-	bigEncFile, err := e.Encrypt("bigfile.test")
+	inputBigEnc, err := fs.Open("bigfile.test")
 	require.NoError(t, err)
-	_, err = e.Decrypt(bigEncFile)
+	outputBigEnc, err := fs.Create("encrypted_big.test.aes")
+	require.NoError(t, err)
+
+	err = e.Encrypt(inputBigEnc, outputBigEnc)
+	require.NoError(t, err)
+
+	inputBigDec, err := fs.Open("encrypted_big.test.aes")
+	require.NoError(t, err)
+	outputBigDec, err := fs.Create("decrypted_big.test.aes")
+	require.NoError(t, err)
+	err = e.Decrypt(inputBigDec, outputBigDec)
 	require.NoError(t, err)
 
 	err = fs.Remove(input.Name())
 	require.NoError(t, err)
-	err = fs.Remove("bigfile.test")
+	err = fs.Remove(output.Name())
+	require.NoError(t, err)
+	err = fs.Remove(outputDecrypted.Name())
+	require.NoError(t, err)
+	err = fs.Remove(inputBigEnc.Name())
+	require.NoError(t, err)
+	err = fs.Remove(outputBigEnc.Name())
+	require.NoError(t, err)
+	err = fs.Remove(outputBigDec.Name())
 	require.NoError(t, err)
 }

@@ -1,8 +1,10 @@
 package initializer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"os"
@@ -212,26 +214,89 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 		return fmt.Errorf("could not delete priorly downloaded file: %w", err)
 	}
 
-	backupFilePath, err := i.bp.DownloadBackup(ctx, version, constants.DownloadDir)
+	// pipe to download and buffer downloaded data
+	reader1, writer1 := io.Pipe()
+	downloadErr := make(chan error, 1)
+	downloadBuffer := &bytes.Buffer{}
+	go func() {
+		defer writer1.Close()
+		defer close(downloadErr)
+
+		err := i.bp.DownloadBackup(ctx, version, writer1)
+		if err != nil {
+			i.metrics.CountError("download")
+			i.log.Error("error downloading backup", "error", err)
+			downloadErr <- err
+		} else {
+			downloadErr <- nil
+		}
+
+	}()
+	go func() {
+		_, err := io.Copy(downloadBuffer, reader1)
+		if err != nil {
+			i.metrics.CountError("buffering")
+			i.log.Error("error buffering downloaded data", "error", err)
+		}
+	}()
+
+	err := <-downloadErr
 	if err != nil {
-		return fmt.Errorf("unable to download backup: %w", err)
+		return fmt.Errorf("error downloading backup: %w", err)
 	}
 
-	if i.encrypter != nil {
-		if encryption.IsEncrypted(backupFilePath) {
-			backupFilePath, err = i.encrypter.Decrypt(backupFilePath)
+	i.currentStatus.Message = "decrypting backup"
+
+	// pipe to decrypt and buffer decrypted data
+	reader2, writer2 := io.Pipe()
+	decryptErr := make(chan error, 1)
+	decryptBuffer := &bytes.Buffer{}
+	go func() {
+		defer writer2.Close()
+		defer close(decryptErr)
+
+		if i.encrypter != nil {
+			err = i.encrypter.Decrypt(downloadBuffer, writer2)
 			if err != nil {
-				return fmt.Errorf("unable to decrypt backup: %w", err)
+				i.metrics.CountError("decrypt")
+				i.log.Error("error decrypting backup", "error", err)
+				decryptErr <- err
+			} else {
+				decryptErr <- nil
 			}
 		} else {
 			i.log.Info("restoring unencrypted backup with configured encryption - skipping decryption...")
+			_, err := io.Copy(writer2, downloadBuffer)
+			if err != nil {
+				i.metrics.CountError("streaming")
+				i.log.Error("error streaming downloaded data", "error", err)
+				decryptErr <- err
+			}
+			decryptErr <- nil
 		}
+	}()
+	go func() {
+		_, err := io.Copy(decryptBuffer, reader2)
+		if err != nil {
+			i.metrics.CountError("streaming")
+			i.log.Error("error streaming decrypted data", "error", err)
+		}
+	}()
+
+	err = <-decryptErr
+	if err != nil {
+		return fmt.Errorf("error decrypting backup: %w", err)
 	}
 
 	i.currentStatus.Message = "uncompressing backup"
-	err = i.comp.Decompress(backupFilePath)
+	err = i.comp.Decompress(ctx, decryptBuffer)
 	if err != nil {
 		return fmt.Errorf("unable to uncompress backup: %w", err)
+	}
+
+	files, err := os.ReadDir(constants.RestoreDir)
+	for _, file := range files {
+		i.log.Info("restored file", "file", file.Name())
 	}
 
 	i.currentStatus.Message = "restoring backup"

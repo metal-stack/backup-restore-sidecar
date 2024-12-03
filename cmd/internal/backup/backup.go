@@ -1,8 +1,10 @@
 package backup
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path"
@@ -13,6 +15,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
+	"github.com/mholt/archives"
 	cron "github.com/robfig/cron/v3"
 	"golang.org/x/sync/semaphore"
 )
@@ -80,6 +83,7 @@ func (b *Backuper) Start(ctx context.Context) error {
 }
 
 func (b *Backuper) CreateBackup(ctx context.Context) error {
+	fmt.Println("CreateBackup")
 	if !b.sem.TryAcquire(1) {
 		return constants.ErrBackupAlreadyInProgress
 	}
@@ -101,32 +105,113 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 		return fmt.Errorf("could not delete priorly uploaded backup: %w", err)
 	}
 
-	filename, err := b.comp.Compress(backupFilePath)
+	filename := path.Base(backupFilePath) + b.comp.Extension()
+
+	files, _ := os.ReadDir(constants.BackupDir)
+	for _, file := range files {
+		b.log.Info("backup file", "file", file.Name())
+	}
+
+	// pipe to compress and buffer compressed data in order to prevent deadlock of pipe and error-handling
+	reader1, writer1 := io.Pipe()
+	compressErr := make(chan error, 1)
+	compressBuffer := &bytes.Buffer{}
+	go func() {
+		defer writer1.Close()
+		defer close(compressErr)
+
+		files, err := archives.FilesFromDisk(ctx, &archives.FromDiskOptions{}, map[string]string{constants.BackupDir: backupFilePath + b.comp.Extension()})
+		fmt.Println("files", files)
+		if err != nil {
+			b.metrics.CountError("build_files")
+			compressErr <- err
+			return
+		}
+
+		err = b.comp.Compress(ctx, writer1, files)
+		if err != nil {
+			b.metrics.CountError("compress")
+			b.log.Error("error compressing backup", "error", err)
+			compressErr <- err
+			return
+		} else {
+			compressErr <- nil
+		}
+	}()
+
+	// buffer compressed data in order to prevent deadlock of pipe and error-handling
+	go func() {
+		_, err := io.Copy(compressBuffer, reader1)
+		if err != nil {
+			b.metrics.CountError("buffering")
+			b.log.Error("error buffering compressed data", "error", err)
+		}
+	}()
+
+	err = <-compressErr
 	if err != nil {
-		b.metrics.CountError("compress")
-		return fmt.Errorf("unable to compress backup: %w", err)
+		return fmt.Errorf("error compressing backup: %w", err)
 	}
 
 	b.log.Info("compressed backup")
 
 	if b.encrypter != nil {
-		filename, err = b.encrypter.Encrypt(filename)
-		if err != nil {
-			b.metrics.CountError("encrypt")
-			return fmt.Errorf("error encrypting backup: %w", err)
-		}
-		b.log.Info("encrypted backup")
+		filename = filename + encryption.Suffix
 	}
 
-	err = b.bp.UploadBackup(ctx, filename)
+	// pipe to encrypt and buffer encrypted data
+	reader2, writer2 := io.Pipe()
+	encryptErr := make(chan error)
+	encryptBuffer := &bytes.Buffer{}
+	go func() {
+		defer writer2.Close()
+		defer close(encryptErr)
+
+		if b.encrypter != nil {
+			err = b.encrypter.Encrypt(compressBuffer, writer2)
+			if err != nil {
+				b.metrics.CountError("encrypt")
+				b.log.Error("error encrypting backup", "error", err)
+				encryptErr <- err
+			} else {
+				encryptErr <- nil
+			}
+		} else {
+			_, err = io.Copy(writer2, compressBuffer)
+			if err != nil {
+				b.metrics.CountError("streaming")
+				b.log.Error("error copying backup", "error", err)
+				encryptErr <- err
+			} else {
+				encryptErr <- nil
+			}
+		}
+	}()
+
+	// buffer compressed data in order to prevent deadlock of pipe and error-handling
+	go func() {
+		_, err := io.Copy(encryptBuffer, reader2)
+		if err != nil {
+			b.metrics.CountError("buffering")
+			b.log.Error("error buffering compressed data", "error", err)
+		}
+	}()
+
+	err = <-encryptErr
+	if err != nil {
+		return fmt.Errorf("error encrypting backup: %w", err)
+	}
+
+	countingReader := &CountingReader{Reader: encryptBuffer}
+	err = b.bp.UploadBackup(ctx, countingReader, filename)
 	if err != nil {
 		b.metrics.CountError("upload")
 		return fmt.Errorf("error uploading backup: %w", err)
 	}
 
-	b.log.Info("uploaded backup to backup provider bucket")
+	b.log.Info("uploaded backup to backup provider bucket", "size", countingReader.BytesRead)
 
-	b.metrics.CountBackup(filename)
+	b.metrics.CountBackup(countingReader.BytesRead)
 
 	err = b.bp.CleanupBackups(ctx)
 	if err != nil {
@@ -137,4 +222,17 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// CountingReader is a wrapper around io.Reader that counts the number of bytes read
+type CountingReader struct {
+	io.Reader
+	BytesRead float64
+}
+
+// Read reads from the underlying reader and counts the number of bytes read
+func (r *CountingReader) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	r.BytesRead += float64(n)
+	return n, err
 }

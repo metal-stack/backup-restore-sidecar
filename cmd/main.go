@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
@@ -101,12 +103,13 @@ const (
 )
 
 var (
-	cfgFile   string
-	logger    *slog.Logger
-	db        database.Database
-	bp        providers.BackupProvider
-	encrypter *encryption.Encrypter
-	stop      context.Context
+	cfgFile    string
+	logger     *slog.Logger
+	db         database.Database
+	bp         providers.BackupProvider
+	encrypter  *encryption.Encrypter
+	compressor *compress.Compressor
+	stop       context.Context
 )
 
 var rootCmd = &cobra.Command{
@@ -133,6 +136,9 @@ var startCmd = &cobra.Command{
 		if err := initEncrypter(); err != nil {
 			return err
 		}
+		if err := initCompressor(); err != nil {
+			return err
+		}
 		return initBackupProvider()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -151,11 +157,6 @@ var startCmd = &cobra.Command{
 
 		logger.Info("starting backup-restore-sidecar", "version", v.V, "bind-addr", addr)
 
-		comp, err := compress.New(viper.GetString(compressionMethod))
-		if err != nil {
-			return err
-		}
-
 		metrics := metrics.New()
 		metrics.Start(logger.WithGroup("metrics"))
 
@@ -165,11 +166,11 @@ var startCmd = &cobra.Command{
 			DatabaseProber: db,
 			BackupProvider: bp,
 			Metrics:        metrics,
-			Compressor:     comp,
+			Compressor:     compressor,
 			Encrypter:      encrypter,
 		})
 
-		if err := initializer.New(logger.WithGroup("initializer"), addr, db, bp, comp, metrics, viper.GetString(databaseDatadirFlg), encrypter).Start(stop, backuper); err != nil {
+		if err := initializer.New(logger.WithGroup("initializer"), addr, db, bp, compressor, metrics, viper.GetString(databaseDatadirFlg), encrypter).Start(stop, backuper); err != nil {
 			return err
 		}
 
@@ -300,15 +301,23 @@ var downloadBackupCmd = &cobra.Command{
 
 		output := viper.GetString(downloadOutputFlg)
 
-		destination, err := bp.DownloadBackup(context.Background(), &providers.BackupVersion{Name: backup.GetBackup().GetName()}, output)
+		outputPath := filepath.Join(output, backup.GetBackup().GetName())
+		outputFile, err := os.Open(outputPath)
+		if err != nil {
+			return fmt.Errorf("failed opening output file: %w", err)
+		}
+
+		reader1, writer1 := io.Pipe()
+
+		err = bp.DownloadBackup(context.Background(), &providers.BackupVersion{Name: backup.GetBackup().GetName()}, writer1)
 
 		if err != nil {
 			return fmt.Errorf("failed downloading backup: %w", err)
 		}
 
 		if encrypter != nil {
-			if encryption.IsEncrypted(destination) {
-				_, err = encrypter.Decrypt(destination)
+			if encryption.IsEncrypted(backup.GetBackup().GetName()) {
+				err = encrypter.Decrypt(reader1, outputFile)
 				if err != nil {
 					return fmt.Errorf("unable to decrypt backup: %w", err)
 				}
@@ -540,6 +549,16 @@ func initDatabase() error {
 
 	logger.Info("initialized database adapter", "type", dbString)
 
+	return nil
+}
+
+func initCompressor() error {
+	var err error
+	method := viper.GetString(compressionMethod)
+	compressor, err = compress.New(&compress.CompressorConfig{Method: method})
+	if err != nil {
+		return fmt.Errorf("unable to initialize compressor: %w", err)
+	}
 	return nil
 }
 

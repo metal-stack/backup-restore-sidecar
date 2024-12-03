@@ -95,7 +95,9 @@ func Test_BackupProviderGCP(t *testing.T) {
 			err = afero.WriteFile(fs, backupPath, []byte(backupContent), 0600)
 			require.NoError(t, err)
 
-			err = p.UploadBackup(ctx, backupPath)
+			backupFile, err := fs.Open(backupPath)
+			require.NoError(t, err)
+			err = p.UploadBackup(ctx, backupFile, backupPath)
 			require.NoError(t, err)
 
 			// cleaning up after test
@@ -153,17 +155,20 @@ func Test_BackupProviderGCP(t *testing.T) {
 		latestVersion := versions.Latest()
 		require.NotNil(t, latestVersion)
 
-		backupFilePath, err := p.DownloadBackup(ctx, latestVersion, "")
+		outputfile, err := fs.Create("outputfile")
 		require.NoError(t, err)
 
-		gotContent, err := afero.ReadFile(fs, backupFilePath)
+		err = p.DownloadBackup(ctx, latestVersion, outputfile)
+		require.NoError(t, err)
+
+		gotContent, err := afero.ReadFile(fs, outputfile.Name())
 		require.NoError(t, err)
 
 		backupContent := fmt.Sprintf("precious data %d", backupAmount-1)
 		require.Equal(t, backupContent, string(gotContent))
 
 		// cleaning up after test
-		err = fs.Remove(backupFilePath)
+		err = fs.Remove(outputfile.Name())
 		require.NoError(t, err)
 	})
 
