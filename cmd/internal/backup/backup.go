@@ -114,11 +114,19 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 		defer writer1.Close()
 		defer close(compressErr)
 
-		err := b.comp.Compress(ctx, backupFilePath, writer1)
+		files, err := b.comp.BuildFilesForCompression(constants.BackupDir, backupArchiveName)
+		if err != nil {
+			b.metrics.CountError("build_files")
+			compressErr <- err
+			return
+		}
+
+		err = b.comp.Compress(ctx, writer1, files)
 		if err != nil {
 			b.metrics.CountError("compress")
 			b.log.Error("error compressing backup", "error", err)
 			compressErr <- err
+			return
 		} else {
 			compressErr <- nil
 		}

@@ -265,8 +265,13 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 				decryptErr <- nil
 			}
 		} else {
-			io.Copy(writer2, downloadBuffer)
 			i.log.Info("restoring unencrypted backup with configured encryption - skipping decryption...")
+			_, err := io.Copy(writer2, downloadBuffer)
+			if err != nil {
+				i.metrics.CountError("streaming")
+				i.log.Error("error streaming downloaded data", "error", err)
+				decryptErr <- err
+			}
 			decryptErr <- nil
 		}
 	}()
@@ -284,7 +289,7 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 	}
 
 	i.currentStatus.Message = "uncompressing backup"
-	err = i.comp.Decompress(ctx, decryptBuffer)
+	err = i.comp.Decompress(ctx, decryptBuffer, constants.RestoreDir)
 	if err != nil {
 		return fmt.Errorf("unable to uncompress backup: %w", err)
 	}

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"strings"
 	"unicode"
@@ -114,10 +113,6 @@ func isASCII(s string) bool {
 func (e *Encrypter) createCipher() (cipher.Block, error) {
 	key := []byte(e.key)
 	return aes.NewCipher(key)
-}
-
-func (e *Encrypter) openOutputFile(output string) (afero.File, error) {
-	return e.fs.OpenFile(output, os.O_RDWR|os.O_CREATE, 0644)
 }
 
 // generateIV() returns unique initalization vector of same size as cipher block for encryption
