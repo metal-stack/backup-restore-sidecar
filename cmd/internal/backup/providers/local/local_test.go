@@ -54,11 +54,14 @@ func Test_BackupProviderLocal(t *testing.T) {
 					err = afero.WriteFile(fs, backupPath, []byte(backupContent), 0600)
 					require.NoError(t, err)
 
-					err = p.UploadBackup(ctx, backupPath)
+					infile, err := fs.Open(backupPath)
+					require.NoError(t, err)
+
+					err = p.UploadBackup(ctx, infile, backupPath)
 					require.NoError(t, err)
 
 					localPath := path.Join(localProviderBackupPath, backupName)
-					_, err := fs.Stat(localPath)
+					_, err = fs.Stat(localPath)
 					require.NoError(t, err)
 
 					backupFiles, err := afero.ReadDir(fs, localProviderBackupPath)
@@ -130,16 +133,19 @@ func Test_BackupProviderLocal(t *testing.T) {
 				latestVersion := versions.Latest()
 				require.NotNil(t, latestVersion)
 
-				backupFilePath, err := p.DownloadBackup(ctx, latestVersion, "")
+				outputFile, err := fs.Create("output.tar.gz")
 				require.NoError(t, err)
 
-				gotContent, err := afero.ReadFile(fs, backupFilePath)
+				err = p.DownloadBackup(ctx, latestVersion, outputFile)
+				require.NoError(t, err)
+
+				gotContent, err := afero.ReadFile(fs, outputFile.Name())
 				require.NoError(t, err)
 
 				require.Equal(t, fmt.Sprintf("precious data %d", backupAmount), string(gotContent))
 
 				// cleaning up after test
-				err = fs.Remove(backupFilePath)
+				err = fs.Remove(outputFile.Name())
 				require.NoError(t, err)
 			})
 

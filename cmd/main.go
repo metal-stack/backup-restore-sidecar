@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
@@ -300,15 +301,21 @@ var downloadBackupCmd = &cobra.Command{
 
 		output := viper.GetString(downloadOutputFlg)
 
-		destination, err := bp.DownloadBackup(context.Background(), &providers.BackupVersion{Name: backup.GetBackup().GetName()}, output)
+		outputPath := filepath.Join(output, backup.GetBackup().GetName())
+		outputFile, err := os.Open(outputPath)
+		if err != nil {
+			return fmt.Errorf("failed opening output file: %w", err)
+		}
+
+		err = bp.DownloadBackup(context.Background(), &providers.BackupVersion{Name: backup.GetBackup().GetName()}, outputFile)
 
 		if err != nil {
 			return fmt.Errorf("failed downloading backup: %w", err)
 		}
 
 		if encrypter != nil {
-			if encryption.IsEncrypted(destination) {
-				_, err = encrypter.Decrypt(destination)
+			if encryption.IsEncrypted(outputPath) {
+				_, err = encrypter.Decrypt(outputPath)
 				if err != nil {
 					return fmt.Errorf("unable to decrypt backup: %w", err)
 				}

@@ -3,6 +3,7 @@ package local
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -11,7 +12,6 @@ import (
 	"errors"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
 )
@@ -86,28 +86,36 @@ func (b *BackupProviderLocal) CleanupBackups(_ context.Context) error {
 }
 
 // DownloadBackup downloads the given backup version to the specified folder
-func (b *BackupProviderLocal) DownloadBackup(_ context.Context, version *providers.BackupVersion, outDir string) (string, error) {
+func (b *BackupProviderLocal) DownloadBackup(_ context.Context, version *providers.BackupVersion, writer io.Writer) error {
 	b.log.Info("download backup called for provider local")
 
 	source := filepath.Join(b.config.LocalBackupPath, version.Name)
 
-	backupFilePath := filepath.Join(outDir, version.Name)
-
-	err := utils.Copy(b.fs, source, backupFilePath)
+	infile, err := b.fs.Open(source)
 	if err != nil {
-		return "", err
+		return fmt.Errorf("could not open file %s: %w", source, err)
+	}
+	defer infile.Close()
+
+	_, err = io.Copy(writer, infile)
+	if err != nil {
+		return err
 	}
 
-	return backupFilePath, err
+	return err
 }
 
-// UploadBackup uploads a backup to the backup provider
-func (b *BackupProviderLocal) UploadBackup(_ context.Context, sourcePath string) error {
+// UploadBackup uploads a backup to the backup provider by providing a reader to the backup archive
+func (b *BackupProviderLocal) UploadBackup(_ context.Context, reader io.Reader, sourcePath string) error {
 	b.log.Info("upload backups called for provider local")
 
 	destination := filepath.Join(b.config.LocalBackupPath, filepath.Base(sourcePath))
+	output, err := b.fs.Create(destination)
+	if err != nil {
+		return fmt.Errorf("could not create file %s: %w", destination, err)
+	}
 
-	err := utils.Copy(b.fs, sourcePath, destination)
+	_, err = io.Copy(output, reader)
 	if err != nil {
 		return err
 	}

@@ -2,9 +2,9 @@ package s3
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"path/filepath"
-	"strings"
 
 	"errors"
 
@@ -189,48 +189,35 @@ func (b *BackupProviderS3) CleanupBackups(_ context.Context) error {
 }
 
 // DownloadBackup downloads the given backup version to the specified folder
-func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *providers.BackupVersion, outDir string) (string, error) {
+func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *providers.BackupVersion, writer io.Writer) error {
 	bucket := aws.String(b.config.BucketName)
-
-	downloadFileName := version.Name
-	if strings.Contains(downloadFileName, "/") {
-		downloadFileName = filepath.Base(downloadFileName)
-	}
-
-	backupFilePath := filepath.Join(outDir, downloadFileName)
-
-	f, err := b.fs.Create(backupFilePath)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
 
 	downloader := s3manager.NewDownloader(b.sess)
 
-	_, err = downloader.DownloadWithContext(
+	buf := aws.NewWriteAtBuffer([]byte{})
+	_, err := downloader.DownloadWithContext(
 		ctx,
-		f,
+		buf,
 		&s3.GetObjectInput{
 			Bucket:    bucket,
 			Key:       &version.Name,
 			VersionId: &version.Version,
 		})
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return backupFilePath, nil
-}
-
-// UploadBackup uploads a backup to the backup provider
-func (b *BackupProviderS3) UploadBackup(ctx context.Context, sourcePath string) error {
-	bucket := aws.String(b.config.BucketName)
-
-	r, err := b.fs.Open(sourcePath)
+	_, err = writer.Write(buf.Bytes())
 	if err != nil {
 		return err
 	}
-	defer r.Close()
+
+	return nil
+}
+
+// UploadBackup uploads a backup to the backup provider
+func (b *BackupProviderS3) UploadBackup(ctx context.Context, reader io.Reader, sourcePath string) error {
+	bucket := aws.String(b.config.BucketName)
 
 	destination := filepath.Base(sourcePath)
 	if b.config.ObjectPrefix != "" {
@@ -240,10 +227,10 @@ func (b *BackupProviderS3) UploadBackup(ctx context.Context, sourcePath string) 
 	b.log.Debug("uploading object", "src", sourcePath, "dest", destination)
 
 	uploader := s3manager.NewUploader(b.sess)
-	_, err = uploader.UploadWithContext(ctx, &s3manager.UploadInput{
+	_, err := uploader.UploadWithContext(ctx, &s3manager.UploadInput{
 		Bucket: bucket,
 		Key:    aws.String(destination),
-		Body:   r,
+		Body:   reader,
 	})
 	if err != nil {
 		return err

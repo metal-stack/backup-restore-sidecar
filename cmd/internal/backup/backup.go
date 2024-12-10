@@ -118,7 +118,13 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 		b.log.Info("encrypted backup")
 	}
 
-	err = b.bp.UploadBackup(ctx, filename)
+	file, err := os.Open(filename)
+	if err != nil {
+		b.metrics.CountError("open")
+		return fmt.Errorf("error opening backup file: %w", err)
+	}
+
+	err = b.bp.UploadBackup(ctx, file, filename)
 	if err != nil {
 		b.metrics.CountError("upload")
 		return fmt.Errorf("error uploading backup: %w", err)
