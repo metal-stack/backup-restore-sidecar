@@ -1,4 +1,4 @@
-// go:build integrationi
+//go:build integration
 
 package gcp
 
@@ -54,7 +54,7 @@ func Test_BackupProviderGCP(t *testing.T) {
 	var (
 		endpoint           = conn.Endpoint + "/storage/v1/"
 		backupAmount       = 5
-		expectedBackupName = ""
+		expectedBackupName = "db.tar.gz"
 		prefix             = fmt.Sprintf("test-with-%d", backupAmount)
 
 		fs = afero.NewMemMapFs()
@@ -77,7 +77,6 @@ func Test_BackupProviderGCP(t *testing.T) {
 		ClientOpts:     []option.ClientOption{option.WithEndpoint(endpoint), option.WithHTTPClient(httpClient)},
 		Compressor:     compressor,
 	})
-	expectedBackupName = p.GetNextBackupName(ctx) + ".tar.gz"
 
 	require.NoError(t, err)
 	require.NotNil(t, p)
