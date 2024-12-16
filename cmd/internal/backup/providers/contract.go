@@ -12,7 +12,7 @@ type BackupProvider interface {
 	CleanupBackups(ctx context.Context) error
 	GetNextBackupName(ctx context.Context) string
 	DownloadBackup(ctx context.Context, version *BackupVersion, writer io.Writer) error
-	UploadBackup(ctx context.Context, reader io.Reader, sourcePath string) error
+	UploadBackup(ctx context.Context, reader io.Reader) error
 }
 
 type BackupVersions interface {

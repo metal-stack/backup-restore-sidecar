@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
@@ -26,8 +27,11 @@ func Test_BackupProviderLocal(t *testing.T) {
 		t.Run(fmt.Sprintf("testing with %d backups", backupAmount), func(t *testing.T) {
 			fs := afero.NewMemMapFs()
 
+			compressor, err := compress.New("targz")
+			require.NoError(t, err)
 			p, err := New(log, &BackupProviderConfigLocal{
-				FS: fs,
+				FS:         fs,
+				Compressor: compressor,
 			})
 			require.NoError(t, err)
 			require.NotNil(t, p)
@@ -47,7 +51,7 @@ func Test_BackupProviderLocal(t *testing.T) {
 
 			t.Run("verify upload", func(t *testing.T) {
 				for i := range backupAmount {
-					backupName := p.GetNextBackupName(ctx) + ".tar.gz"
+					backupName := p.GetNextBackupName(ctx) + compressor.Extension()
 					backupPath := path.Join(constants.UploadDir, backupName)
 					backupContent := fmt.Sprintf("precious data %d", i+1)
 
@@ -57,7 +61,7 @@ func Test_BackupProviderLocal(t *testing.T) {
 					infile, err := fs.Open(backupPath)
 					require.NoError(t, err)
 
-					err = p.UploadBackup(ctx, infile, backupPath)
+					err = p.UploadBackup(ctx, infile)
 					require.NoError(t, err)
 
 					localPath := path.Join(localProviderBackupPath, backupName)

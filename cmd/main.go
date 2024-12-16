@@ -102,12 +102,13 @@ const (
 )
 
 var (
-	cfgFile   string
-	logger    *slog.Logger
-	db        database.Database
-	bp        providers.BackupProvider
-	encrypter *encryption.Encrypter
-	stop      context.Context
+	cfgFile    string
+	logger     *slog.Logger
+	db         database.Database
+	bp         providers.BackupProvider
+	encrypter  *encryption.Encrypter
+	compressor *compress.Compressor
+	stop       context.Context
 )
 
 var rootCmd = &cobra.Command{
@@ -134,6 +135,9 @@ var startCmd = &cobra.Command{
 		if err := initEncrypter(); err != nil {
 			return err
 		}
+		if err := initCompressor(); err != nil {
+			return err
+		}
 		return initBackupProvider()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -152,11 +156,6 @@ var startCmd = &cobra.Command{
 
 		logger.Info("starting backup-restore-sidecar", "version", v.V, "bind-addr", addr)
 
-		comp, err := compress.New(viper.GetString(compressionMethod))
-		if err != nil {
-			return err
-		}
-
 		metrics := metrics.New()
 		metrics.Start(logger.WithGroup("metrics"))
 
@@ -166,11 +165,11 @@ var startCmd = &cobra.Command{
 			DatabaseProber: db,
 			BackupProvider: bp,
 			Metrics:        metrics,
-			Compressor:     comp,
+			Compressor:     compressor,
 			Encrypter:      encrypter,
 		})
 
-		if err := initializer.New(logger.WithGroup("initializer"), addr, db, bp, comp, metrics, viper.GetString(databaseDatadirFlg), encrypter).Start(stop, backuper); err != nil {
+		if err := initializer.New(logger.WithGroup("initializer"), addr, db, bp, compressor, metrics, viper.GetString(databaseDatadirFlg), encrypter).Start(stop, backuper); err != nil {
 			return err
 		}
 
@@ -563,6 +562,19 @@ func initEncrypter() error {
 	return nil
 }
 
+func initCompressor() error {
+	var err error
+	key := viper.GetString(compressionMethod)
+	if key != "" {
+		compressor, err = compress.New(key)
+		if err != nil {
+			return fmt.Errorf("unable to initialize compressor: %w", err)
+		}
+		logger.Info("initialized compressor")
+	}
+	return nil
+}
+
 func initBackupProvider() error {
 	bpString := viper.GetString(backupProviderFlg)
 	var err error
@@ -598,6 +610,8 @@ func initBackupProvider() error {
 			&local.BackupProviderConfigLocal{
 				LocalBackupPath: viper.GetString(localBackupPathFlg),
 				ObjectsToKeep:   viper.GetInt64(objectsToKeepFlg),
+				Encrypter:       encrypter,
+				Compressor:      compressor,
 			},
 		)
 	default:

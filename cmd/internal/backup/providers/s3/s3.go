@@ -4,11 +4,14 @@ import (
 	"context"
 	"io"
 	"log/slog"
-	"path/filepath"
+	"strconv"
 
 	"errors"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
 
@@ -21,16 +24,18 @@ import (
 )
 
 const (
-	defaultBackupName = "db"
+	ProviderConstant = "db"
 )
 
 // BackupProviderS3 implements the backup provider interface for S3
 type BackupProviderS3 struct {
-	fs     afero.Fs
-	log    *slog.Logger
-	c      *s3.S3
-	sess   *session.Session
-	config *BackupProviderConfigS3
+	fs         afero.Fs
+	log        *slog.Logger
+	c          *s3.S3
+	sess       *session.Session
+	config     *BackupProviderConfigS3
+	encrypter  *encryption.Encrypter
+	compressor *compress.Compressor
 }
 
 // BackupProviderConfigS3 provides configuration for the BackupProviderS3
@@ -44,6 +49,8 @@ type BackupProviderConfigS3 struct {
 	ObjectPrefix  string
 	ObjectsToKeep int64
 	FS            afero.Fs
+	Encrypter     *encryption.Encrypter
+	Compressor    *compress.Compressor
 }
 
 func (c *BackupProviderConfigS3) validate() error {
@@ -72,9 +79,6 @@ func New(log *slog.Logger, config *BackupProviderConfigS3) (*BackupProviderS3, e
 	if config.ObjectsToKeep == 0 {
 		config.ObjectsToKeep = constants.DefaultObjectsToKeep
 	}
-	if config.BackupName == "" {
-		config.BackupName = defaultBackupName
-	}
 	if config.FS == nil {
 		config.FS = afero.NewOsFs()
 	}
@@ -96,11 +100,13 @@ func New(log *slog.Logger, config *BackupProviderConfigS3) (*BackupProviderS3, e
 	client := s3.New(newSession)
 
 	return &BackupProviderS3{
-		c:      client,
-		sess:   newSession,
-		config: config,
-		log:    log,
-		fs:     config.FS,
+		c:          client,
+		sess:       newSession,
+		config:     config,
+		log:        log,
+		fs:         config.FS,
+		encrypter:  config.Encrypter,
+		compressor: config.Compressor,
 	}, nil
 }
 
@@ -190,14 +196,23 @@ func (b *BackupProviderS3) CleanupBackups(_ context.Context) error {
 
 // DownloadBackup downloads the given backup version to the specified folder
 func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *providers.BackupVersion, writer io.Writer) error {
+	gen, err := strconv.ParseInt(version.Version, 10, 64)
+	if err != nil {
+		return err
+	}
+
 	bucket := aws.String(b.config.BucketName)
 
 	downloader := s3manager.NewDownloader(b.sess)
+	// we need to download the backup sequentially since we fake the download with a io.Writer instead of io.WriterAt
+	downloader.Concurrency = 1
 
-	buf := aws.NewWriteAtBuffer([]byte{})
-	_, err := downloader.DownloadWithContext(
+	b.log.Info("downloading", "object", version.Name, "get", gen)
+
+	streamWriter := utils.NewSequentialWriterAt(writer)
+	_, err = downloader.DownloadWithContext(
 		ctx,
-		buf,
+		streamWriter,
 		&s3.GetObjectInput{
 			Bucket:    bucket,
 			Key:       &version.Name,
@@ -207,24 +222,26 @@ func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *provider
 		return err
 	}
 
-	_, err = writer.Write(buf.Bytes())
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
 // UploadBackup uploads a backup to the backup provider
-func (b *BackupProviderS3) UploadBackup(ctx context.Context, reader io.Reader, sourcePath string) error {
+func (b *BackupProviderS3) UploadBackup(ctx context.Context, reader io.Reader) error {
 	bucket := aws.String(b.config.BucketName)
 
-	destination := filepath.Base(sourcePath)
+	destination := ProviderConstant
+	if b.compressor != nil {
+		destination += b.compressor.Extension()
+	}
+	if b.encrypter != nil {
+		destination += b.encrypter.Extension()
+	}
+
 	if b.config.ObjectPrefix != "" {
 		destination = b.config.ObjectPrefix + "/" + destination
 	}
 
-	b.log.Debug("uploading object", "src", sourcePath, "dest", destination)
+	b.log.Debug("uploading object", "dest", destination)
 
 	uploader := s3manager.NewUploader(b.sess)
 	_, err := uploader.UploadWithContext(ctx, &s3manager.UploadInput{

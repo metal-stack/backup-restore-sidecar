@@ -42,7 +42,7 @@ func (c *Compressor) Decompress(backupFilePath string) error {
 	return archiver.Unarchive(backupFilePath, filepath.Dir(constants.RestoreDir))
 }
 
-// Extension returns the file extension of the configured compressor, depending on the method
+// Extension returns the file extension of the configured compressor, depending on the methodn
 func (c *Compressor) Extension() string {
 	return c.extension
 }

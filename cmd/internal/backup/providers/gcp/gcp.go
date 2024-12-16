@@ -13,6 +13,8 @@ import (
 	"errors"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
 
@@ -24,15 +26,17 @@ import (
 )
 
 const (
-	defaultBackupName = "db"
+	ProviderConstant = "db"
 )
 
 // BackupProviderGCP implements the backup provider interface for GCP
 type BackupProviderGCP struct {
-	fs     afero.Fs
-	log    *slog.Logger
-	c      *storage.Client
-	config *BackupProviderConfigGCP
+	fs         afero.Fs
+	log        *slog.Logger
+	c          *storage.Client
+	config     *BackupProviderConfigGCP
+	encrypter  *encryption.Encrypter
+	compressor *compress.Compressor
 }
 
 // BackupProviderConfigGCP provides configuration for the BackupProviderGCP
@@ -45,6 +49,8 @@ type BackupProviderConfigGCP struct {
 	ProjectID      string
 	FS             afero.Fs
 	ClientOpts     []option.ClientOption
+	Encrypter      *encryption.Encrypter
+	Compressor     *compress.Compressor
 }
 
 func (c *BackupProviderConfigGCP) validate() error {
@@ -72,9 +78,6 @@ func New(ctx context.Context, log *slog.Logger, config *BackupProviderConfigGCP)
 	if config.ObjectsToKeep == 0 {
 		config.ObjectsToKeep = constants.DefaultObjectsToKeep
 	}
-	if config.BackupName == "" {
-		config.BackupName = defaultBackupName
-	}
 	if config.FS == nil {
 		config.FS = afero.NewOsFs()
 	}
@@ -90,10 +93,12 @@ func New(ctx context.Context, log *slog.Logger, config *BackupProviderConfigGCP)
 	}
 
 	return &BackupProviderGCP{
-		c:      client,
-		config: config,
-		log:    log,
-		fs:     config.FS,
+		c:          client,
+		config:     config,
+		log:        log,
+		fs:         config.FS,
+		compressor: config.Compressor,
+		encrypter:  config.Encrypter,
 	}, nil
 }
 
@@ -160,6 +165,8 @@ func (b *BackupProviderGCP) DownloadBackup(ctx context.Context, version *provide
 		downloadFileName = filepath.Base(downloadFileName)
 	}
 
+	b.log.Info("downloading", "object", version.Name, "gen", gen)
+
 	r, err := bucket.Object(version.Name).Generation(gen).NewReader(ctx)
 	if err != nil {
 		return fmt.Errorf("backup not found: %w", err)
@@ -175,15 +182,22 @@ func (b *BackupProviderGCP) DownloadBackup(ctx context.Context, version *provide
 }
 
 // UploadBackup uploads a backup to the backup provider
-func (b *BackupProviderGCP) UploadBackup(ctx context.Context, reader io.Reader, sourcePath string) error {
+func (b *BackupProviderGCP) UploadBackup(ctx context.Context, reader io.Reader) error {
 	bucket := b.c.Bucket(b.config.BucketName)
 
-	destination := filepath.Base(sourcePath)
+	destination := ProviderConstant
+	if b.compressor != nil {
+		destination += b.compressor.Extension()
+	}
+	if b.encrypter != nil {
+		destination += b.encrypter.Extension()
+	}
+
 	if b.config.ObjectPrefix != "" {
 		destination = b.config.ObjectPrefix + "/" + destination
 	}
 
-	b.log.Debug("uploading object", "src", sourcePath, "dest", destination)
+	b.log.Debug("uploading object", "dest", destination)
 
 	obj := bucket.Object(destination)
 	w := obj.NewWriter(ctx)

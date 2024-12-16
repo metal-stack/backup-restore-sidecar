@@ -124,7 +124,7 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 		return fmt.Errorf("error opening backup file: %w", err)
 	}
 
-	err = b.bp.UploadBackup(ctx, file, filename)
+	err = b.bp.UploadBackup(ctx, file)
 	if err != nil {
 		b.metrics.CountError("upload")
 		return fmt.Errorf("error uploading backup: %w", err)

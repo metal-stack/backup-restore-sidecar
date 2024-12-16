@@ -236,3 +236,7 @@ func (e *Encrypter) decryptFile(infile, outfile afero.File, block cipher.Block, 
 
 	return nil
 }
+
+func (e *Encrypter) Extension() string {
+	return suffix
+}
