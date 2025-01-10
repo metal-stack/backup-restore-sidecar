@@ -71,7 +71,6 @@ func Test_BackupProviderGCP(t *testing.T) {
 	p, err := New(ctx, log, &BackupProviderConfigGCP{
 		BucketName:     "test",
 		BucketLocation: "europe-west3",
-		BackupName:     "db",
 		ObjectPrefix:   prefix,
 		ProjectID:      "test-project-id",
 		FS:             fs,

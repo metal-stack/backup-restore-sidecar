@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"log/slog"
-	"strconv"
 
 	"errors"
 
@@ -78,6 +77,9 @@ func New(log *slog.Logger, config *BackupProviderConfigS3) (*BackupProviderS3, e
 
 	if config.ObjectsToKeep == 0 {
 		config.ObjectsToKeep = constants.DefaultObjectsToKeep
+	}
+	if config.BackupName == "" {
+		config.BackupName = ProviderConstant
 	}
 	if config.FS == nil {
 		config.FS = afero.NewOsFs()
@@ -196,21 +198,16 @@ func (b *BackupProviderS3) CleanupBackups(_ context.Context) error {
 
 // DownloadBackup downloads the given backup version to the specified folder
 func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *providers.BackupVersion, writer io.Writer) error {
-	gen, err := strconv.ParseInt(version.Version, 10, 64)
-	if err != nil {
-		return err
-	}
-
 	bucket := aws.String(b.config.BucketName)
 
 	downloader := s3manager.NewDownloader(b.sess)
 	// we need to download the backup sequentially since we fake the download with a io.Writer instead of io.WriterAt
 	downloader.Concurrency = 1
 
-	b.log.Info("downloading", "object", version.Name, "get", gen)
+	b.log.Info("downloading", "object", version.Name, "get", version.Version)
 
 	streamWriter := utils.NewSequentialWriterAt(writer)
-	_, err = downloader.DownloadWithContext(
+	_, err := downloader.DownloadWithContext(
 		ctx,
 		streamWriter,
 		&s3.GetObjectInput{

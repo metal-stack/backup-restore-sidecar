@@ -76,6 +76,9 @@ func New(ctx context.Context, log *slog.Logger, config *BackupProviderConfigGCP)
 	if config.ObjectsToKeep == 0 {
 		config.ObjectsToKeep = constants.DefaultObjectsToKeep
 	}
+	if config.BackupName == "" {
+		config.BackupName = ProviderConstant
+	}
 	if config.FS == nil {
 		config.FS = afero.NewOsFs()
 	}
