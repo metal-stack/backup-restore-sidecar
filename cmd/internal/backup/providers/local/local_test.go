@@ -46,10 +46,10 @@ func Test_BackupProviderLocal(t *testing.T) {
 			}
 
 			t.Run("verify upload", func(t *testing.T) {
-				for i := 0; i < backupAmount; i++ {
+				for i := range backupAmount {
 					backupName := p.GetNextBackupName(ctx) + ".tar.gz"
 					backupPath := path.Join(constants.UploadDir, backupName)
-					backupContent := fmt.Sprintf("precious data %d", i)
+					backupContent := fmt.Sprintf("precious data %d", i+1)
 
 					err = afero.WriteFile(fs, backupPath, []byte(backupContent), 0600)
 					require.NoError(t, err)
@@ -102,8 +102,6 @@ func Test_BackupProviderLocal(t *testing.T) {
 				require.Len(t, allVersions, amount)
 
 				for i, v := range allVersions {
-					v := v
-
 					assert.True(t, strings.HasSuffix(v.Name, ".tar.gz"))
 					assert.NotZero(t, v.Date)
 
@@ -132,17 +130,16 @@ func Test_BackupProviderLocal(t *testing.T) {
 				latestVersion := versions.Latest()
 				require.NotNil(t, latestVersion)
 
-				err = p.DownloadBackup(ctx, latestVersion)
+				backupFilePath, err := p.DownloadBackup(ctx, latestVersion, "")
 				require.NoError(t, err)
 
-				downloadPath := path.Join(constants.DownloadDir, latestVersion.Name)
-				gotContent, err := afero.ReadFile(fs, downloadPath)
+				gotContent, err := afero.ReadFile(fs, backupFilePath)
 				require.NoError(t, err)
 
-				require.Equal(t, fmt.Sprintf("precious data %d", backupAmount-1), string(gotContent))
+				require.Equal(t, fmt.Sprintf("precious data %d", backupAmount), string(gotContent))
 
 				// cleaning up after test
-				err = fs.Remove(downloadPath)
+				err = fs.Remove(backupFilePath)
 				require.NoError(t, err)
 			})
 

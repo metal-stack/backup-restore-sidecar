@@ -15,6 +15,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 
@@ -34,9 +35,10 @@ type Initializer struct {
 	comp          *compress.Compressor
 	metrics       *metrics.Metrics
 	dbDataDir     string
+	encrypter     *encryption.Encrypter
 }
 
-func New(log *slog.Logger, addr string, db database.Database, bp providers.BackupProvider, comp *compress.Compressor, metrics *metrics.Metrics, dbDataDir string) *Initializer {
+func New(log *slog.Logger, addr string, db database.Database, bp providers.BackupProvider, comp *compress.Compressor, metrics *metrics.Metrics, dbDataDir string, encrypter *encryption.Encrypter) *Initializer {
 	return &Initializer{
 		currentStatus: &v1.StatusResponse{
 			Status:  v1.StatusResponse_CHECKING,
@@ -49,11 +51,12 @@ func New(log *slog.Logger, addr string, db database.Database, bp providers.Backu
 		comp:      comp,
 		dbDataDir: dbDataDir,
 		metrics:   metrics,
+		encrypter: encrypter,
 	}
 }
 
 // Start starts the initializer, which includes a server component and the initializer itself, which is potentially restoring a backup
-func (i *Initializer) Start(ctx context.Context) {
+func (i *Initializer) Start(ctx context.Context, backuper *backup.Backuper) error {
 	opts := []grpc.ServerOption{
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
 			grpc_ctxtags.StreamServerInterceptor(),
@@ -72,14 +75,6 @@ func (i *Initializer) Start(ctx context.Context) {
 	initializerService := newInitializerService(i.currentStatus)
 	backupService := newBackupProviderService(i.bp, i.Restore)
 	databaseService := newDatabaseService(func() error {
-		backuper := backup.New(&backup.BackuperConfig{
-			Log:            i.log,
-			DatabaseProber: i.db,
-			BackupProvider: i.bp,
-			Metrics:        i.metrics,
-			Compressor:     i.comp,
-		})
-
 		return backuper.CreateBackup(ctx)
 	})
 
@@ -91,8 +86,8 @@ func (i *Initializer) Start(ctx context.Context) {
 
 	lis, err := net.Listen("tcp", i.addr)
 	if err != nil {
-		i.log.Error("failed to listen: %v", err)
-		panic(err)
+		i.log.Error("failed to listen", "error", err)
+		return err
 	}
 
 	go func() {
@@ -103,7 +98,7 @@ func (i *Initializer) Start(ctx context.Context) {
 
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
-			i.log.Error("failed to serve: %v", err)
+			i.log.Error("failed to serve", "error", err)
 			panic(err)
 		}
 	}()
@@ -111,7 +106,7 @@ func (i *Initializer) Start(ctx context.Context) {
 	err = i.initialize(ctx)
 	if err != nil {
 		i.log.Error("error initializing database, shutting down", "error", err)
-		panic(err)
+		return err
 	}
 
 	i.currentStatus.Status = v1.StatusResponse_UPGRADING
@@ -119,12 +114,13 @@ func (i *Initializer) Start(ctx context.Context) {
 	err = i.db.Upgrade(ctx)
 	if err != nil {
 		i.log.Error("upgrade database failed", "error", err)
-		panic(err)
+		return err
 	}
 
 	i.log.Info("initializer done")
 	i.currentStatus.Status = v1.StatusResponse_DONE
 	i.currentStatus.Message = "done"
+	return nil
 }
 
 func (i *Initializer) initialize(ctx context.Context) error {
@@ -141,6 +137,12 @@ func (i *Initializer) initialize(ctx context.Context) error {
 	err = i.bp.EnsureBackupBucket(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to ensure backup bucket: %w", err)
+	}
+
+	i.log.Info("ensuring default download directory")
+	err = os.MkdirAll(constants.DownloadDir, 0755)
+	if err != nil {
+		return fmt.Errorf("unable to ensure default download directory: %w", err)
 	}
 
 	i.log.Info("checking database")
@@ -168,6 +170,12 @@ func (i *Initializer) initialize(ctx context.Context) error {
 	if latestBackup == nil {
 		i.log.Info("there are no backups available, it's a fresh database. allow database to start")
 		return nil
+	}
+
+	if i.encrypter == nil {
+		if encryption.IsEncrypted(latestBackup.Name) {
+			return fmt.Errorf("latest backup is encrypted, but no encryption/decryption is configured")
+		}
 	}
 
 	err = i.Restore(ctx, latestBackup)
@@ -204,9 +212,20 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 		return fmt.Errorf("could not delete priorly downloaded file: %w", err)
 	}
 
-	err := i.bp.DownloadBackup(ctx, version)
+	backupFilePath, err := i.bp.DownloadBackup(ctx, version, constants.DownloadDir)
 	if err != nil {
 		return fmt.Errorf("unable to download backup: %w", err)
+	}
+
+	if i.encrypter != nil {
+		if encryption.IsEncrypted(backupFilePath) {
+			backupFilePath, err = i.encrypter.Decrypt(backupFilePath)
+			if err != nil {
+				return fmt.Errorf("unable to decrypt backup: %w", err)
+			}
+		} else {
+			i.log.Info("restoring unencrypted backup with configured encryption - skipping decryption...")
+		}
 	}
 
 	i.currentStatus.Message = "uncompressing backup"

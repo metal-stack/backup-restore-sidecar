@@ -23,6 +23,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/postgres"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/redis"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/rethinkdb"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/initializer"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/probe"
@@ -93,14 +94,19 @@ const (
 	s3SecretKeyFlg = "s3-secret-key"
 
 	compressionMethod = "compression-method"
+
+	encryptionKeyFlg = "encryption-key"
+
+	downloadOutputFlg = "output"
 )
 
 var (
-	cfgFile string
-	logger  *slog.Logger
-	db      database.Database
-	bp      providers.BackupProvider
-	stop    context.Context
+	cfgFile   string
+	logger    *slog.Logger
+	db        database.Database
+	bp        providers.BackupProvider
+	encrypter *encryption.Encrypter
+	stop      context.Context
 )
 
 var rootCmd = &cobra.Command{
@@ -122,6 +128,9 @@ var startCmd = &cobra.Command{
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		initSignalHandlers()
 		if err := initDatabase(); err != nil {
+			return err
+		}
+		if err := initEncrypter(); err != nil {
 			return err
 		}
 		return initBackupProvider()
@@ -150,12 +159,6 @@ var startCmd = &cobra.Command{
 		metrics := metrics.New()
 		metrics.Start(logger.WithGroup("metrics"))
 
-		initializer.New(logger.WithGroup("initializer"), addr, db, bp, comp, metrics, viper.GetString(databaseDatadirFlg)).Start(stop)
-
-		if err := probe.Start(stop, logger.WithGroup("probe"), db); err != nil {
-			return err
-		}
-
 		backuper := backup.New(&backup.BackuperConfig{
 			Log:            logger.WithGroup("backup"),
 			BackupSchedule: viper.GetString(backupCronScheduleFlg),
@@ -163,7 +166,16 @@ var startCmd = &cobra.Command{
 			BackupProvider: bp,
 			Metrics:        metrics,
 			Compressor:     comp,
+			Encrypter:      encrypter,
 		})
+
+		if err := initializer.New(logger.WithGroup("initializer"), addr, db, bp, comp, metrics, viper.GetString(databaseDatadirFlg), encrypter).Start(stop, backuper); err != nil {
+			return err
+		}
+
+		if err := probe.Start(stop, logger.WithGroup("probe"), db); err != nil {
+			return err
+		}
 
 		return backuper.Start(stop)
 	},
@@ -260,6 +272,54 @@ var waitCmd = &cobra.Command{
 	},
 }
 
+var downloadBackupCmd = &cobra.Command{
+	Use:   "download <version>",
+	Short: "downloads backup without restoring",
+	PreRunE: func(cm *cobra.Command, args []string) error {
+		err := initEncrypter()
+		if err != nil {
+			return err
+		}
+		return initBackupProvider()
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return errors.New("no version argument specified")
+		}
+
+		c, err := client.New(context.Background(), viper.GetString(serverAddrFlg))
+		if err != nil {
+			return fmt.Errorf("error creating client: %w", err)
+		}
+
+		backup, err := c.BackupServiceClient().GetBackupByVersion(context.Background(), &v1.GetBackupByVersionRequest{Version: args[0]})
+
+		if err != nil {
+			return fmt.Errorf("error getting backup by version: %w", err)
+		}
+
+		output := viper.GetString(downloadOutputFlg)
+
+		destination, err := bp.DownloadBackup(context.Background(), &providers.BackupVersion{Name: backup.GetBackup().GetName()}, output)
+
+		if err != nil {
+			return fmt.Errorf("failed downloading backup: %w", err)
+		}
+
+		if encrypter != nil {
+			if encryption.IsEncrypted(destination) {
+				_, err = encrypter.Decrypt(destination)
+				if err != nil {
+					return fmt.Errorf("unable to decrypt backup: %w", err)
+				}
+			} else {
+				logger.Info("downloading unencrypted backup with configured encryption - skipping decryption...")
+			}
+		}
+		return nil
+	},
+}
+
 func main() {
 	if err := rootCmd.Execute(); err != nil {
 		if logger == nil {
@@ -271,7 +331,7 @@ func main() {
 }
 
 func init() {
-	rootCmd.AddCommand(startCmd, waitCmd, restoreCmd, createBackupCmd)
+	rootCmd.AddCommand(startCmd, waitCmd, restoreCmd, createBackupCmd, downloadBackupCmd)
 
 	rootCmd.PersistentFlags().StringP(logLevelFlg, "", "info", "sets the application log level")
 	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb|etcd|meilisearch|redis|keydb|localfs]")
@@ -320,6 +380,8 @@ func init() {
 
 	startCmd.Flags().StringP(compressionMethod, "", "targz", "the compression method to use to compress the backups (tar|targz|tarlz4)")
 
+	startCmd.Flags().StringP(encryptionKeyFlg, "", "", "the encryption key for aes")
+
 	err = viper.BindPFlags(startCmd.Flags())
 	if err != nil {
 		fmt.Printf("unable to construct initializer command: %v", err)
@@ -337,6 +399,13 @@ func init() {
 	}
 
 	restoreCmd.AddCommand(restoreListCmd)
+
+	downloadBackupCmd.Flags().StringP(downloadOutputFlg, "o", constants.DownloadDir, "the target directory for the downloaded backup")
+	err = viper.BindPFlags(downloadBackupCmd.Flags())
+	if err != nil {
+		fmt.Printf("unable to construct download command: %v", err)
+		os.Exit(1)
+	}
 }
 
 func initConfig() {
@@ -471,6 +540,19 @@ func initDatabase() error {
 
 	logger.Info("initialized database adapter", "type", dbString)
 
+	return nil
+}
+
+func initEncrypter() error {
+	var err error
+	key := viper.GetString(encryptionKeyFlg)
+	if key != "" {
+		encrypter, err = encryption.New(logger.WithGroup("encrypter"), &encryption.EncrypterConfig{Key: key})
+		if err != nil {
+			return fmt.Errorf("unable to initialize encrypter: %w", err)
+		}
+		logger.Info("initialized encrypter")
+	}
 	return nil
 }
 

@@ -32,7 +32,7 @@ test: build
 	go test -cover ./...
 
 .PHONY: generate-examples
-generate-examples:
+generate-examples: proto
 	go run ./pkg/generate/examples/dump.go
 
 .PHONY: test-integration
@@ -88,7 +88,7 @@ endif
 	kubectl --kubeconfig $(KUBECONFIG) delete -f "deploy/$(DB)-$(BACKUP_PROVIDER).yaml" || true # for idempotence
 	kubectl --kubeconfig $(KUBECONFIG) apply -f "deploy/$(DB)-$(BACKUP_PROVIDER).yaml"
 	# tailing
-	stern --kubeconfig $(KUBECONFIG) '.*'
+	kubectl stern --kubeconfig $(KUBECONFIG) '.*'
 
 .PHONY: kind-cluster-create
 kind-cluster-create: dockerimage

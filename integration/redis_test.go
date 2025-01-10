@@ -4,6 +4,8 @@ package integration_test
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -22,6 +24,16 @@ func Test_Redis_Restore(t *testing.T) {
 		backingResources: examples.RedisBackingResources,
 		addTestData:      addRedisTestData,
 		verifyTestData:   verifyRedisTestData,
+	})
+}
+
+func Test_Redis_RestoreLatestFromMultipleBackups(t *testing.T) {
+	restoreLatestFromMultipleBackupsFlow(t, &flowSpec{
+		databaseType:            examples.Redis,
+		sts:                     examples.RedisSts,
+		backingResources:        examples.RedisBackingResources,
+		addTestDataWithIndex:    addRedisTestDataWithIndex,
+		verifyTestDataWithIndex: verifyRedisTestDataWithIndex,
 	})
 }
 
@@ -60,4 +72,22 @@ func verifyRedisTestData(t *testing.T, ctx context.Context) {
 	require.NoError(t, err)
 	require.NotEmpty(t, resp)
 	assert.Equal(t, "I am precious", resp)
+}
+
+func addRedisTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
+	cli := newRedisClient(t, ctx)
+	defer cli.Close()
+
+	_, err := cli.Set(ctx, strconv.Itoa(index), fmt.Sprintf("idx-%d", index), 1*time.Hour).Result()
+	require.NoError(t, err)
+}
+
+func verifyRedisTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
+	cli := newRedisClient(t, ctx)
+	defer cli.Close()
+
+	resp, err := cli.Get(ctx, strconv.Itoa(index)).Result()
+	require.NoError(t, err)
+	require.NotEmpty(t, resp)
+	assert.Equal(t, fmt.Sprintf("idx-%d", index), resp)
 }

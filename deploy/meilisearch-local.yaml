@@ -24,7 +24,7 @@ spec:
       - command:
         - backup-restore-sidecar
         - wait
-        image: getmeili/meilisearch:v1.3.0
+        image: getmeili/meilisearch:v1.8.1
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 6
@@ -80,7 +80,7 @@ spec:
             secretKeyRef:
               key: MEILISEARCH_URL
               name: meilisearch
-        image: getmeili/meilisearch:v1.3.0
+        image: getmeili/meilisearch:v1.8.1
         name: backup-restore-sidecar
         ports:
         - containerPort: 8000
@@ -157,6 +157,7 @@ data:
     backup-cron-schedule: "*/1 * * * *"
     object-prefix: meilisearch-test
     compression-method: targz
+    encryption-key: "01234567891234560123456789123456"
     post-exec-cmds:
     - meilisearch --db-path=/data/data.ms/ --dump-dir=/backup/upload/files
 kind: ConfigMap

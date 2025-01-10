@@ -1,30 +1,25 @@
 package gcp
 
 import (
-	"fmt"
-	"sort"
 	"strconv"
 
 	"cloud.google.com/go/storage"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/common"
 )
 
-type BackupVersionsGCP struct {
+type backupVersionsGCP struct {
 	objectAttrs []*storage.ObjectAttrs
 }
 
-func (b BackupVersionsGCP) Latest() *providers.BackupVersion {
-	result := b.List()
-	if len(result) == 0 {
-		return nil
-	}
-	return result[0]
+func (b backupVersionsGCP) Latest() *providers.BackupVersion {
+	return common.Latest(b.List())
 }
 
-func (b BackupVersionsGCP) List() []*providers.BackupVersion {
+func (b backupVersionsGCP) List() []*providers.BackupVersion {
 	var result []*providers.BackupVersion
 
-	tmp := make(map[int64]bool)
+	tmp := make(map[int64]bool, len(result))
 	for _, attr := range b.objectAttrs {
 		ok := tmp[attr.Generation]
 		if !ok {
@@ -37,25 +32,11 @@ func (b BackupVersionsGCP) List() []*providers.BackupVersion {
 		}
 	}
 
-	b.Sort(result, false)
+	common.Sort(result)
 
 	return result
 }
 
-func (b BackupVersionsGCP) Sort(versions []*providers.BackupVersion, asc bool) {
-	sort.Slice(versions, func(i, j int) bool {
-		if asc {
-			return versions[i].Date.Before(versions[j].Date)
-		}
-		return versions[i].Date.After(versions[j].Date)
-	})
-}
-
-func (b BackupVersionsGCP) Get(version string) (*providers.BackupVersion, error) {
-	for _, backup := range b.List() {
-		if version == backup.Version {
-			return backup, nil
-		}
-	}
-	return nil, fmt.Errorf("version %q not found", version)
+func (b backupVersionsGCP) Get(version string) (*providers.BackupVersion, error) {
+	return common.Get(b.List(), version)
 }

@@ -27,6 +27,16 @@ func Test_Postgres_Restore(t *testing.T) {
 	})
 }
 
+func Test_Postgres_RestoreLatestFromMultipleBackups(t *testing.T) {
+	restoreLatestFromMultipleBackupsFlow(t, &flowSpec{
+		databaseType:            examples.Postgres,
+		sts:                     examples.PostgresSts,
+		backingResources:        examples.PostgresBackingResources,
+		addTestDataWithIndex:    addPostgresTestDataWithIndex,
+		verifyTestDataWithIndex: verifyPostgresTestDataWithIndex,
+	})
+}
+
 func Test_Postgres_Upgrade(t *testing.T) {
 	upgradeFlow(t, &upgradeFlowSpec{
 		flowSpec: flowSpec{
@@ -86,6 +96,42 @@ func addPostgresTestData(t *testing.T, ctx context.Context) {
 	require.NoError(t, err)
 }
 
+func addPostgresTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
+	db := newPostgresSession(t, ctx)
+	defer db.Close()
+
+	var (
+		createStmt = `CREATE TABLE IF NOT EXISTS backuprestore (
+			data text NOT NULL
+		 );`
+		insertStmt = fmt.Sprintf("INSERT INTO backuprestore (data) VALUES ('idx-%d');", index)
+	)
+
+	_, err := db.Exec(createStmt)
+	require.NoError(t, err)
+
+	_, err = db.Exec(insertStmt)
+	require.NoError(t, err)
+}
+
+func verifyPostgresTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
+	db := newPostgresSession(t, ctx)
+	defer db.Close()
+
+	rows, err := db.Query(fmt.Sprintf("SELECT \"data\" FROM backuprestore WHERE data='idx-%d';", index))
+	require.NoError(t, err)
+	require.NoError(t, rows.Err())
+	defer rows.Close()
+
+	require.True(t, rows.Next())
+	var data string
+
+	err = rows.Scan(&data)
+	require.NoError(t, err)
+
+	assert.Equal(t, fmt.Sprintf("idx-%d", index), data)
+	assert.False(t, rows.Next())
+}
 func verifyPostgresTestData(t *testing.T, ctx context.Context) {
 	db := newPostgresSession(t, ctx)
 	defer db.Close()

@@ -16,7 +16,7 @@ const (
 
 	RethinkDbPassword = "test123!"
 
-	rethinkDbContainerImage = "rethinkdb:2.4.0"
+	rethinkDbContainerImage = "rethinkdb:2.4.4-bookworm-slim"
 )
 
 func RethinkDbSts(namespace string) *appsv1.StatefulSet {
@@ -214,7 +214,7 @@ func RethinkDbSts(namespace string) *appsv1.StatefulSet {
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
 						},
-						Resources: corev1.ResourceRequirements{
+						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{
 								corev1.ResourceStorage: resource.MustParse("1Gi"),
 							},
@@ -229,7 +229,7 @@ func RethinkDbSts(namespace string) *appsv1.StatefulSet {
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
 						},
-						Resources: corev1.ResourceRequirements{
+						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{
 								corev1.ResourceStorage: resource.MustParse("1Gi"),
 							},
@@ -261,6 +261,7 @@ backup-provider: local
 rethinkdb-passwordfile: /rethinkdb-secret/rethinkdb-password.txt
 backup-cron-schedule: "*/1 * * * *"
 object-prefix: rethinkdb-test
+encryption-key: "01234567891234560123456789123456"
 post-exec-cmds:
 # IMPORTANT: the --directory needs to point to the exact sidecar data dir, otherwise the database will be restored to the wrong location
 - rethinkdb --bind all --directory /data/rethinkdb --initial-password ${RETHINKDB_PASSWORD}

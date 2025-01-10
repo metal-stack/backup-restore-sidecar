@@ -85,7 +85,7 @@ func Test_BackupProviderGCP(t *testing.T) {
 	}
 
 	t.Run("verify upload", func(t *testing.T) {
-		for i := 0; i < backupAmount; i++ {
+		for i := range backupAmount {
 			backupName := p.GetNextBackupName(ctx) + ".tar.gz"
 			assert.Equal(t, expectedBackupName, backupName)
 
@@ -153,18 +153,17 @@ func Test_BackupProviderGCP(t *testing.T) {
 		latestVersion := versions.Latest()
 		require.NotNil(t, latestVersion)
 
-		err = p.DownloadBackup(ctx, latestVersion)
+		backupFilePath, err := p.DownloadBackup(ctx, latestVersion, "")
 		require.NoError(t, err)
 
-		downloadPath := path.Join(constants.DownloadDir, expectedBackupName)
-		gotContent, err := afero.ReadFile(fs, downloadPath)
+		gotContent, err := afero.ReadFile(fs, backupFilePath)
 		require.NoError(t, err)
 
 		backupContent := fmt.Sprintf("precious data %d", backupAmount-1)
 		require.Equal(t, backupContent, string(gotContent))
 
 		// cleaning up after test
-		err = fs.Remove(downloadPath)
+		err = fs.Remove(backupFilePath)
 		require.NoError(t, err)
 	})
 
@@ -201,8 +200,8 @@ type connectionDetails struct {
 func startFakeGcsContainer(t testing.TB, ctx context.Context) (testcontainers.Container, *connectionDetails) {
 	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "fsouza/fake-gcs-server", // tested with fsouza/fake-gcs-server:1.47.4
-			ExposedPorts: []string{"4443"},
+			Image: "fsouza/fake-gcs-server", // tested with fsouza/fake-gcs-server:1.47.4
+			// ExposedPorts: []string{"4443"},
 			HostConfigModifier: func(hc *container.HostConfig) {
 				// Unfortunately we must use host network as the public host must exactly match the client endpoint
 				// see for example: https://github.com/fsouza/fake-gcs-server/issues/196
@@ -212,7 +211,8 @@ func startFakeGcsContainer(t testing.TB, ctx context.Context) (testcontainers.Co
 			},
 			Cmd: []string{"-backend", "memory", "-log-level", "debug", "-public-host", "localhost:4443"},
 			WaitingFor: wait.ForAll(
-				wait.ForListeningPort("4443/tcp"),
+				// wait.ForListeningPort("4443/tcp"),
+				wait.ForLog("server started"),
 			),
 		},
 		Started: true,

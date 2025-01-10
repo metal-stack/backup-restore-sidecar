@@ -77,7 +77,7 @@ func Test_BackupProviderS3(t *testing.T) {
 	}
 
 	t.Run("verify upload", func(t *testing.T) {
-		for i := 0; i < backupAmount; i++ {
+		for i := range backupAmount {
 			backupName := p.GetNextBackupName(ctx) + ".tar.gz"
 			assert.Equal(t, expectedBackupName, backupName)
 
@@ -147,18 +147,17 @@ func Test_BackupProviderS3(t *testing.T) {
 		latestVersion := versions.Latest()
 		require.NotNil(t, latestVersion)
 
-		err = p.DownloadBackup(ctx, latestVersion)
+		backupFilePath, err := p.DownloadBackup(ctx, latestVersion, "")
 		require.NoError(t, err)
 
-		downloadPath := path.Join(constants.DownloadDir, expectedBackupName)
-		gotContent, err := afero.ReadFile(fs, downloadPath)
+		gotContent, err := afero.ReadFile(fs, backupFilePath)
 		require.NoError(t, err)
 
 		backupContent := fmt.Sprintf("precious data %d", backupAmount-1)
 		require.Equal(t, backupContent, string(gotContent))
 
 		// cleaning up after test
-		err = fs.Remove(downloadPath)
+		err = fs.Remove(backupFilePath)
 		require.NoError(t, err)
 	})
 

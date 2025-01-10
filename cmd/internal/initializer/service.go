@@ -6,6 +6,7 @@ import (
 
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/common"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -43,8 +44,9 @@ func (s *backupService) ListBackups(ctx context.Context, _ *v1.ListBackupsReques
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	// List internally sorts the backups
 	backups := versions.List()
-	versions.Sort(backups, false)
+	common.Sort(backups)
 
 	response := &v1.BackupListResponse{}
 	for _, b := range backups {
@@ -80,6 +82,25 @@ func (s *backupService) RestoreBackup(ctx context.Context, req *v1.RestoreBackup
 	}
 
 	return &v1.RestoreBackupResponse{}, nil
+}
+
+func (s *backupService) GetBackupByVersion(ctx context.Context, req *v1.GetBackupByVersionRequest) (*v1.GetBackupByVersionResponse, error) {
+	if req.GetVersion() == "" {
+		return nil, status.Error(codes.InvalidArgument, "version to get must be defined explicitly")
+	}
+
+	versions, err := s.bp.ListBackups(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	version, err := versions.Get(req.GetVersion())
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &v1.GetBackupByVersionResponse{Backup: &v1.Backup{Name: version.Name, Version: version.Version, Timestamp: timestamppb.New(version.Date)}}, nil
+
 }
 
 type databaseService struct {

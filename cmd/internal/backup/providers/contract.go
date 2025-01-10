@@ -10,14 +10,16 @@ type BackupProvider interface {
 	ListBackups(ctx context.Context) (BackupVersions, error)
 	CleanupBackups(ctx context.Context) error
 	GetNextBackupName(ctx context.Context) string
-	DownloadBackup(ctx context.Context, version *BackupVersion) error
+	DownloadBackup(ctx context.Context, version *BackupVersion, outDir string) (string, error)
 	UploadBackup(ctx context.Context, sourcePath string) error
 }
 
 type BackupVersions interface {
+	// Latest returns the most recent backup
 	Latest() *BackupVersion
-	Sort(versions []*BackupVersion, asc bool)
+	// List returns all backups sorted by date descending, e.g. the newest backup comes first
 	List() []*BackupVersion
+	// Get a backup at the specified version
 	Get(version string) (*BackupVersion, error)
 }
 

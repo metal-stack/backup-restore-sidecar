@@ -13,7 +13,7 @@ import (
 
 var (
 	Etcd               = "etcd"
-	etcdContainerImage = "quay.io/coreos/etcd:v3.5.7"
+	etcdContainerImage = "quay.io/coreos/etcd:v3.5.14"
 )
 
 func EtcdSts(namespace string) *appsv1.StatefulSet {
@@ -199,7 +199,7 @@ func EtcdSts(namespace string) *appsv1.StatefulSet {
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
 						},
-						Resources: corev1.ResourceRequirements{
+						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{
 								corev1.ResourceStorage: resource.MustParse("1Gi"),
 							},
@@ -214,7 +214,7 @@ func EtcdSts(namespace string) *appsv1.StatefulSet {
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
 						},
-						Resources: corev1.ResourceRequirements{
+						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{
 								corev1.ResourceStorage: resource.MustParse("1Gi"),
 							},
@@ -246,6 +246,7 @@ backup-provider: local
 backup-cron-schedule: "*/1 * * * *"
 object-prefix: etcd-test
 etcd-endpoints: http://localhost:32379
+encryption-key: "01234567891234560123456789123456"
 post-exec-cmds:
 - etcd --data-dir=/data/etcd --listen-client-urls http://0.0.0.0:32379 --advertise-client-urls http://0.0.0.0:32379 --listen-peer-urls http://0.0.0.0:32380 --initial-advertise-peer-urls http://0.0.0.0:32380 --initial-cluster default=http://0.0.0.0:32380 --listen-metrics-urls http://0.0.0.0:32381
 `,

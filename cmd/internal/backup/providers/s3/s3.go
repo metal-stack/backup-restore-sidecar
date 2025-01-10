@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"path"
 	"path/filepath"
 	"strings"
 
@@ -158,17 +157,17 @@ func (b *BackupProviderS3) CleanupBackups(_ context.Context) error {
 }
 
 // DownloadBackup downloads the given backup version to the restoration folder
-func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *providers.BackupVersion) error {
+func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *providers.BackupVersion, outDir string) (string, error) {
 	downloadFileName := version.Name
 	if strings.Contains(downloadFileName, "/") {
 		downloadFileName = filepath.Base(downloadFileName)
 	}
 
-	backupFilePath := path.Join(constants.DownloadDir, downloadFileName)
+	backupFilePath := filepath.Join(outDir, downloadFileName)
 
 	f, err := b.fs.Create(backupFilePath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer f.Close()
 
@@ -179,10 +178,10 @@ func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *provider
 		VersionId: &version.Version,
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
+	return backupFilePath, nil
 }
 
 // UploadBackup uploads a backup to the backup provider

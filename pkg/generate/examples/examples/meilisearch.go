@@ -15,7 +15,7 @@ const (
 	Meilisearch         = "meilisearch"
 	MeilisearchPassword = "test123!"
 
-	meilisearchContainerImage = "getmeili/meilisearch:v1.3.0"
+	meilisearchContainerImage = "getmeili/meilisearch:v1.8.1"
 )
 
 func MeilisearchSts(namespace string) *appsv1.StatefulSet {
@@ -232,7 +232,7 @@ func MeilisearchSts(namespace string) *appsv1.StatefulSet {
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
 						},
-						Resources: corev1.ResourceRequirements{
+						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{
 								corev1.ResourceStorage: resource.MustParse("1Gi"),
 							},
@@ -247,7 +247,7 @@ func MeilisearchSts(namespace string) *appsv1.StatefulSet {
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
 						},
-						Resources: corev1.ResourceRequirements{
+						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{
 								corev1.ResourceStorage: resource.MustParse("1Gi"),
 							},
@@ -279,6 +279,7 @@ backup-provider: local
 backup-cron-schedule: "*/1 * * * *"
 object-prefix: meilisearch-test
 compression-method: targz
+encryption-key: "01234567891234560123456789123456"
 post-exec-cmds:
 - meilisearch --db-path=/data/data.ms/ --dump-dir=/backup/upload/files
 `,

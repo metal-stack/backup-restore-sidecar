@@ -4,6 +4,8 @@ package integration_test
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -22,6 +24,16 @@ func Test_ETCD_Restore(t *testing.T) {
 		backingResources: examples.EtcdBackingResources,
 		addTestData:      addEtcdTestData,
 		verifyTestData:   verifyEtcdTestData,
+	})
+}
+
+func Test_ETCD_RestoreLatestFromMultipleBackups(t *testing.T) {
+	restoreLatestFromMultipleBackupsFlow(t, &flowSpec{
+		databaseType:            examples.Etcd,
+		sts:                     examples.EtcdSts,
+		backingResources:        examples.EtcdBackingResources,
+		addTestDataWithIndex:    addEtcdTestDataWithIndex,
+		verifyTestDataWithIndex: verifyEtcdTestDataWithIndex,
 	})
 }
 
@@ -64,4 +76,24 @@ func verifyEtcdTestData(t *testing.T, ctx context.Context) {
 	ev := resp.Kvs[0]
 	assert.Equal(t, "1", string(ev.Key))
 	assert.Equal(t, "I am precious", string(ev.Value))
+}
+func addEtcdTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
+	cli := newEtcdClient(t, ctx)
+	defer cli.Close()
+
+	_, err := cli.Put(ctx, strconv.Itoa(index), fmt.Sprintf("idx-%d", index))
+	require.NoError(t, err)
+}
+
+func verifyEtcdTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
+	cli := newEtcdClient(t, ctx)
+	defer cli.Close()
+
+	resp, err := cli.Get(ctx, strconv.Itoa(index))
+	require.NoError(t, err)
+	require.Len(t, resp.Kvs, 1)
+
+	ev := resp.Kvs[0]
+	assert.Equal(t, strconv.Itoa(index), string(ev.Key))
+	assert.Equal(t, fmt.Sprintf("idx-%d", index), string(ev.Value))
 }

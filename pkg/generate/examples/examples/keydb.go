@@ -191,7 +191,7 @@ func KeyDBSts(namespace string) *appsv1.StatefulSet {
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
 						},
-						Resources: corev1.ResourceRequirements{
+						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{
 								corev1.ResourceStorage: resource.MustParse("1Gi"),
 							},
@@ -206,7 +206,7 @@ func KeyDBSts(namespace string) *appsv1.StatefulSet {
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
 						},
-						Resources: corev1.ResourceRequirements{
+						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{
 								corev1.ResourceStorage: resource.MustParse("1Gi"),
 							},
@@ -238,6 +238,7 @@ backup-provider: local
 backup-cron-schedule: "*/1 * * * *"
 object-prefix: keydb-test
 redis-addr: localhost:6379
+encryption-key: "01234567891234560123456789123456"
 post-exec-cmds:
 - keydb-server
 `,

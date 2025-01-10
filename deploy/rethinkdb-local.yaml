@@ -30,7 +30,7 @@ spec:
             secretKeyRef:
               key: rethinkdb-password
               name: rethinkdb
-        image: rethinkdb:2.4.0
+        image: rethinkdb:2.4.4-bookworm-slim
         name: rethinkdb
         ports:
         - containerPort: 8080
@@ -48,7 +48,7 @@ spec:
         - backup-restore-sidecar
         - start
         - --log-level=debug
-        image: rethinkdb:2.4.0
+        image: rethinkdb:2.4.4-bookworm-slim
         name: backup-restore-sidecar
         ports:
         - containerPort: 8000
@@ -141,6 +141,7 @@ data:
     rethinkdb-passwordfile: /rethinkdb-secret/rethinkdb-password.txt
     backup-cron-schedule: "*/1 * * * *"
     object-prefix: rethinkdb-test
+    encryption-key: "01234567891234560123456789123456"
     post-exec-cmds:
     # IMPORTANT: the --directory needs to point to the exact sidecar data dir, otherwise the database will be restored to the wrong location
     - rethinkdb --bind all --directory /data/rethinkdb --initial-password ${RETHINKDB_PASSWORD}

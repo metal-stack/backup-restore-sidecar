@@ -82,12 +82,13 @@ func (db *Meilisearch) Backup(ctx context.Context) error {
 
 	dumpTask, err := db.client.WaitForTask(dumpResponse.TaskUID, meilisearch.WaitParams{
 		Context:  ctx,
-		Interval: time.Millisecond * 50,
+		Interval: time.Second,
 	})
 	if err != nil {
 		return err
 	}
-	db.log.Info("dump created successfully", "duration", dumpTask.Duration)
+	dumpDuration := dumpTask.FinishedAt.Sub(dumpTask.EnqueuedAt)
+	db.log.Info("dump created successfully", "duration", dumpDuration.String())
 
 	dumps, err := filepath.Glob(constants.BackupDir + "/*.dump")
 	if err != nil {
