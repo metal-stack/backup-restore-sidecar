@@ -1,5 +1,3 @@
-//go:build integration
-
 package s3
 
 import (
@@ -61,6 +59,7 @@ func Test_BackupProviderS3(t *testing.T) {
 
 	p, err := New(log, &BackupProviderConfigS3{
 		BucketName:   "test",
+		BackupName:   "db",
 		Endpoint:     endpoint,
 		Region:       "dummy",
 		AccessKey:    "ACCESSKEY",
