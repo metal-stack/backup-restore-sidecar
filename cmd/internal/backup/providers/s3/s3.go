@@ -137,8 +137,8 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 					},
 					Status: types.ExpirationStatusEnabled,
 					ID:     aws.String("backup-restore-lifecycle"),
-					Filter: &types.LifecycleRuleFilterMemberPrefix{
-						Value: b.config.ObjectPrefix,
+					Filter: &types.LifecycleRuleFilter{
+						Prefix: aws.String(b.config.ObjectPrefix),
 					},
 				},
 			},
