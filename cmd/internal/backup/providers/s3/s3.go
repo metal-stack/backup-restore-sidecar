@@ -126,7 +126,7 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 		return err
 	}
 
-	// add lifecyle policy
+	// add lifecycle policy
 	_, err = b.c.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
 		Bucket: aws.String(b.config.BucketName),
 		LifecycleConfiguration: &types.BucketLifecycleConfiguration{
@@ -137,8 +137,8 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 					},
 					Status: types.ExpirationStatusEnabled,
 					ID:     aws.String("backup-restore-lifecycle"),
-					Filter: &types.LifecycleRuleFilterMemberPrefix{
-						Value: b.config.ObjectPrefix,
+					Filter: &types.LifecycleRuleFilter{
+						Prefix: aws.String(b.config.ObjectPrefix),
 					},
 				},
 			},
