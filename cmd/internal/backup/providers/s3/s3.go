@@ -13,9 +13,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/spf13/afero"
+
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
-	"github.com/spf13/afero"
 )
 
 const (
@@ -108,8 +109,10 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 		Bucket: aws.String(b.config.BucketName),
 	})
 	if err != nil {
-		var bucketAlreadyExists *types.BucketAlreadyExists
-		var bucketAlreadyOwnerByYou *types.BucketAlreadyOwnedByYou
+		var (
+			bucketAlreadyExists     *types.BucketAlreadyExists
+			bucketAlreadyOwnerByYou *types.BucketAlreadyOwnedByYou
+		)
 		if !errors.As(err, &bucketAlreadyExists) && !errors.As(err, &bucketAlreadyOwnerByYou) {
 			return err
 		}
@@ -228,7 +231,7 @@ func (b *BackupProviderS3) ListBackups(ctx context.Context) (providers.BackupVer
 		return nil, err
 	}
 
-	return BackupVersionsS3{
+	return backupVersionsS3{
 		objectAttrs: it.Versions,
 	}, nil
 }
