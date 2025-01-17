@@ -577,7 +577,7 @@ func initBackupProvider() error {
 			logger.WithGroup("backup"),
 			&s3.BackupProviderConfigS3{
 				ObjectPrefix:  viper.GetString(objectPrefixFlg),
-				ObjectsToKeep: viper.GetInt64(objectsToKeepFlg),
+				ObjectsToKeep: viper.GetInt32(objectsToKeepFlg),
 				Region:        viper.GetString(s3RegionFlg),
 				BucketName:    viper.GetString(s3BucketNameFlg),
 				Endpoint:      viper.GetString(s3EndpointFlg),
