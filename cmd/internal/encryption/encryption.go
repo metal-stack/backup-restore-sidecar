@@ -149,7 +149,7 @@ func (e *Encrypter) openOutputFile(output string) (afero.File, error) {
 	return e.fs.OpenFile(output, os.O_RDWR|os.O_CREATE, 0644)
 }
 
-// generateIV() returns unique initalization vector of same size as cipher block for encryption
+// generateIV() returns unique initialization vector of same size as cipher block for encryption
 func (e *Encrypter) generateIV(block cipher.Block) ([]byte, error) {
 	iv := make([]byte, block.BlockSize())
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
