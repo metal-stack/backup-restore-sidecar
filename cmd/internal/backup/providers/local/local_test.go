@@ -30,8 +30,8 @@ func Test_BackupProviderLocal(t *testing.T) {
 			compressor, err := compress.New("targz")
 			require.NoError(t, err)
 			p, err := New(log, &BackupProviderConfigLocal{
-				FS:         fs,
-				Compressor: compressor,
+				FS:     fs,
+				Suffix: compressor.Extension(),
 			})
 			require.NoError(t, err)
 			require.NotNil(t, p)

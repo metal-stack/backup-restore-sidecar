@@ -75,7 +75,7 @@ func Test_BackupProviderGCP(t *testing.T) {
 		ProjectID:      "test-project-id",
 		FS:             fs,
 		ClientOpts:     []option.ClientOption{option.WithEndpoint(endpoint), option.WithHTTPClient(httpClient)},
-		Compressor:     compressor,
+		Suffix:         compressor.Extension(),
 	})
 
 	require.NoError(t, err)

@@ -15,24 +15,21 @@ import (
 	"github.com/spf13/afero"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 )
 
 const (
-	ProviderConstant = "db"
+	defaultBackupName = "db"
 )
 
 // BackupProviderS3 implements the backup provider interface for S3
 type BackupProviderS3 struct {
-	fs         afero.Fs
-	log        *slog.Logger
-	c          *s3.Client
-	config     *BackupProviderConfigS3
-	encrypter  *encryption.Encrypter
-	compressor *compress.Compressor
+	fs     afero.Fs
+	log    *slog.Logger
+	c      *s3.Client
+	config *BackupProviderConfigS3
+	suffix string
 }
 
 // BackupProviderConfigS3 provides configuration for the BackupProviderS3
@@ -46,8 +43,7 @@ type BackupProviderConfigS3 struct {
 	ObjectPrefix  string
 	ObjectsToKeep int32
 	FS            afero.Fs
-	Encrypter     *encryption.Encrypter
-	Compressor    *compress.Compressor
+	Suffix        string
 }
 
 func (c *BackupProviderConfigS3) validate() error {
@@ -77,7 +73,7 @@ func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, erro
 		cfg.ObjectsToKeep = constants.DefaultObjectsToKeep
 	}
 	if cfg.BackupName == "" {
-		cfg.BackupName = ProviderConstant
+		cfg.BackupName = defaultBackupName
 	}
 	if cfg.FS == nil {
 		cfg.FS = afero.NewOsFs()
@@ -101,12 +97,11 @@ func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, erro
 	})
 
 	return &BackupProviderS3{
-		c:          client,
-		config:     cfg,
-		log:        log,
-		fs:         cfg.FS,
-		encrypter:  cfg.Encrypter,
-		compressor: cfg.Compressor,
+		c:      client,
+		config: cfg,
+		log:    log,
+		fs:     cfg.FS,
+		suffix: cfg.Suffix,
 	}, nil
 }
 
@@ -197,13 +192,7 @@ func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *provider
 func (b *BackupProviderS3) UploadBackup(ctx context.Context, reader io.Reader) error {
 	bucket := aws.String(b.config.BucketName)
 
-	destination := ProviderConstant
-	if b.compressor != nil {
-		destination += b.compressor.Extension()
-	}
-	if b.encrypter != nil {
-		destination += b.encrypter.Extension()
-	}
+	destination := defaultBackupName + b.suffix
 
 	if b.config.ObjectPrefix != "" {
 		destination = b.config.ObjectPrefix + "/" + destination

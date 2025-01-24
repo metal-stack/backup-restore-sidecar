@@ -12,25 +12,23 @@ import (
 	"errors"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
 )
 
 const (
 	defaultLocalBackupPath = constants.SidecarBaseDir + "/local-provider"
-	ProviderConstant       = "db"
+	defaultBackupName      = "db"
 )
 
 // BackupProviderLocal implements the backup provider interface for no backup provider (useful to disable sidecar functionality in development environments)
 type BackupProviderLocal struct {
-	fs              afero.Fs
-	log             *slog.Logger
-	config          *BackupProviderConfigLocal
-	nextBackupCount int64
-	encrypter       *encryption.Encrypter
-	compressor      *compress.Compressor
+	fs                afero.Fs
+	log               *slog.Logger
+	config            *BackupProviderConfigLocal
+	nextBackupCount   int64
+	suffix            string
+	currentBackupName string
 }
 
 // BackupProviderConfigLocal provides configuration for the BackupProviderLocal
@@ -38,8 +36,7 @@ type BackupProviderConfigLocal struct {
 	LocalBackupPath string
 	ObjectsToKeep   int64
 	FS              afero.Fs
-	Encrypter       *encryption.Encrypter
-	Compressor      *compress.Compressor
+	Suffix          string
 }
 
 func (c *BackupProviderConfigLocal) validate() error {
@@ -68,11 +65,10 @@ func New(log *slog.Logger, config *BackupProviderConfigLocal) (*BackupProviderLo
 	}
 
 	return &BackupProviderLocal{
-		config:     config,
-		log:        log,
-		fs:         config.FS,
-		encrypter:  config.Encrypter,
-		compressor: config.Compressor,
+		config: config,
+		log:    log,
+		fs:     config.FS,
+		suffix: config.Suffix,
 	}, nil
 }
 
@@ -118,15 +114,9 @@ func (b *BackupProviderLocal) DownloadBackup(_ context.Context, version *provide
 func (b *BackupProviderLocal) UploadBackup(ctx context.Context, reader io.Reader) error {
 	b.log.Info("upload backups called for provider local")
 
-	destination := b.config.LocalBackupPath + "/" + b.GetNextBackupName(ctx)
-	b.nextBackupCount++
-	b.nextBackupCount = b.nextBackupCount % b.config.ObjectsToKeep
-	if b.compressor != nil {
-		destination = destination + b.compressor.Extension()
-	}
-	if b.encrypter != nil {
-		destination = destination + b.encrypter.Extension()
-	}
+	destination := b.config.LocalBackupPath + "/" + b.currentBackupName + b.suffix
+	fmt.Println("dest of provider file: ", "dest", destination)
+
 	output, err := b.fs.Create(destination)
 	if err != nil {
 		return fmt.Errorf("could not create file %s: %w", destination, err)
@@ -143,6 +133,9 @@ func (b *BackupProviderLocal) UploadBackup(ctx context.Context, reader io.Reader
 // GetNextBackupName returns a name for the next backup archive that is going to be uploaded
 func (b *BackupProviderLocal) GetNextBackupName(_ context.Context) string {
 	name := strconv.FormatInt(b.nextBackupCount, 10)
+	b.nextBackupCount++
+	b.nextBackupCount = b.nextBackupCount % b.config.ObjectsToKeep
+	b.currentBackupName = name
 	return name
 }
 

@@ -67,7 +67,7 @@ func Test_BackupProviderS3(t *testing.T) {
 		SecretKey:    "SECRETKEY",
 		ObjectPrefix: prefix,
 		FS:           fs,
-		Compressor:   compressor,
+		Suffix:       compressor.Extension(),
 	})
 	require.NoError(t, err)
 	require.NotNil(t, p)

@@ -565,19 +565,24 @@ func initEncrypter() error {
 func initCompressor() error {
 	var err error
 	key := viper.GetString(compressionMethod)
-	if key != "" {
-		compressor, err = compress.New(key)
-		if err != nil {
-			return fmt.Errorf("unable to initialize compressor: %w", err)
-		}
-		logger.Info("initialized compressor")
+	compressor, err = compress.New(key)
+	if err != nil {
+		return fmt.Errorf("unable to initialize compressor: %w", err)
 	}
+	logger.Info("initialized compressor")
 	return nil
 }
 
 func initBackupProvider() error {
 	bpString := viper.GetString(backupProviderFlg)
 	var err error
+	suffix := ""
+	if compressor != nil {
+		suffix += compressor.Extension()
+	}
+	if encrypter != nil {
+		suffix += encrypter.Extension()
+	}
 	switch bpString {
 	case "gcp":
 		bp, err = gcp.New(
@@ -589,6 +594,7 @@ func initBackupProvider() error {
 				ProjectID:      viper.GetString(gcpProjectFlg),
 				BucketName:     viper.GetString(gcpBucketNameFlg),
 				BucketLocation: viper.GetString(gcpBucketLocationFlg),
+				Suffix:         suffix,
 			},
 		)
 	case "s3":
@@ -602,6 +608,7 @@ func initBackupProvider() error {
 				Endpoint:      viper.GetString(s3EndpointFlg),
 				AccessKey:     viper.GetString(s3AccessKeyFlg),
 				SecretKey:     viper.GetString(s3SecretKeyFlg),
+				Suffix:        suffix,
 			},
 		)
 	case "local":
@@ -610,8 +617,7 @@ func initBackupProvider() error {
 			&local.BackupProviderConfigLocal{
 				LocalBackupPath: viper.GetString(localBackupPathFlg),
 				ObjectsToKeep:   viper.GetInt64(objectsToKeepFlg),
-				Encrypter:       encrypter,
-				Compressor:      compressor,
+				Suffix:          suffix,
 			},
 		)
 	default:
