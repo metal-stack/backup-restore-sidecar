@@ -3,6 +3,7 @@ package backup
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path"
@@ -106,11 +107,16 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 		b.metrics.CountError("compress")
 		return fmt.Errorf("unable to compress backup: %w", err)
 	}
-
 	b.log.Info("compressed backup")
 
+	reader, err := os.Open(filename)
+	if err != nil {
+		b.metrics.CountError("open")
+		return fmt.Errorf("unable to open compressed backup for encryption: %w", err)
+	}
+	pr, pw := io.Pipe()
 	if b.encrypter != nil {
-		filename, err = b.encrypter.Encrypt(filename)
+		err = b.encrypter.Encrypt(reader, pw)
 		if err != nil {
 			b.metrics.CountError("encrypt")
 			return fmt.Errorf("error encrypting backup: %w", err)
@@ -118,18 +124,11 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 		b.log.Info("encrypted backup")
 	}
 
-	file, err := os.Open(filename)
-	if err != nil {
-		b.metrics.CountError("open")
-		return fmt.Errorf("error opening backup file: %w", err)
-	}
-
-	err = b.bp.UploadBackup(ctx, file)
+	err = b.bp.UploadBackup(ctx, pr)
 	if err != nil {
 		b.metrics.CountError("upload")
 		return fmt.Errorf("error uploading backup: %w", err)
 	}
-
 	b.log.Info("uploaded backup to backup provider bucket")
 
 	b.metrics.CountBackup(filename)

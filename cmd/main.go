@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -306,7 +307,8 @@ var downloadBackupCmd = &cobra.Command{
 			return fmt.Errorf("failed opening output file: %w", err)
 		}
 
-		err = bp.DownloadBackup(context.Background(), &providers.BackupVersion{Name: backup.GetBackup().GetName()}, outputFile)
+		pr, pw := io.Pipe()
+		err = bp.DownloadBackup(context.Background(), &providers.BackupVersion{Name: backup.GetBackup().GetName()}, pw)
 
 		if err != nil {
 			return fmt.Errorf("failed downloading backup: %w", err)
@@ -314,7 +316,7 @@ var downloadBackupCmd = &cobra.Command{
 
 		if encrypter != nil {
 			if encryption.IsEncrypted(outputPath) {
-				_, err = encrypter.Decrypt(outputPath)
+				err = encrypter.Decrypt(pr, outputFile)
 				if err != nil {
 					return fmt.Errorf("unable to decrypt backup: %w", err)
 				}

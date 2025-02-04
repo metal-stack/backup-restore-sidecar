@@ -3,6 +3,7 @@ package initializer
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"os"
@@ -220,14 +221,15 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 
 	i.log.Info("downloading backup", "version", version.Version, "path", backupFilePath)
 
-	err = i.bp.DownloadBackup(ctx, version, outputFile)
+	pr, pw := io.Pipe()
+	err = i.bp.DownloadBackup(ctx, version, pw)
 	if err != nil {
 		return fmt.Errorf("unable to download backup: %w", err)
 	}
 
 	if i.encrypter != nil {
 		if encryption.IsEncrypted(backupFilePath) {
-			backupFilePath, err = i.encrypter.Decrypt(backupFilePath)
+			err = i.encrypter.Decrypt(pr, outputFile)
 			if err != nil {
 				return fmt.Errorf("unable to decrypt backup: %w", err)
 			}
