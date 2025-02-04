@@ -3,9 +3,8 @@ package s3
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
-	"path/filepath"
-	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -16,6 +15,7 @@ import (
 	"github.com/spf13/afero"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 )
 
@@ -29,6 +29,7 @@ type BackupProviderS3 struct {
 	log    *slog.Logger
 	c      *s3.Client
 	config *BackupProviderConfigS3
+	suffix string
 }
 
 // BackupProviderConfigS3 provides configuration for the BackupProviderS3
@@ -42,6 +43,7 @@ type BackupProviderConfigS3 struct {
 	ObjectPrefix  string
 	ObjectsToKeep int32
 	FS            afero.Fs
+	Suffix        string
 }
 
 func (c *BackupProviderConfigS3) validate() error {
@@ -99,6 +101,7 @@ func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, erro
 		config: cfg,
 		log:    log,
 		fs:     cfg.FS,
+		suffix: cfg.Suffix,
 	}, nil
 }
 
@@ -159,54 +162,49 @@ func (b *BackupProviderS3) CleanupBackups(_ context.Context) error {
 	return nil
 }
 
-// DownloadBackup downloads the given backup version to the restoration folder
-func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *providers.BackupVersion, outDir string) (string, error) {
-	downloadFileName := version.Name
-	if strings.Contains(downloadFileName, "/") {
-		downloadFileName = filepath.Base(downloadFileName)
-	}
-
-	backupFilePath := filepath.Join(outDir, downloadFileName)
-
-	f, err := b.fs.Create(backupFilePath)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
+// DownloadBackup downloads the given backup version to the specified folder
+func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *providers.BackupVersion, writer io.Writer) error {
+	bucket := aws.String(b.config.BucketName)
 
 	downloader := manager.NewDownloader(b.c)
-	_, err = downloader.Download(ctx, f, &s3.GetObjectInput{
-		Bucket:    aws.String(b.config.BucketName),
-		Key:       &version.Name,
-		VersionId: &version.Version,
-	})
-	if err != nil {
-		return "", err
-	}
+	// we need to download the backup sequentially since we fake the download with a io.Writer instead of io.WriterAt
+	downloader.Concurrency = 1
 
-	return backupFilePath, nil
-}
+	b.log.Info("downloading", "object", version.Name, "get", version.Version)
 
-// UploadBackup uploads a backup to the backup provider
-func (b *BackupProviderS3) UploadBackup(ctx context.Context, sourcePath string) error {
-	r, err := b.fs.Open(sourcePath)
+	streamWriter := utils.NewSequentialWriterAt(writer)
+	_, err := downloader.Download(
+		ctx,
+		streamWriter,
+		&s3.GetObjectInput{
+			Bucket:    bucket,
+			Key:       &version.Name,
+			VersionId: &version.Version,
+		})
 	if err != nil {
 		return err
 	}
-	defer r.Close()
 
-	destination := filepath.Base(sourcePath)
+	return nil
+}
+
+// UploadBackup uploads a backup to the backup provider
+func (b *BackupProviderS3) UploadBackup(ctx context.Context, reader io.Reader) error {
+	bucket := aws.String(b.config.BucketName)
+
+	destination := defaultBackupName + b.suffix
+
 	if b.config.ObjectPrefix != "" {
 		destination = b.config.ObjectPrefix + "/" + destination
 	}
 
-	b.log.Debug("uploading object", "src", sourcePath, "dest", destination)
+	b.log.Debug("uploading object", "dest", destination)
 
 	uploader := manager.NewUploader(b.c)
-	_, err = uploader.Upload(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(b.config.BucketName),
+	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
+		Bucket: bucket,
 		Key:    aws.String(destination),
-		Body:   r,
+		Body:   reader,
 	})
 	if err != nil {
 		return err

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
@@ -101,12 +102,13 @@ const (
 )
 
 var (
-	cfgFile   string
-	logger    *slog.Logger
-	db        database.Database
-	bp        providers.BackupProvider
-	encrypter *encryption.Encrypter
-	stop      context.Context
+	cfgFile    string
+	logger     *slog.Logger
+	db         database.Database
+	bp         providers.BackupProvider
+	encrypter  *encryption.Encrypter
+	compressor *compress.Compressor
+	stop       context.Context
 )
 
 var rootCmd = &cobra.Command{
@@ -133,6 +135,9 @@ var startCmd = &cobra.Command{
 		if err := initEncrypter(); err != nil {
 			return err
 		}
+		if err := initCompressor(); err != nil {
+			return err
+		}
 		return initBackupProvider()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -151,11 +156,6 @@ var startCmd = &cobra.Command{
 
 		logger.Info("starting backup-restore-sidecar", "version", v.V, "bind-addr", addr)
 
-		comp, err := compress.New(viper.GetString(compressionMethod))
-		if err != nil {
-			return err
-		}
-
 		metrics := metrics.New()
 		metrics.Start(logger.WithGroup("metrics"))
 
@@ -165,11 +165,11 @@ var startCmd = &cobra.Command{
 			DatabaseProber: db,
 			BackupProvider: bp,
 			Metrics:        metrics,
-			Compressor:     comp,
+			Compressor:     compressor,
 			Encrypter:      encrypter,
 		})
 
-		if err := initializer.New(logger.WithGroup("initializer"), addr, db, bp, comp, metrics, viper.GetString(databaseDatadirFlg), encrypter).Start(stop, backuper); err != nil {
+		if err := initializer.New(logger.WithGroup("initializer"), addr, db, bp, compressor, metrics, viper.GetString(databaseDatadirFlg), encrypter).Start(stop, backuper); err != nil {
 			return err
 		}
 
@@ -300,15 +300,21 @@ var downloadBackupCmd = &cobra.Command{
 
 		output := viper.GetString(downloadOutputFlg)
 
-		destination, err := bp.DownloadBackup(context.Background(), &providers.BackupVersion{Name: backup.GetBackup().GetName()}, output)
+		outputPath := filepath.Join(output, backup.GetBackup().GetName())
+		outputFile, err := os.Open(outputPath)
+		if err != nil {
+			return fmt.Errorf("failed opening output file: %w", err)
+		}
+
+		err = bp.DownloadBackup(context.Background(), &providers.BackupVersion{Name: backup.GetBackup().GetName()}, outputFile)
 
 		if err != nil {
 			return fmt.Errorf("failed downloading backup: %w", err)
 		}
 
 		if encrypter != nil {
-			if encryption.IsEncrypted(destination) {
-				_, err = encrypter.Decrypt(destination)
+			if encryption.IsEncrypted(outputPath) {
+				_, err = encrypter.Decrypt(outputPath)
 				if err != nil {
 					return fmt.Errorf("unable to decrypt backup: %w", err)
 				}
@@ -556,9 +562,27 @@ func initEncrypter() error {
 	return nil
 }
 
+func initCompressor() error {
+	var err error
+	key := viper.GetString(compressionMethod)
+	compressor, err = compress.New(key)
+	if err != nil {
+		return fmt.Errorf("unable to initialize compressor: %w", err)
+	}
+	logger.Info("initialized compressor")
+	return nil
+}
+
 func initBackupProvider() error {
 	bpString := viper.GetString(backupProviderFlg)
 	var err error
+	suffix := ""
+	if compressor != nil {
+		suffix += compressor.Extension()
+	}
+	if encrypter != nil {
+		suffix += encrypter.Extension()
+	}
 	switch bpString {
 	case "gcp":
 		bp, err = gcp.New(
@@ -570,6 +594,7 @@ func initBackupProvider() error {
 				ProjectID:      viper.GetString(gcpProjectFlg),
 				BucketName:     viper.GetString(gcpBucketNameFlg),
 				BucketLocation: viper.GetString(gcpBucketLocationFlg),
+				Suffix:         suffix,
 			},
 		)
 	case "s3":
@@ -583,6 +608,7 @@ func initBackupProvider() error {
 				Endpoint:      viper.GetString(s3EndpointFlg),
 				AccessKey:     viper.GetString(s3AccessKeyFlg),
 				SecretKey:     viper.GetString(s3SecretKeyFlg),
+				Suffix:        suffix,
 			},
 		)
 	case "local":
@@ -591,6 +617,7 @@ func initBackupProvider() error {
 			&local.BackupProviderConfigLocal{
 				LocalBackupPath: viper.GetString(localBackupPathFlg),
 				ObjectsToKeep:   viper.GetInt64(objectsToKeepFlg),
+				Suffix:          suffix,
 			},
 		)
 	default:

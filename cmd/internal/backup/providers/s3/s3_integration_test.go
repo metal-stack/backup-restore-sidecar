@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
@@ -49,11 +50,14 @@ func Test_BackupProviderS3(t *testing.T) {
 	var (
 		endpoint           = conn.Endpoint
 		backupAmount       = 5
-		expectedBackupName = defaultBackupName + ".tar.gz"
+		expectedBackupName = "db.tar.gz"
 		prefix             = fmt.Sprintf("test-with-%d", backupAmount)
 
 		fs = afero.NewMemMapFs()
 	)
+
+	compressor, err := compress.New("targz")
+	require.NoError(t, err)
 
 	p, err := New(log, &BackupProviderConfigS3{
 		BucketName:   "test",
@@ -63,6 +67,7 @@ func Test_BackupProviderS3(t *testing.T) {
 		SecretKey:    "SECRETKEY",
 		ObjectPrefix: prefix,
 		FS:           fs,
+		Suffix:       compressor.Extension(),
 	})
 	require.NoError(t, err)
 	require.NotNil(t, p)
@@ -87,7 +92,9 @@ func Test_BackupProviderS3(t *testing.T) {
 			err = afero.WriteFile(fs, backupPath, []byte(backupContent), 0600)
 			require.NoError(t, err)
 
-			err = p.UploadBackup(ctx, backupPath)
+			backupFile, err := fs.Open(backupPath)
+			require.NoError(t, err)
+			err = p.UploadBackup(ctx, backupFile)
 			require.NoError(t, err)
 
 			// cleaning up after test
@@ -147,17 +154,19 @@ func Test_BackupProviderS3(t *testing.T) {
 		latestVersion := versions.Latest()
 		require.NotNil(t, latestVersion)
 
-		backupFilePath, err := p.DownloadBackup(ctx, latestVersion, "")
+		outputFile, err := fs.Create("outputfile")
+		require.NoError(t, err)
+		err = p.DownloadBackup(ctx, latestVersion, outputFile)
 		require.NoError(t, err)
 
-		gotContent, err := afero.ReadFile(fs, backupFilePath)
+		gotContent, err := afero.ReadFile(fs, outputFile.Name())
 		require.NoError(t, err)
 
 		backupContent := fmt.Sprintf("precious data %d", backupAmount-1)
 		require.Equal(t, backupContent, string(gotContent))
 
 		// cleaning up after test
-		err = fs.Remove(backupFilePath)
+		err = fs.Remove(outputFile.Name())
 		require.NoError(t, err)
 	})
 

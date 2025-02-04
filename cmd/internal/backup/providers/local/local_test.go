@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
@@ -26,8 +27,11 @@ func Test_BackupProviderLocal(t *testing.T) {
 		t.Run(fmt.Sprintf("testing with %d backups", backupAmount), func(t *testing.T) {
 			fs := afero.NewMemMapFs()
 
+			compressor, err := compress.New("targz")
+			require.NoError(t, err)
 			p, err := New(log, &BackupProviderConfigLocal{
-				FS: fs,
+				FS:     fs,
+				Suffix: compressor.Extension(),
 			})
 			require.NoError(t, err)
 			require.NotNil(t, p)
@@ -47,18 +51,21 @@ func Test_BackupProviderLocal(t *testing.T) {
 
 			t.Run("verify upload", func(t *testing.T) {
 				for i := range backupAmount {
-					backupName := p.GetNextBackupName(ctx) + ".tar.gz"
+					backupName := p.GetNextBackupName(ctx) + compressor.Extension()
 					backupPath := path.Join(constants.UploadDir, backupName)
 					backupContent := fmt.Sprintf("precious data %d", i+1)
 
 					err = afero.WriteFile(fs, backupPath, []byte(backupContent), 0600)
 					require.NoError(t, err)
 
-					err = p.UploadBackup(ctx, backupPath)
+					infile, err := fs.Open(backupPath)
+					require.NoError(t, err)
+
+					err = p.UploadBackup(ctx, infile)
 					require.NoError(t, err)
 
 					localPath := path.Join(localProviderBackupPath, backupName)
-					_, err := fs.Stat(localPath)
+					_, err = fs.Stat(localPath)
 					require.NoError(t, err)
 
 					backupFiles, err := afero.ReadDir(fs, localProviderBackupPath)
@@ -130,16 +137,19 @@ func Test_BackupProviderLocal(t *testing.T) {
 				latestVersion := versions.Latest()
 				require.NotNil(t, latestVersion)
 
-				backupFilePath, err := p.DownloadBackup(ctx, latestVersion, "")
+				outputFile, err := fs.Create("output.tar.gz")
 				require.NoError(t, err)
 
-				gotContent, err := afero.ReadFile(fs, backupFilePath)
+				err = p.DownloadBackup(ctx, latestVersion, outputFile)
+				require.NoError(t, err)
+
+				gotContent, err := afero.ReadFile(fs, outputFile.Name())
 				require.NoError(t, err)
 
 				require.Equal(t, fmt.Sprintf("precious data %d", backupAmount), string(gotContent))
 
 				// cleaning up after test
-				err = fs.Remove(backupFilePath)
+				err = fs.Remove(outputFile.Name())
 				require.NoError(t, err)
 			})
 

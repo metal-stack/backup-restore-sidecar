@@ -6,9 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"path/filepath"
 	"strconv"
-	"strings"
 
 	"errors"
 
@@ -33,6 +31,7 @@ type BackupProviderGCP struct {
 	log    *slog.Logger
 	c      *storage.Client
 	config *BackupProviderConfigGCP
+	suffix string
 }
 
 // BackupProviderConfigGCP provides configuration for the BackupProviderGCP
@@ -45,6 +44,7 @@ type BackupProviderConfigGCP struct {
 	ProjectID      string
 	FS             afero.Fs
 	ClientOpts     []option.ClientOption
+	Suffix         string
 }
 
 func (c *BackupProviderConfigGCP) validate() error {
@@ -94,6 +94,7 @@ func New(ctx context.Context, log *slog.Logger, config *BackupProviderConfigGCP)
 		config: config,
 		log:    log,
 		fs:     config.FS,
+		suffix: config.Suffix,
 	}, nil
 }
 
@@ -147,63 +148,45 @@ func (b *BackupProviderGCP) CleanupBackups(_ context.Context) error {
 }
 
 // DownloadBackup downloads the given backup version to the specified folder
-func (b *BackupProviderGCP) DownloadBackup(ctx context.Context, version *providers.BackupVersion, outDir string) (string, error) {
+func (b *BackupProviderGCP) DownloadBackup(ctx context.Context, version *providers.BackupVersion, writer io.Writer) error {
 	gen, err := strconv.ParseInt(version.Version, 10, 64)
-	if err != nil {
-		return "", err
-	}
-
-	bucket := b.c.Bucket(b.config.BucketName)
-
-	downloadFileName := version.Name
-	if strings.Contains(downloadFileName, "/") {
-		downloadFileName = filepath.Base(downloadFileName)
-	}
-
-	backupFilePath := filepath.Join(outDir, downloadFileName)
-
-	b.log.Info("downloading", "object", version.Name, "gen", gen, "to", backupFilePath)
-
-	r, err := bucket.Object(version.Name).Generation(gen).NewReader(ctx)
-	if err != nil {
-		return "", fmt.Errorf("backup not found: %w", err)
-	}
-	defer r.Close()
-
-	f, err := b.fs.Create(backupFilePath)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	_, err = io.Copy(f, r)
-	if err != nil {
-		return "", fmt.Errorf("error writing file from gcp to filesystem: %w", err)
-	}
-
-	return backupFilePath, nil
-}
-
-// UploadBackup uploads a backup to the backup provider
-func (b *BackupProviderGCP) UploadBackup(ctx context.Context, sourcePath string) error {
-	bucket := b.c.Bucket(b.config.BucketName)
-
-	r, err := b.fs.Open(sourcePath)
 	if err != nil {
 		return err
 	}
+
+	bucket := b.c.Bucket(b.config.BucketName)
+
+	b.log.Info("downloading", "object", version.Name, "gen", gen)
+
+	r, err := bucket.Object(version.Name).Generation(gen).NewReader(ctx)
+	if err != nil {
+		return fmt.Errorf("backup not found: %w", err)
+	}
 	defer r.Close()
 
-	destination := filepath.Base(sourcePath)
+	_, err = io.Copy(writer, r)
+	if err != nil {
+		return fmt.Errorf("error writing file from gcp to filesystem: %w", err)
+	}
+
+	return nil
+}
+
+// UploadBackup uploads a backup to the backup ovider
+func (b *BackupProviderGCP) UploadBackup(ctx context.Context, reader io.Reader) error {
+	bucket := b.c.Bucket(b.config.BucketName)
+
+	destination := defaultBackupName + b.suffix
+
 	if b.config.ObjectPrefix != "" {
 		destination = b.config.ObjectPrefix + "/" + destination
 	}
 
-	b.log.Debug("uploading object", "src", sourcePath, "dest", destination)
+	b.log.Debug("uploading object", "dest", destination)
 
 	obj := bucket.Object(destination)
 	w := obj.NewWriter(ctx)
-	if _, err := io.Copy(w, r); err != nil {
+	if _, err := io.Copy(w, reader); err != nil {
 		return err
 	}
 	defer w.Close()

@@ -3,6 +3,7 @@ package local
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -11,21 +12,23 @@ import (
 	"errors"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/spf13/afero"
 )
 
 const (
 	defaultLocalBackupPath = constants.SidecarBaseDir + "/local-provider"
+	defaultBackupName      = "db"
 )
 
 // BackupProviderLocal implements the backup provider interface for no backup provider (useful to disable sidecar functionality in development environments)
 type BackupProviderLocal struct {
-	fs              afero.Fs
-	log             *slog.Logger
-	config          *BackupProviderConfigLocal
-	nextBackupCount int64
+	fs                afero.Fs
+	log               *slog.Logger
+	config            *BackupProviderConfigLocal
+	nextBackupCount   int64
+	suffix            string
+	currentBackupName string
 }
 
 // BackupProviderConfigLocal provides configuration for the BackupProviderLocal
@@ -33,6 +36,7 @@ type BackupProviderConfigLocal struct {
 	LocalBackupPath string
 	ObjectsToKeep   int64
 	FS              afero.Fs
+	Suffix          string
 }
 
 func (c *BackupProviderConfigLocal) validate() error {
@@ -64,6 +68,7 @@ func New(log *slog.Logger, config *BackupProviderConfigLocal) (*BackupProviderLo
 		config: config,
 		log:    log,
 		fs:     config.FS,
+		suffix: config.Suffix,
 	}, nil
 }
 
@@ -86,28 +91,38 @@ func (b *BackupProviderLocal) CleanupBackups(_ context.Context) error {
 }
 
 // DownloadBackup downloads the given backup version to the specified folder
-func (b *BackupProviderLocal) DownloadBackup(_ context.Context, version *providers.BackupVersion, outDir string) (string, error) {
+func (b *BackupProviderLocal) DownloadBackup(_ context.Context, version *providers.BackupVersion, writer io.Writer) error {
 	b.log.Info("download backup called for provider local")
 
 	source := filepath.Join(b.config.LocalBackupPath, version.Name)
 
-	backupFilePath := filepath.Join(outDir, version.Name)
-
-	err := utils.Copy(b.fs, source, backupFilePath)
+	infile, err := b.fs.Open(source)
 	if err != nil {
-		return "", err
+		return fmt.Errorf("could not open file %s: %w", source, err)
+	}
+	defer infile.Close()
+
+	_, err = io.Copy(writer, infile)
+	if err != nil {
+		return err
 	}
 
-	return backupFilePath, err
+	return err
 }
 
-// UploadBackup uploads a backup to the backup provider
-func (b *BackupProviderLocal) UploadBackup(_ context.Context, sourcePath string) error {
+// UploadBackup uploads a backup to the backup provider by providing a reader to the backup archive
+func (b *BackupProviderLocal) UploadBackup(ctx context.Context, reader io.Reader) error {
 	b.log.Info("upload backups called for provider local")
 
-	destination := filepath.Join(b.config.LocalBackupPath, filepath.Base(sourcePath))
+	destination := b.config.LocalBackupPath + "/" + b.currentBackupName + b.suffix
+	fmt.Println("dest of provider file: ", "dest", destination)
 
-	err := utils.Copy(b.fs, sourcePath, destination)
+	output, err := b.fs.Create(destination)
+	if err != nil {
+		return fmt.Errorf("could not create file %s: %w", destination, err)
+	}
+
+	_, err = io.Copy(output, reader)
 	if err != nil {
 		return err
 	}
@@ -120,6 +135,7 @@ func (b *BackupProviderLocal) GetNextBackupName(_ context.Context) string {
 	name := strconv.FormatInt(b.nextBackupCount, 10)
 	b.nextBackupCount++
 	b.nextBackupCount = b.nextBackupCount % b.config.ObjectsToKeep
+	b.currentBackupName = name
 	return name
 }
 
