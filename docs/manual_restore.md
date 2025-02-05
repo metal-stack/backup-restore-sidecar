@@ -7,7 +7,7 @@ The advantage of the backup-restore-sidecar is that it automatically restores th
 3. Deploy the exact stateful set you had but only with the backup-restore-sidecar container and tail some file such that container does not die. This is your "helper" stateful set, which you can use for manual administration. 
    - For postgres check the example [here](../deploy/postgres_manual_restore.yaml)
    - For rethinkdb check the example [here](../deploy/rethinkdb_manual_restore.yaml)
-4. Enter the container in your "helper" pod by running `kubectl exec -it <your-database-helper-pod>-0 -c backup-restore-container -- bash`
+4. Enter the container in your "helper" pod by running `kubectl exec -it <your-database-helper-pod>-0 -c backup-restore-sidecar -- bash`
 5. Inside the container, you can view the existing backup versions using `backup-restore-sidecar restore ls`
 6. Choose the version to restore by running `backup-restore-sidecar restore <version>`
 7. The backup was now restored, you can exit the container and remove the "helper" stateful set `kubectl delete sts <helper-sts-name>` but keep the pvc!
