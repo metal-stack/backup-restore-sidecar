@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -308,10 +309,24 @@ var downloadBackupCmd = &cobra.Command{
 		}
 
 		pr, pw := io.Pipe()
-		err = bp.DownloadBackup(context.Background(), &providers.BackupVersion{Name: backup.GetBackup().GetName()}, pw)
-
+		downloadErr := make(chan error, 1)
+		downloadBuffer := &bytes.Buffer{}
+		go func() {
+			defer pw.Close()
+			err := bp.DownloadBackup(context.Background(), &providers.BackupVersion{Name: backup.GetBackup().GetName()}, pw)
+			if err != nil {
+				downloadErr <- err
+			}
+		}()
+		go func() {
+			_, err := io.Copy(downloadBuffer, pr)
+			if err != nil {
+				downloadErr <- err
+			}
+		}()
+		err = <-downloadErr
 		if err != nil {
-			return fmt.Errorf("failed downloading backup: %w", err)
+			return fmt.Errorf("unable to download backukp: %w", err)
 		}
 
 		if encrypter != nil {

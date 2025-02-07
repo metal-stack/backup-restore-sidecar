@@ -213,29 +213,42 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 		return fmt.Errorf("could not delete priorly downloaded file: %w", err)
 	}
 
-	outputFile, err := os.Create(backupFilePath)
-	if err != nil {
-		return fmt.Errorf("could not open file for writing: %w", err)
-	}
-	defer outputFile.Close()
-
 	i.log.Info("downloading backup", "version", version.Version, "path", backupFilePath)
 
 	pr, pw := io.Pipe()
-	err = i.bp.DownloadBackup(ctx, version, pw)
+	downloadErr := make(chan error, 1)
+	go func() {
+		defer pw.Close()
+		defer close(downloadErr)
+
+		err := i.bp.DownloadBackup(ctx, version, pw)
+		if err != nil {
+			i.metrics.CountError("donwload")
+			downloadErr <- err
+		}
+	}()
+	err := <-downloadErr
 	if err != nil {
 		return fmt.Errorf("unable to download backup: %w", err)
 	}
 
 	if i.encrypter != nil {
 		if encryption.IsEncrypted(backupFilePath) {
+			backupFilePath = strings.Trim(backupFilePath, i.encrypter.Extension())
+			outputFile, err := os.Create(backupFilePath)
+			if err != nil {
+				return fmt.Errorf("unable to create outputfile")
+			}
 			err = i.encrypter.Decrypt(pr, outputFile)
 			if err != nil {
 				return fmt.Errorf("unable to decrypt backup: %w", err)
 			}
 		} else {
+			encryption.SkipDecryption(backupFilePath, pr)
 			i.log.Info("restoring unencrypted backup with configured encryption - skipping decryption...")
 		}
+	} else {
+		encryption.SkipDecryption(backupFilePath, pr)
 	}
 
 	i.currentStatus.Message = "uncompressing backup"

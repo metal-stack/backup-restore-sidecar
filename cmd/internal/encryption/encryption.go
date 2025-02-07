@@ -62,6 +62,7 @@ func (e *Encrypter) Encrypt(inputReader io.Reader, outputWriter io.Writer) error
 	if err != nil {
 		return err
 	}
+	e.log.Info("generate iv and cipher")
 	if err := e.encryptFile(inputReader, outputWriter, block, iv); err != nil {
 		return err
 	}
@@ -90,6 +91,34 @@ func (e *Encrypter) Decrypt(inputReader io.Reader, outputWriter io.Writer) error
 	return nil
 }
 
+// SkipDecryption() creates the output-file and copys reader to output
+//
+// Workaround for streaming - will be dropped with streaming of compressor
+func SkipEncryption(filePath string, pwl io.Writer) error {
+	return nil
+}
+
+// SkipDecryption() creates the output-file and copys reader to output
+//
+// Workaround for streaming - will be dropped with streaming of compressor
+func SkipDecryption(filePath string, pr io.Reader) error {
+	outputFile, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("unable to create outputfile")
+	}
+	_, err = io.Copy(outputFile, pr)
+	if err != nil {
+		return fmt.Errorf("unable to copy download to outputfile")
+	}
+	return nil
+}
+
+// IsEncrypted() tests if target file is encrypted
+func IsEncrypted(path string) bool {
+	return filepath.Ext(path) == suffix
+}
+
+// isASCII() tests if string only contains ASCII chars
 func isASCII(s string) bool {
 	for _, c := range s {
 		if c > unicode.MaxASCII {
@@ -130,6 +159,7 @@ func (e *Encrypter) encryptFile(inputReader io.Reader, outputWriter io.Writer, b
 			if _, err := outputWriter.Write(buf[:n]); err != nil {
 				return err
 			}
+			e.log.Info("writing backup...")
 		}
 		if errors.Is(err, io.EOF) {
 			break
@@ -145,11 +175,6 @@ func (e *Encrypter) encryptFile(inputReader io.Reader, outputWriter io.Writer, b
 	}
 
 	return nil
-}
-
-// IsEncrypted() tests if target file is encrypted
-func IsEncrypted(path string) bool {
-	return filepath.Ext(path) == suffix
 }
 
 // readIVAndMessageLength() returns initialization vector and message length for decryption

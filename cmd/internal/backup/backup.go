@@ -109,19 +109,33 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 	}
 	b.log.Info("compressed backup")
 
-	reader, err := os.Open(filename)
+	toEncryptFile, err := os.Open(filename)
 	if err != nil {
 		b.metrics.CountError("open")
 		return fmt.Errorf("unable to open compressed backup for encryption: %w", err)
 	}
+
 	pr, pw := io.Pipe()
+	encryptErr := make(chan error, 1)
 	if b.encrypter != nil {
-		err = b.encrypter.Encrypt(reader, pw)
+		go func() {
+			close(encryptErr)
+			defer pw.Close()
+			encryptErr <- b.encrypter.Encrypt(toEncryptFile, pw)
+		}()
+	} else {
+		defer pw.Close()
+		// skip encryption -> copy file to writer -> gets piped to pr
+		_, err = io.Copy(pw, toEncryptFile)
 		if err != nil {
-			b.metrics.CountError("encrypt")
-			return fmt.Errorf("error encrypting backup: %w", err)
+			b.metrics.CountError("skipping-encryption")
+			return fmt.Errorf("error while skipping encryption: %w", err)
 		}
-		b.log.Info("encrypted backup")
+	}
+	err = <-encryptErr
+	if err != nil {
+		b.metrics.CountError("encrypt")
+		return fmt.Errorf("unable to encrypt backup: %w", err)
 	}
 
 	err = b.bp.UploadBackup(ctx, pr)
