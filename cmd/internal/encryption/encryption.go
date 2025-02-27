@@ -163,6 +163,11 @@ func (e *Encrypter) encryptFile(infile, outfile afero.File, block cipher.Block, 
 	buf := make([]byte, 1024)
 	stream := cipher.NewCTR(block, iv)
 
+	_, err := outfile.Write(iv)
+	if err != nil {
+		return fmt.Errorf("could not append iv: %w", err)
+	}
+
 	for {
 		n, err := infile.Read(buf)
 		if n > 0 {
@@ -171,17 +176,12 @@ func (e *Encrypter) encryptFile(infile, outfile afero.File, block cipher.Block, 
 				return err
 			}
 		}
-
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
 			return fmt.Errorf("error reading from file (%d bytes read): %w", n, err)
 		}
-	}
-
-	if _, err := outfile.Write(iv); err != nil {
-		return fmt.Errorf("could not append iv: %w", err)
 	}
 
 	return nil
@@ -201,7 +201,7 @@ func (e *Encrypter) readIVAndMessageLength(infile afero.File, block cipher.Block
 
 	iv := make([]byte, block.BlockSize())
 	msgLen := fi.Size() - int64(len(iv))
-	if _, err := infile.ReadAt(iv, msgLen); err != nil {
+	if _, err := infile.Read(iv); err != nil {
 		return nil, 0, err
 	}
 
