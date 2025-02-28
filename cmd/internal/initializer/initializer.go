@@ -3,6 +3,7 @@ package initializer
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"os"
@@ -212,28 +213,51 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 		return fmt.Errorf("could not delete priorly downloaded file: %w", err)
 	}
 
-	outputFile, err := os.Create(backupFilePath)
-	if err != nil {
-		return fmt.Errorf("could not open file for writing: %w", err)
-	}
-	defer outputFile.Close()
-
 	i.log.Info("downloading backup", "version", version.Version, "path", backupFilePath)
 
-	err = i.bp.DownloadBackup(ctx, version, outputFile)
+	pr, pw := io.Pipe()
+	downloadErr := make(chan error, 1)
+	go func() {
+		defer pw.Close()
+		defer close(downloadErr)
+
+		downloadErr <- i.bp.DownloadBackup(ctx, version, pw)
+	}()
+	err := <-downloadErr
 	if err != nil {
+		i.metrics.CountError("download")
 		return fmt.Errorf("unable to download backup: %w", err)
 	}
 
-	if i.encrypter != nil {
-		if encryption.IsEncrypted(backupFilePath) {
-			backupFilePath, err = i.encrypter.Decrypt(backupFilePath)
-			if err != nil {
-				return fmt.Errorf("unable to decrypt backup: %w", err)
+	decryptionErr := make(chan error, 1)
+	go func() {
+		defer close(decryptionErr)
+
+		if i.encrypter != nil {
+			if encryption.IsEncrypted(backupFilePath) {
+				backupFilePath = strings.Trim(backupFilePath, i.encrypter.Extension())
+				outputFile, err := os.Create(backupFilePath)
+				if err != nil {
+					decryptionErr <- err
+					return
+				}
+				decryptionErr <- i.encrypter.Decrypt(pr, outputFile)
+			} else {
+				outputFile, err := os.Create(backupFilePath)
+				if err != nil {
+					decryptionErr <- err
+					return
+				}
+				_, err = io.Copy(outputFile, pr)
+				decryptionErr <- err
 			}
-		} else {
-			i.log.Info("restoring unencrypted backup with configured encryption - skipping decryption...")
 		}
+	}()
+
+	err = <-decryptionErr
+	if err != nil {
+		i.metrics.CountError("decryption")
+		return fmt.Errorf("unable to decrypt backup: %w", err)
 	}
 
 	i.currentStatus.Message = "uncompressing backup"

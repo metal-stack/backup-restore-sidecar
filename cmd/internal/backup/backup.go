@@ -3,6 +3,7 @@ package backup
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path"
@@ -109,25 +110,44 @@ func (b *Backuper) CreateBackup(ctx context.Context) error {
 
 	b.log.Info("compressed backup")
 
-	if b.encrypter != nil {
-		filename, err = b.encrypter.Encrypt(filename)
-		if err != nil {
-			b.metrics.CountError("encrypt")
-			return fmt.Errorf("error encrypting backup: %w", err)
+	toEncryptFile, err := os.Open(filename)
+	if err != nil {
+		b.metrics.CountError("open toEncryptFile")
+		return fmt.Errorf("unable to open compressed backup for encryption: %w", err)
+	}
+
+	pr, pw := io.Pipe()
+
+	encryptErr := make(chan error, 1)
+	go func() {
+		defer pw.Close()
+		defer close(encryptErr)
+
+		if b.encrypter != nil {
+			encryptErr <- b.encrypter.Encrypt(toEncryptFile, pw)
+		} else {
+			_, err := io.Copy(pw, toEncryptFile)
+			encryptErr <- err
 		}
-		b.log.Info("encrypted backup")
-	}
+	}()
 
-	file, err := os.Open(filename)
-	if err != nil {
-		b.metrics.CountError("open")
-		return fmt.Errorf("error opening backup file: %w", err)
-	}
+	uploadErr := make(chan error, 1)
+	go func() {
+		defer close(uploadErr)
+		uploadErr <- b.bp.UploadBackup(ctx, pr)
+	}()
 
-	err = b.bp.UploadBackup(ctx, file)
-	if err != nil {
-		b.metrics.CountError("upload")
-		return fmt.Errorf("error uploading backup: %w", err)
+	select {
+	case err = <-encryptErr:
+		if err != nil {
+			b.metrics.CountError("encryption")
+			return fmt.Errorf("unable to encrypt backup: %w", err)
+		}
+	case err = <-uploadErr:
+		if err != nil {
+			b.metrics.CountError("upload")
+			return fmt.Errorf("unable to upload backup: %w", err)
+		}
 	}
 
 	b.log.Info("uploaded backup to backup provider bucket")
