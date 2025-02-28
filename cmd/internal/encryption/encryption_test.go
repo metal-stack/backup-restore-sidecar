@@ -111,7 +111,7 @@ func TestNonBlockingEncryption(t *testing.T) {
 	require.NoError(t, err, "")
 
 	// Test with 100MB file
-	bigBuff := make([]byte, 100000000)
+	bigBuff := make([]byte, 1000000000)
 	err = afero.WriteFile(fs, "bigfile", bigBuff, 0600)
 	require.NoError(t, err)
 
@@ -153,6 +153,52 @@ func TestNonBlockingEncryption(t *testing.T) {
 	case err = <-uploadErr:
 		require.NoError(t, err)
 	}
+
+	err = fs.Remove(inputBigEnc.Name())
+	require.NoError(t, err)
+	err = fs.Remove(outputBigEnc.Name())
+	require.NoError(t, err)
+}
+
+func TestBlockingEncryption(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	err := fs.Mkdir("/backup", 0777)
+	require.NoError(t, err)
+	bp, err := local.New(
+		slog.Default(),
+		&local.BackupProviderConfigLocal{
+			LocalBackupPath: "/backup",
+			ObjectsToKeep:   10,
+			Suffix:          suffix,
+			FS:              fs,
+		},
+	)
+	require.NoError(t, err, "")
+	e, err := New(slog.Default(), &EncrypterConfig{Key: "01234567891234560123456789123456", FS: fs})
+	require.NoError(t, err, "")
+
+	// Test with 100MB file
+	bigBuff := make([]byte, 1000000000)
+	err = afero.WriteFile(fs, "bigfile", bigBuff, 0600)
+	require.NoError(t, err)
+
+	inputBigEnc, err := fs.Open("bigfile")
+	require.NoError(t, err)
+	outputBigEnc, err := fs.Create("bigfile.aes")
+	require.NoError(t, err)
+
+	fmt.Println("🔒 Starting encryption")
+	err = e.Encrypt(inputBigEnc, outputBigEnc)
+	require.NoError(t, err)
+	fmt.Println("🔒 Ending encryption")
+
+	encryptedFile, err := fs.Open("bigfile.aes")
+	require.NoError(t, err)
+
+	fmt.Println("☁️ Starting upload")
+	err = bp.UploadBackup(context.Background(), encryptedFile)
+	require.NoError(t, err)
+	fmt.Println("☁️ Ending upload")
 
 	err = fs.Remove(inputBigEnc.Name())
 	require.NoError(t, err)
