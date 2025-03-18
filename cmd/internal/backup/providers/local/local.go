@@ -112,23 +112,21 @@ func (b *BackupProviderLocal) DownloadBackup(_ context.Context, version *provide
 
 // UploadBackup uploads a backup to the backup provider by providing a reader to the backup archive
 func (b *BackupProviderLocal) UploadBackup(ctx context.Context, reader io.Reader) error {
-	fmt.Println("starting upload")
 	b.log.Info("upload backups called for provider local")
 
 	destination := b.config.LocalBackupPath + "/" + b.currentBackupName + b.suffix
-	fmt.Println("dest of provider file: ", "dest", destination)
 
 	output, err := b.fs.Create(destination)
 	if err != nil {
 		return fmt.Errorf("could not create file %s: %w", destination, err)
 	}
+	defer output.Close()
 
-	_, err = io.Copy(output, reader)
+	buf := make([]byte, 1024 * 1024 * 10)
+	_, err = io.CopyBuffer(output, reader, buf)
 	if err != nil {
 		return err
 	}
-
-	fmt.Println("ending upload")
 
 	return nil
 }

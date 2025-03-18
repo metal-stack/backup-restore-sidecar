@@ -1,6 +1,7 @@
 package encryption
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -133,7 +134,8 @@ func TestNonBlockingEncryption(t *testing.T) {
 		defer wg.Done()
 
 		fmt.Println("🔒 Starting encryption")
-		encryptErr <- e.Encrypt(inputBigEnc, pw)
+		bufferedPipe := bufio.NewWriterSize(pw, 1024 * 1024 * 10)
+		encryptErr <- e.Encrypt(inputBigEnc, bufferedPipe)
 		fmt.Println("🔒 Ending encryption")
 	}()
 	go func() {
@@ -141,7 +143,8 @@ func TestNonBlockingEncryption(t *testing.T) {
 		defer wg.Done()
 
 		fmt.Println("☁️ Starting upload")
-		uploadErr <- bp.UploadBackup(context.Background(), pr)
+		bufferedPipe := bufio.NewReaderSize(pr, 1024 * 1024 * 10)
+		uploadErr <- bp.UploadBackup(context.Background(), bufferedPipe)
 		fmt.Println("☁️ Ending upload")
 	}()
 
@@ -154,11 +157,14 @@ func TestNonBlockingEncryption(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	err = fs.RemoveAll("/backup")
+	require.NoError(t, err)
 	err = fs.Remove(inputBigEnc.Name())
 	require.NoError(t, err)
 	err = fs.Remove(outputBigEnc.Name())
 	require.NoError(t, err)
 }
+
 
 func TestBlockingEncryption(t *testing.T) {
 	fs := afero.NewMemMapFs()
@@ -200,6 +206,8 @@ func TestBlockingEncryption(t *testing.T) {
 	require.NoError(t, err)
 	fmt.Println("☁️ Ending upload")
 
+	err = fs.RemoveAll("/backup")
+	require.NoError(t, err)
 	err = fs.Remove(inputBigEnc.Name())
 	require.NoError(t, err)
 	err = fs.Remove(outputBigEnc.Name())

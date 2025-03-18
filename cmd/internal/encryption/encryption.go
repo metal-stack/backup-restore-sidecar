@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"unicode"
 
@@ -110,10 +109,6 @@ func (e *Encrypter) createCipher() (cipher.Block, error) {
 	return aes.NewCipher(key)
 }
 
-func (e *Encrypter) openOutputFile(output string) (afero.File, error) {
-	return e.fs.OpenFile(output, os.O_RDWR|os.O_CREATE, 0644)
-}
-
 // generateIV() returns unique initialization vector of same size as cipher block for encryption
 func (e *Encrypter) generateIV(block cipher.Block) ([]byte, error) {
 	iv := make([]byte, block.BlockSize())
@@ -125,7 +120,7 @@ func (e *Encrypter) generateIV(block cipher.Block) ([]byte, error) {
 
 // encryptFile() encrypts infile to outfile using CTR mode (cipher and iv) and appends iv for decryption
 func (e *Encrypter) encryptFile(inputReader io.Reader, outputWriter io.Writer, block cipher.Block, iv []byte) error {
-	buf := make([]byte, 1024)
+	buf := make([]byte, 1024 * 1024 * 10)
 	stream := cipher.NewCTR(block, iv)
 
 	_, err := outputWriter.Write(iv)
