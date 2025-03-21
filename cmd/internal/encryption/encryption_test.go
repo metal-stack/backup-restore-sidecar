@@ -1,14 +1,17 @@
 package encryption
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"runtime"
+	"runtime/pprof"
 	"sync"
 	"testing"
+
+	_ "net/http/pprof"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/local"
 	"github.com/spf13/afero"
@@ -95,8 +98,15 @@ func TestEncrypter(t *testing.T) {
 }
 
 func TestNonBlockingEncryption(t *testing.T) {
+	f, err := os.Create("cpu-non-blocking.pprof")
+	require.NoError(t, err)
+	defer f.Close()
+	memProfile, err := os.Create("mem-non-blocking.pprof")
+	require.NoError(t, err)
+	defer memProfile.Close()
+
 	fs := afero.NewMemMapFs()
-	err := fs.Mkdir("/backup", 0777)
+	err = fs.Mkdir("/backup", 0777)
 	require.NoError(t, err)
 	bp, err := local.New(
 		slog.Default(),
@@ -111,8 +121,8 @@ func TestNonBlockingEncryption(t *testing.T) {
 	e, err := New(slog.Default(), &EncrypterConfig{Key: "01234567891234560123456789123456", FS: fs})
 	require.NoError(t, err, "")
 
-	// Test with 100MB file
-	bigBuff := make([]byte, 1000000000)
+	// Test with 1GB file
+	bigBuff := make([]byte, 1024 * 1024 * 1024)
 	err = afero.WriteFile(fs, "bigfile", bigBuff, 0600)
 	require.NoError(t, err)
 
@@ -120,6 +130,9 @@ func TestNonBlockingEncryption(t *testing.T) {
 	require.NoError(t, err)
 	outputBigEnc, err := fs.Create("bigfile.aes")
 	require.NoError(t, err)
+
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
 
 	pr, pw := io.Pipe()
 
@@ -134,8 +147,7 @@ func TestNonBlockingEncryption(t *testing.T) {
 		defer wg.Done()
 
 		fmt.Println("🔒 Starting encryption")
-		bufferedPipe := bufio.NewWriterSize(pw, 1024 * 1024 * 10)
-		encryptErr <- e.Encrypt(inputBigEnc, bufferedPipe)
+		encryptErr <- e.Encrypt(inputBigEnc, pw)
 		fmt.Println("🔒 Ending encryption")
 	}()
 	go func() {
@@ -143,8 +155,7 @@ func TestNonBlockingEncryption(t *testing.T) {
 		defer wg.Done()
 
 		fmt.Println("☁️ Starting upload")
-		bufferedPipe := bufio.NewReaderSize(pr, 1024 * 1024 * 10)
-		uploadErr <- bp.UploadBackup(context.Background(), bufferedPipe)
+		uploadErr <- bp.UploadBackup(context.Background(), pr)
 		fmt.Println("☁️ Ending upload")
 	}()
 
@@ -157,6 +168,9 @@ func TestNonBlockingEncryption(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	pprof.WriteHeapProfile(memProfile)
+	pprof.StopCPUProfile()
+
 	err = fs.RemoveAll("/backup")
 	require.NoError(t, err)
 	err = fs.Remove(inputBigEnc.Name())
@@ -167,8 +181,15 @@ func TestNonBlockingEncryption(t *testing.T) {
 
 
 func TestBlockingEncryption(t *testing.T) {
+	f, err := os.Create("cpu-blocking.pprof")
+	require.NoError(t, err)
+	defer f.Close()
+	memProfile, err := os.Create("mem-blocking.pprof")
+	require.NoError(t, err)
+	defer memProfile.Close()
+
 	fs := afero.NewMemMapFs()
-	err := fs.Mkdir("/backup", 0777)
+	err = fs.Mkdir("/backup", 0777)
 	require.NoError(t, err)
 	bp, err := local.New(
 		slog.Default(),
@@ -183,8 +204,8 @@ func TestBlockingEncryption(t *testing.T) {
 	e, err := New(slog.Default(), &EncrypterConfig{Key: "01234567891234560123456789123456", FS: fs})
 	require.NoError(t, err, "")
 
-	// Test with 100MB file
-	bigBuff := make([]byte, 1000000000)
+	// Test with 1GB file
+	bigBuff := make([]byte, 1024 * 1024 * 1024)
 	err = afero.WriteFile(fs, "bigfile", bigBuff, 0600)
 	require.NoError(t, err)
 
@@ -192,6 +213,9 @@ func TestBlockingEncryption(t *testing.T) {
 	require.NoError(t, err)
 	outputBigEnc, err := fs.Create("bigfile.aes")
 	require.NoError(t, err)
+
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
 
 	fmt.Println("🔒 Starting encryption")
 	err = e.Encrypt(inputBigEnc, outputBigEnc)
@@ -205,6 +229,9 @@ func TestBlockingEncryption(t *testing.T) {
 	err = bp.UploadBackup(context.Background(), encryptedFile)
 	require.NoError(t, err)
 	fmt.Println("☁️ Ending upload")
+
+	pprof.WriteHeapProfile(memProfile)
+	pprof.StopCPUProfile()
 
 	err = fs.RemoveAll("/backup")
 	require.NoError(t, err)

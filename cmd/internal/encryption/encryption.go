@@ -52,7 +52,6 @@ func New(log *slog.Logger, config *EncrypterConfig) (*Encrypter, error) {
 
 // Encrypt input file with key and store encrypted result with suffix
 func (e *Encrypter) Encrypt(inputReader io.Reader, outputWriter io.Writer) error {
-	fmt.Println("starting encryption")
 	block, err := e.createCipher()
 	if err != nil {
 		return err
@@ -66,14 +65,12 @@ func (e *Encrypter) Encrypt(inputReader io.Reader, outputWriter io.Writer) error
 	if err := e.encryptFile(inputReader, outputWriter, block, iv); err != nil {
 		return err
 	}
-	fmt.Println("ending encryption")
 	return nil
 }
 
 // Decrypt input file with key and store decrypted result with suffix removed
 // if input does not end with suffix, it is assumed that the file was not encrypted.
 func (e *Encrypter) Decrypt(inputReader io.Reader, outputWriter io.Writer) error {
-	fmt.Println("start decrypt")
 	block, err := e.createCipher()
 	if err != nil {
 		return err
@@ -84,12 +81,9 @@ func (e *Encrypter) Decrypt(inputReader io.Reader, outputWriter io.Writer) error
 		return err
 	}
 
-	fmt.Println("before decrypt")
-
 	if err := e.decryptFile(inputReader, outputWriter, block, iv); err != nil {
 		return err
 	}
-	fmt.Println("after decrypt")
 
 	return nil
 }
