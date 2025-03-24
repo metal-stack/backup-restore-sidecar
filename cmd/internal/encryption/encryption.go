@@ -148,7 +148,6 @@ func IsEncrypted(path string) bool {
 
 // readIVAndMessageLength() returns initialization vector and message length for decryption
 func (e *Encrypter) readIV(inputReader io.Reader, block cipher.Block) ([]byte, error) {
-	fmt.Println("read IV")
 	iv := make([]byte, block.BlockSize())
 	_, err := inputReader.Read(iv)
 	if err != nil {
