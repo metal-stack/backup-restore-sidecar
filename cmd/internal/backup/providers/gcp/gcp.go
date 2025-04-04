@@ -101,18 +101,27 @@ func New(ctx context.Context, log *slog.Logger, config *BackupProviderConfigGCP)
 // EnsureBackupBucket ensures a backup bucket at the backup provider
 func (b *BackupProviderGCP) EnsureBackupBucket(ctx context.Context) error {
 	bucket := b.c.Bucket(b.config.BucketName)
-	lifecycle := storage.Lifecycle{
-		Rules: []storage.LifecycleRule{
-			{
-				Condition: storage.LifecycleCondition{
-					NumNewerVersions: b.config.ObjectsToKeep,
-				},
-				Action: storage.LifecycleAction{
-					Type: "Delete",
-				},
-			},
+
+	// get existing lifecycle configuration
+	bucketAttrs, err := bucket.Attrs(ctx)
+	if err != nil {
+		return err
+	}
+
+	lifecycleRule := storage.LifecycleRule{
+		Condition: storage.LifecycleCondition{
+			NumNewerVersions: b.config.ObjectsToKeep,
+			MatchesPrefix:    []string{b.config.ObjectPrefix},
+		},
+		Action: storage.LifecycleAction{
+			Type: "Delete",
 		},
 	}
+
+	lifecycle := storage.Lifecycle{
+		Rules: append(bucketAttrs.Lifecycle.Rules, lifecycleRule),
+	}
+
 	attrs := &storage.BucketAttrs{
 		Location:          b.config.BucketLocation,
 		VersioningEnabled: true,

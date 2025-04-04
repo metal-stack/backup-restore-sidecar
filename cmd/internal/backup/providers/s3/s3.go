@@ -132,20 +132,30 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 		return err
 	}
 
+	// get existing lifecycle configuration
+	bucketLifecycleConfiguration, err := b.c.GetBucketLifecycleConfiguration(ctx, &s3.GetBucketLifecycleConfigurationInput{
+		Bucket: aws.String(b.config.BucketName),
+	})
+	if err != nil {
+		return err
+	}
+
+	lifecycleRule := types.LifecycleRule{
+		NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
+			NewerNoncurrentVersions: &b.config.ObjectsToKeep,
+		},
+		Status: types.ExpirationStatusEnabled,
+		ID:     aws.String(b.config.ObjectPrefix + "-backup-restore-lifecycle"),
+		Filter: &types.LifecycleRuleFilter{
+			Prefix: aws.String(b.config.ObjectPrefix),
+		},
+	}
+
 	// add lifecycle policy
 	_, err = b.c.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
 		Bucket: aws.String(b.config.BucketName),
 		LifecycleConfiguration: &types.BucketLifecycleConfiguration{
-			Rules: []types.LifecycleRule{
-				{
-					NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
-						NewerNoncurrentVersions: &b.config.ObjectsToKeep,
-					},
-					Status: types.ExpirationStatusEnabled,
-					ID:     aws.String("backup-restore-lifecycle"),
-					Filter: &types.LifecycleRuleFilter{},
-				},
-			},
+			Rules: append(bucketLifecycleConfiguration.Rules, lifecycleRule),
 		},
 	})
 	if err != nil {
