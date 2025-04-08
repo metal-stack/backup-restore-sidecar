@@ -157,8 +157,10 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 			return err
 		}
 		for _, r := range bucketLifecycleConfiguration.Rules {
-			if r.ID != lifecycleRuleID {
-				rules = append(rules, r)
+			if r.ID != nil && lifecycleRuleID != nil {
+				if *r.ID != *lifecycleRuleID {
+					rules = append(rules, r)
+				}
 			}
 		}
 	}
