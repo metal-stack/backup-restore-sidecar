@@ -142,7 +142,7 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 			Status: types.ExpirationStatusEnabled,
 			ID:     lifecycleRuleID,
 			Filter: &types.LifecycleRuleFilter{
-				Prefix: aws.String(b.config.ObjectPrefix),
+				Prefix: aws.String(b.config.ObjectPrefix + "/"),
 			},
 		},
 	}
