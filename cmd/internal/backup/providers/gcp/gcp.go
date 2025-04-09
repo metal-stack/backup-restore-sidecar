@@ -102,15 +102,13 @@ func New(ctx context.Context, log *slog.Logger, config *BackupProviderConfigGCP)
 func (b *BackupProviderGCP) EnsureBackupBucket(ctx context.Context) error {
 	bucket := b.c.Bucket(b.config.BucketName)
 
-	rules := []storage.LifecycleRule{
-		{
-			Condition: storage.LifecycleCondition{
-				NumNewerVersions: b.config.ObjectsToKeep,
-				MatchesPrefix:    []string{b.config.ObjectPrefix},
-			},
-			Action: storage.LifecycleAction{
-				Type: "Delete",
-			},
+	rule := storage.LifecycleRule{
+		Condition: storage.LifecycleCondition{
+			NumNewerVersions: b.config.ObjectsToKeep,
+			MatchesPrefix:    []string{b.config.ObjectPrefix},
+		},
+		Action: storage.LifecycleAction{
+			Type: "Delete",
 		},
 	}
 
@@ -120,11 +118,20 @@ func (b *BackupProviderGCP) EnsureBackupBucket(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		rules = append(rules, bucketAttrs.Lifecycle.Rules...)
+
+		for _, rule := range bucketAttrs.Lifecycle.Rules {
+			if rule.Condition.MatchesPrefix != nil {
+				for _, prefix := range rule.Condition.MatchesPrefix {
+					if prefix != b.config.ObjectPrefix {
+						rule.Condition.MatchesPrefix = append(rule.Condition.MatchesPrefix, prefix)
+					}
+				}
+			}
+		}
 	}
 
 	lifecycle := storage.Lifecycle{
-		Rules: rules,
+		Rules: []storage.LifecycleRule{rule},
 	}
 
 	attrs := &storage.BucketAttrs{
