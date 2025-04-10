@@ -62,6 +62,12 @@ The backups are stored at the storage provider with the `.aes` suffix. If the fi
 - The database is deployed as a statefulset and the data is backed by a PVC
 - No "Point in Time Recovery" (PITR)
 
+## Using Multiple Backup-Restore-Sidecars
+
+It is possible to let multiple backup-restore-sidecars (for different databases) use the same backup bucket at an external provider. However, it has to be noted that these sidecars must all configure a dedicated object prefix in which they store the backups. Otherwise they would overwrite each other's data.
+
+Be aware that, if you change the object prefix under which the backups are stored, the old lifecycle policies matching this prefix are not automatically cleaned up and have to be removed manually.
+
 ## Try it out
 
 Requires:
