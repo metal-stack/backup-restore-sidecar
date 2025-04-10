@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"errors"
@@ -100,47 +101,27 @@ func New(ctx context.Context, log *slog.Logger, config *BackupProviderConfigGCP)
 
 // EnsureBackupBucket ensures a backup bucket at the backup provider
 func (b *BackupProviderGCP) EnsureBackupBucket(ctx context.Context) error {
-	bucket := b.c.Bucket(b.config.BucketName)
+	var (
+		bucket = b.c.Bucket(b.config.BucketName)
 
-	rule := storage.LifecycleRule{
-		Condition: storage.LifecycleCondition{
-			NumNewerVersions: b.config.ObjectsToKeep,
-			MatchesPrefix:    []string{b.config.ObjectPrefix},
-		},
-		Action: storage.LifecycleAction{
-			Type: "Delete",
-		},
-	}
-
-	// get existing lifecycle configuration
-	bucketAttrs, err := bucket.Attrs(ctx)
-	if bucketAttrs != nil {
-		if err != nil {
-			return err
+		rule = storage.LifecycleRule{
+			Condition: storage.LifecycleCondition{
+				NumNewerVersions: b.config.ObjectsToKeep,
+				MatchesPrefix:    []string{b.config.ObjectPrefix},
+			},
+			Action: storage.LifecycleAction{
+				Type: "Delete",
+			},
 		}
+	)
 
-		for _, rule := range bucketAttrs.Lifecycle.Rules {
-			if rule.Condition.MatchesPrefix != nil {
-				for _, prefix := range rule.Condition.MatchesPrefix {
-					if prefix != b.config.ObjectPrefix {
-						rule.Condition.MatchesPrefix = append(rule.Condition.MatchesPrefix, prefix)
-					}
-				}
-			}
-		}
-	}
-
-	lifecycle := storage.Lifecycle{
-		Rules: []storage.LifecycleRule{rule},
-	}
-
-	attrs := &storage.BucketAttrs{
+	if err := bucket.Create(ctx, b.config.ProjectID, &storage.BucketAttrs{
 		Location:          b.config.BucketLocation,
 		VersioningEnabled: true,
-		Lifecycle:         lifecycle,
-	}
-
-	if err := bucket.Create(ctx, b.config.ProjectID, attrs); err != nil {
+		Lifecycle: storage.Lifecycle{
+			Rules: []storage.LifecycleRule{rule},
+		},
+	}); err != nil {
 		var googleErr *googleapi.Error
 		if errors.As(err, &googleErr) {
 			if googleErr.Code != http.StatusConflict {
@@ -151,11 +132,41 @@ func (b *BackupProviderGCP) EnsureBackupBucket(ctx context.Context) error {
 		}
 	}
 
+	// if the bucket already exists, get existing lifecycle configuration and add the own rule
+
+	bucketAttrs, err := bucket.Attrs(ctx)
+	if err != nil {
+		return err
+	}
+
+	var (
+		rules = bucketAttrs.Lifecycle.Rules
+	)
+
+	idx := slices.IndexFunc(rules, func(rule storage.LifecycleRule) bool {
+		if slices.ContainsFunc(rule.Condition.MatchesPrefix, func(prefix string) bool {
+			return prefix == b.config.ObjectPrefix
+		}) {
+			return true
+		}
+		return false
+	})
+
+	if idx >= 0 {
+		rules[idx] = rule
+	} else {
+		rules = append(rules, rule)
+	}
+
 	attrsToUpdate := storage.BucketAttrsToUpdate{
 		VersioningEnabled: true,
-		Lifecycle:         &lifecycle,
+		Lifecycle: &storage.Lifecycle{
+			Rules: rules,
+		},
 	}
-	if _, err := bucket.Update(ctx, attrsToUpdate); err != nil {
+	if _, err := bucket.If(storage.BucketConditions{
+		MetagenerationMatch: bucketAttrs.MetaGeneration,
+	}).Update(ctx, attrsToUpdate); err != nil {
 		return err
 	}
 
