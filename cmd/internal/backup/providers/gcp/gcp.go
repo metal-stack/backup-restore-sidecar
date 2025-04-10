@@ -141,16 +141,15 @@ func (b *BackupProviderGCP) EnsureBackupBucket(ctx context.Context) error {
 
 	var (
 		rules = bucketAttrs.Lifecycle.Rules
+		idx   = slices.IndexFunc(rules, func(rule storage.LifecycleRule) bool {
+			if slices.ContainsFunc(rule.Condition.MatchesPrefix, func(prefix string) bool {
+				return prefix == b.config.ObjectPrefix
+			}) {
+				return true
+			}
+			return false
+		})
 	)
-
-	idx := slices.IndexFunc(rules, func(rule storage.LifecycleRule) bool {
-		if slices.ContainsFunc(rule.Condition.MatchesPrefix, func(prefix string) bool {
-			return prefix == b.config.ObjectPrefix
-		}) {
-			return true
-		}
-		return false
-	})
 
 	if idx >= 0 {
 		rules[idx] = rule
@@ -158,15 +157,14 @@ func (b *BackupProviderGCP) EnsureBackupBucket(ctx context.Context) error {
 		rules = append(rules, rule)
 	}
 
-	attrsToUpdate := storage.BucketAttrsToUpdate{
+	if _, err := bucket.If(storage.BucketConditions{
+		MetagenerationMatch: bucketAttrs.MetaGeneration,
+	}).Update(ctx, storage.BucketAttrsToUpdate{
 		VersioningEnabled: true,
 		Lifecycle: &storage.Lifecycle{
 			Rules: rules,
 		},
-	}
-	if _, err := bucket.If(storage.BucketConditions{
-		MetagenerationMatch: bucketAttrs.MetaGeneration,
-	}).Update(ctx, attrsToUpdate); err != nil {
+	}); err != nil {
 		return err
 	}
 
