@@ -132,22 +132,44 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 		return err
 	}
 
+	lifecycleRuleID := aws.String(b.config.ObjectPrefix + "-backup-restore-lifecycle")
+
+	rules := []types.LifecycleRule{
+		{
+			NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
+				NewerNoncurrentVersions: &b.config.ObjectsToKeep,
+			},
+			Status: types.ExpirationStatusEnabled,
+			ID:     lifecycleRuleID,
+			Filter: &types.LifecycleRuleFilter{
+				Prefix: aws.String(b.config.ObjectPrefix + "/"),
+			},
+		},
+	}
+
+	// get existing lifecycle configuration
+	bucketLifecycleConfiguration, err := b.c.GetBucketLifecycleConfiguration(ctx, &s3.GetBucketLifecycleConfigurationInput{
+		Bucket: aws.String(b.config.BucketName),
+	})
+
+	if bucketLifecycleConfiguration != nil {
+		if err != nil {
+			return err
+		}
+		for _, r := range bucketLifecycleConfiguration.Rules {
+			if r.ID != nil && lifecycleRuleID != nil {
+				if *r.ID != *lifecycleRuleID {
+					rules = append(rules, r)
+				}
+			}
+		}
+	}
+
 	// add lifecycle policy
 	_, err = b.c.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
 		Bucket: aws.String(b.config.BucketName),
 		LifecycleConfiguration: &types.BucketLifecycleConfiguration{
-			Rules: []types.LifecycleRule{
-				{
-					NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
-						NoncurrentDays: &b.config.ObjectsToKeep,
-					},
-					Status: types.ExpirationStatusEnabled,
-					ID:     aws.String("backup-restore-lifecycle"),
-					Filter: &types.LifecycleRuleFilter{
-						Prefix: aws.String(b.config.ObjectPrefix),
-					},
-				},
-			},
+			Rules: rules,
 		},
 	})
 	if err != nil {
