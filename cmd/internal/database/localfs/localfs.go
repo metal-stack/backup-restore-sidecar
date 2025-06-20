@@ -57,7 +57,7 @@ func (l *LocalFS) Backup(ctx context.Context) error {
 // get data from constants.RestoreDir
 func (l *LocalFS) Recover(ctx context.Context) error {
 	if err := utils.RemoveContents(l.datadir); err != nil {
-		return fmt.Errorf("Could not cleanup Datadir: %w", err)
+		return fmt.Errorf("could not cleanup Datadir: %w", err)
 	}
 
 	if err := utils.CopyFS(l.datadir, os.DirFS(constants.RestoreDir)); err != nil {
@@ -73,7 +73,7 @@ func (l *LocalFS) Probe(ctx context.Context) error {
 	return nil
 }
 
-func (_ *LocalFS) Upgrade(ctx context.Context) error {
+func (*LocalFS) Upgrade(ctx context.Context) error {
 	// Nothing to do here
 	return nil
 }

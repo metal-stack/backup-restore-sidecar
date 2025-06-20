@@ -142,12 +142,9 @@ func (b *BackupProviderGCP) EnsureBackupBucket(ctx context.Context) error {
 	var (
 		rules = bucketAttrs.Lifecycle.Rules
 		idx   = slices.IndexFunc(rules, func(rule storage.LifecycleRule) bool {
-			if slices.ContainsFunc(rule.Condition.MatchesPrefix, func(prefix string) bool {
+			return slices.ContainsFunc(rule.Condition.MatchesPrefix, func(prefix string) bool {
 				return prefix == b.config.ObjectPrefix
-			}) {
-				return true
-			}
-			return false
+			})
 		})
 	)
 

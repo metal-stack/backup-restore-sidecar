@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
+	tlog "github.com/testcontainers/testcontainers-go/log"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"google.golang.org/api/option"
 )
@@ -227,7 +228,7 @@ func startFakeGcsContainer(t testing.TB, ctx context.Context) (testcontainers.Co
 			),
 		},
 		Started: true,
-		Logger:  testcontainers.TestLogger(t),
+		Logger:  tlog.TestLogger(t),
 	})
 	require.NoError(t, err)
 
