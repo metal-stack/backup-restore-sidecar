@@ -216,8 +216,9 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 	if err != nil {
 		return fmt.Errorf("could not open file for writing: %w", err)
 	}
-	defer outputFile.Close()
-
+	defer func() {
+		_ = outputFile.Close()
+	}()
 	i.log.Info("downloading backup", "version", version.Version, "path", backupFilePath)
 
 	err = i.bp.DownloadBackup(ctx, version, outputFile)

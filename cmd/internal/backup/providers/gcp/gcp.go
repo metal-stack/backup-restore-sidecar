@@ -189,7 +189,9 @@ func (b *BackupProviderGCP) DownloadBackup(ctx context.Context, version *provide
 	if err != nil {
 		return fmt.Errorf("backup not found: %w", err)
 	}
-	defer r.Close()
+	defer func() {
+		_ = r.Close()
+	}()
 
 	_, err = io.Copy(writer, r)
 	if err != nil {
@@ -216,7 +218,9 @@ func (b *BackupProviderGCP) UploadBackup(ctx context.Context, reader io.Reader) 
 	if _, err := io.Copy(w, reader); err != nil {
 		return err
 	}
-	defer w.Close()
+	defer func() {
+		_ = w.Close()
+	}()
 
 	return nil
 }

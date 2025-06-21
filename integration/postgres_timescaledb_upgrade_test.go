@@ -71,7 +71,9 @@ post-exec-cmds:
 
 func addTimescaleDbTestData(t *testing.T, ctx context.Context) {
 	db := newPostgresSession(t, ctx)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	var (
 		createStmt = `

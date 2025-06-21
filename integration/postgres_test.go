@@ -80,7 +80,9 @@ func newPostgresSession(t *testing.T, ctx context.Context) *sql.DB {
 
 func addPostgresTestData(t *testing.T, ctx context.Context) {
 	db := newPostgresSession(t, ctx)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	var (
 		createStmt = `CREATE TABLE backuprestore (
@@ -98,7 +100,9 @@ func addPostgresTestData(t *testing.T, ctx context.Context) {
 
 func addPostgresTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
 	db := newPostgresSession(t, ctx)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	var (
 		createStmt = `CREATE TABLE IF NOT EXISTS backuprestore (
@@ -116,12 +120,16 @@ func addPostgresTestDataWithIndex(t *testing.T, ctx context.Context, index int) 
 
 func verifyPostgresTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
 	db := newPostgresSession(t, ctx)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	rows, err := db.Query(fmt.Sprintf("SELECT \"data\" FROM backuprestore WHERE data='idx-%d';", index))
 	require.NoError(t, err)
 	require.NoError(t, rows.Err())
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	require.True(t, rows.Next())
 	var data string
@@ -134,12 +142,16 @@ func verifyPostgresTestDataWithIndex(t *testing.T, ctx context.Context, index in
 }
 func verifyPostgresTestData(t *testing.T, ctx context.Context) {
 	db := newPostgresSession(t, ctx)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	rows, err := db.Query(`SELECT "data" FROM backuprestore;`)
 	require.NoError(t, err)
 	require.NoError(t, rows.Err())
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	require.True(t, rows.Next())
 	var data string

@@ -100,8 +100,9 @@ func (b *BackupProviderLocal) DownloadBackup(_ context.Context, version *provide
 	if err != nil {
 		return fmt.Errorf("could not open file %s: %w", source, err)
 	}
-	defer infile.Close()
-
+	defer func() {
+		_ = infile.Close()
+	}()
 	_, err = io.Copy(writer, infile)
 	if err != nil {
 		return err
@@ -147,7 +148,9 @@ func (b *BackupProviderLocal) ListBackups(_ context.Context) (providers.BackupVe
 	if err != nil {
 		return nil, err
 	}
-	defer d.Close()
+	defer func() {
+		_ = d.Close()
+	}()
 	names, err := d.Readdirnames(-1)
 	if err != nil {
 		return nil, err
