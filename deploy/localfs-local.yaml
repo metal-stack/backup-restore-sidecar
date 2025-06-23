@@ -24,7 +24,7 @@ spec:
       - command:
         - backup-restore-sidecar
         - wait
-        image: alpine:3.19
+        image: alpine:3.22
         name: localfs
         resources: {}
         volumeMounts:
@@ -39,7 +39,7 @@ spec:
         - backup-restore-sidecar
         - start
         - --log-level=debug
-        image: alpine:3.19
+        image: alpine:3.22
         name: backup-restore-sidecar
         ports:
         - containerPort: 8000
