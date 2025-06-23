@@ -41,14 +41,9 @@ func newRedisClient(t *testing.T, ctx context.Context) *redis.Client {
 	var cli *redis.Client
 
 	err := retry.Do(func() error {
-		var err error
 		cli = redis.NewClient(&redis.Options{
 			Addr: "localhost:6379",
 		})
-		if err != nil {
-			return err
-		}
-
 		return nil
 	}, retry.Context(ctx))
 	require.NoError(t, err)

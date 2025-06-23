@@ -48,9 +48,10 @@ func Test_Postgres_Upgrade(t *testing.T) {
 		},
 		databaseImages: []string{
 			"postgres:12-alpine",
-			// "postgres:13-alpine", commented to test if two versions upgrade also work
+			"postgres:13-alpine",
 			"postgres:14-alpine",
 			"postgres:15-alpine",
+			"postgres:17-alpine",
 		},
 	})
 }
