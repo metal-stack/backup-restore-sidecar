@@ -47,9 +47,13 @@ func Test_Postgres_Upgrade(t *testing.T) {
 			verifyTestData:   verifyPostgresTestData,
 		},
 		databaseImages: []string{
-			// "postgres:12-alpine", // FIXME upgrade from 12 -> 13 does not work, maybe a older 12 works
-			"postgres:13-alpine",
-			"postgres:14-alpine",
+			"postgres:12-alpine",
+			// Upgrade from 12-alpine to 13-alpine is not possible because of library differences in icu-lib.
+			// The solution is to upgrade to a older 14.10-alpine which has the same icu-lib version as 12-alpine
+			// and then update to 14.18-alpine or newer which does not require to run pg_upgrade.
+			// "postgres:13-alpine",
+			"postgres:14.10-alpine",
+			"postgres:14.18-alpine",
 			"postgres:15-alpine",
 			"postgres:17-alpine",
 		},
