@@ -60,7 +60,9 @@ func (e *Encrypter) Encrypt(inputPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer infile.Close()
+	defer func() {
+		_ = infile.Close()
+	}()
 
 	block, err := e.createCipher()
 	if err != nil {
@@ -76,8 +78,9 @@ func (e *Encrypter) Encrypt(inputPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer outfile.Close()
-
+	defer func() {
+		_ = outfile.Close()
+	}()
 	if err := e.encryptFile(infile, outfile, block, iv); err != nil {
 		return "", err
 	}
@@ -103,8 +106,9 @@ func (e *Encrypter) Decrypt(inputPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer infile.Close()
-
+	defer func() {
+		_ = infile.Close()
+	}()
 	block, err := e.createCipher()
 	if err != nil {
 		return "", err

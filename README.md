@@ -20,6 +20,12 @@ Probably, it does not make sense to use this project with large databases. Howev
 
 Postgres also supports updates when using the TimescaleDB extension. Please consider the integration test for supported upgrade paths.
 
+> [!IMPORTANT]
+> Upgrade from 12-alpine to 13-alpine is not possible because of library differences in icu-lib.
+> The solution is to upgrade to a older 14.10-alpine which has the same icu-lib version as 12-alpine
+> and then update to 14.18-alpine or newer which does not require to run pg_upgrade.
+> It is also recommended to pin the original database to postgres:12.22-alpine to ensure the latest minor.
+
 ## Database Upgrades
 
 ### Postgres

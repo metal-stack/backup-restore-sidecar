@@ -41,14 +41,9 @@ func newRedisClient(t *testing.T, ctx context.Context) *redis.Client {
 	var cli *redis.Client
 
 	err := retry.Do(func() error {
-		var err error
 		cli = redis.NewClient(&redis.Options{
 			Addr: "localhost:6379",
 		})
-		if err != nil {
-			return err
-		}
-
 		return nil
 	}, retry.Context(ctx))
 	require.NoError(t, err)
@@ -58,7 +53,9 @@ func newRedisClient(t *testing.T, ctx context.Context) *redis.Client {
 
 func addRedisTestData(t *testing.T, ctx context.Context) {
 	cli := newRedisClient(t, ctx)
-	defer cli.Close()
+	defer func() {
+		_ = cli.Close()
+	}()
 
 	_, err := cli.Set(ctx, "1", "I am precious", 1*time.Hour).Result()
 	require.NoError(t, err)
@@ -66,7 +63,9 @@ func addRedisTestData(t *testing.T, ctx context.Context) {
 
 func verifyRedisTestData(t *testing.T, ctx context.Context) {
 	cli := newRedisClient(t, ctx)
-	defer cli.Close()
+	defer func() {
+		_ = cli.Close()
+	}()
 
 	resp, err := cli.Get(ctx, "1").Result()
 	require.NoError(t, err)
@@ -76,7 +75,9 @@ func verifyRedisTestData(t *testing.T, ctx context.Context) {
 
 func addRedisTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
 	cli := newRedisClient(t, ctx)
-	defer cli.Close()
+	defer func() {
+		_ = cli.Close()
+	}()
 
 	_, err := cli.Set(ctx, strconv.Itoa(index), fmt.Sprintf("idx-%d", index), 1*time.Hour).Result()
 	require.NoError(t, err)
@@ -84,7 +85,9 @@ func addRedisTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
 
 func verifyRedisTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
 	cli := newRedisClient(t, ctx)
-	defer cli.Close()
+	defer func() {
+		_ = cli.Close()
+	}()
 
 	resp, err := cli.Get(ctx, strconv.Itoa(index)).Result()
 	require.NoError(t, err)

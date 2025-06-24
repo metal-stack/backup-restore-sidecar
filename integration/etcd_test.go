@@ -59,15 +59,18 @@ func newEtcdClient(t *testing.T, ctx context.Context) *clientv3.Client {
 
 func addEtcdTestData(t *testing.T, ctx context.Context) {
 	cli := newEtcdClient(t, ctx)
-	defer cli.Close()
-
+	defer func() {
+		_ = cli.Close()
+	}()
 	_, err := cli.Put(ctx, "1", "I am precious")
 	require.NoError(t, err)
 }
 
 func verifyEtcdTestData(t *testing.T, ctx context.Context) {
 	cli := newEtcdClient(t, ctx)
-	defer cli.Close()
+	defer func() {
+		_ = cli.Close()
+	}()
 
 	resp, err := cli.Get(ctx, "1")
 	require.NoError(t, err)
@@ -79,7 +82,9 @@ func verifyEtcdTestData(t *testing.T, ctx context.Context) {
 }
 func addEtcdTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
 	cli := newEtcdClient(t, ctx)
-	defer cli.Close()
+	defer func() {
+		_ = cli.Close()
+	}()
 
 	_, err := cli.Put(ctx, strconv.Itoa(index), fmt.Sprintf("idx-%d", index))
 	require.NoError(t, err)
@@ -87,7 +92,9 @@ func addEtcdTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
 
 func verifyEtcdTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
 	cli := newEtcdClient(t, ctx)
-	defer cli.Close()
+	defer func() {
+		_ = cli.Close()
+	}()
 
 	resp, err := cli.Get(ctx, strconv.Itoa(index))
 	require.NoError(t, err)

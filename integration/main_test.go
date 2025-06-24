@@ -67,7 +67,7 @@ func TestMain(m *testing.M) {
 func restoreFlow(t *testing.T, spec *flowSpec) {
 	t.Log("running restore flow")
 	var (
-		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+		ctx, cancel = context.WithTimeout(t.Context(), 20*time.Minute)
 		ns          = testNamespace(t)
 	)
 
@@ -182,7 +182,7 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 func restoreLatestFromMultipleBackupsFlow(t *testing.T, spec *flowSpec) {
 	t.Log("running restore with empty datadir flow")
 	var (
-		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+		ctx, cancel = context.WithTimeout(t.Context(), 20*time.Minute)
 		ns          = testNamespace(t)
 	)
 
@@ -302,7 +302,7 @@ func upgradeFlow(t *testing.T, spec *upgradeFlowSpec) {
 	require.GreaterOrEqual(t, len(spec.databaseImages), 2, "at least 2 database images must be specified for the upgrade test")
 
 	var (
-		ctx, cancel  = context.WithTimeout(context.Background(), 10*time.Minute)
+		ctx, cancel  = context.WithTimeout(t.Context(), 20*time.Minute)
 		ns           = testNamespace(t)
 		initialImage = spec.databaseImages[0]
 		nextImages   = spec.databaseImages[1:]
@@ -365,12 +365,14 @@ func upgradeFlow(t *testing.T, spec *upgradeFlowSpec) {
 
 		var backup *v1.Backup
 		err = retry.Do(func() error {
+			t.Log("trigger backup")
 			_, err = brsc.DatabaseServiceClient().CreateBackup(ctx, &v1.CreateBackupRequest{})
 			if err != nil {
 				t.Log(err)
 				return err
 			}
 
+			t.Log("list backups")
 			backups, err := brsc.BackupServiceClient().ListBackups(ctx, &v1.ListBackupsRequest{})
 			if err != nil {
 				return err
@@ -381,6 +383,7 @@ func upgradeFlow(t *testing.T, spec *upgradeFlowSpec) {
 			}
 
 			backup = backups.GetBackups()[0]
+			t.Logf("found %d backups, consider backup with version:%s", len(backups.GetBackups()), backup.Version)
 
 			return nil
 		}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))

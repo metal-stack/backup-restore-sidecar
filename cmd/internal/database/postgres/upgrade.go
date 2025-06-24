@@ -179,6 +179,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 		"--old-bindir", oldPostgresBinDir,
 		"--new-bindir", newPostgresBinDir,
 		"--link",
+		"--verbose",
 	}
 
 	runsTimescaleDB, err := db.runningTimescaleDB(ctx, postgresConfigCmd)
@@ -211,6 +212,12 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	err = cmd.Run()
 	if err != nil {
 		db.log.Error("unable to run pg_upgrade on new new datadir, abort upgrade", "error", err)
+
+		logfile, lferr := os.ReadFile(cmd.Dir + "/pg_upgrade_server.log")
+		if lferr != nil {
+			return fmt.Errorf("unable to read pg_upgrade_server.log %w", lferr)
+		}
+		fmt.Println(string(logfile))
 		return fmt.Errorf("unable to run pg_upgrade %w", err)
 	}
 
@@ -237,16 +244,23 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 func (db *Postgres) getBinaryVersion(ctx context.Context, pgConfigCmd string) (uint64, error) {
 	// pg_config  --version
 	// PostgreSQL 12.16
+	// PostgreSQL 12.22 (Debian 12.22-1.pgdg120+1)
 	cmd := exec.CommandContext(ctx, pgConfigCmd, "--version")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return 0, fmt.Errorf("unable to detect postgres binary version: %w", err)
 	}
 
-	_, binaryVersionString, found := strings.Cut(string(out), "PostgreSQL ")
-	if !found {
-		return 0, fmt.Errorf("unable to detect postgres binary version in pg_config output %q", binaryVersionString)
+	return db.extractVersion(string(out))
+}
+
+func (db *Postgres) extractVersion(commandOutput string) (uint64, error) {
+	versionSlice := strings.Fields(commandOutput)
+	if len(versionSlice) < 2 {
+		return 0, fmt.Errorf("unable to detect postgres binary version in pg_config output %q", commandOutput)
 	}
+
+	binaryVersionString := versionSlice[1]
 
 	v, err := semver.NewVersion(strings.TrimSpace(binaryVersionString))
 	if err != nil {

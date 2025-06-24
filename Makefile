@@ -38,7 +38,7 @@ generate-examples: proto
 .PHONY: test-integration
 test-integration: kind-cluster-create
 	kind --name backup-restore-sidecar load docker-image ghcr.io/metal-stack/backup-restore-sidecar:latest
-	KUBECONFIG=$(KUBECONFIG) go test $(GO_RUN_ARG) -tags=integration -count 1 -v -p 1 -timeout 20m ./...
+	KUBECONFIG=$(KUBECONFIG) go test $(GO_RUN_ARG) -tags=integration -count 1 -v -p 1 -timeout 30m ./...
 
 .PHONY: proto
 proto:

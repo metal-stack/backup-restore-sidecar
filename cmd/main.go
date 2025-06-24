@@ -188,12 +188,12 @@ var createBackupCmd = &cobra.Command{
 		return initBackupProvider()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.New(context.Background(), viper.GetString(serverAddrFlg))
+		c, err := client.New(cmd.Context(), viper.GetString(serverAddrFlg))
 		if err != nil {
 			return fmt.Errorf("error creating client: %w", err)
 		}
 
-		_, err = c.DatabaseServiceClient().CreateBackup(context.Background(), &v1.CreateBackupRequest{})
+		_, err = c.DatabaseServiceClient().CreateBackup(cmd.Context(), &v1.CreateBackupRequest{})
 		return err
 	},
 }
@@ -209,12 +209,12 @@ var restoreCmd = &cobra.Command{
 			return errors.New("no version argument given")
 		}
 
-		c, err := client.New(context.Background(), viper.GetString(serverAddrFlg))
+		c, err := client.New(cmd.Context(), viper.GetString(serverAddrFlg))
 		if err != nil {
 			return fmt.Errorf("error creating client: %w", err)
 		}
 
-		_, err = c.BackupServiceClient().RestoreBackup(context.Background(), &v1.RestoreBackupRequest{
+		_, err = c.BackupServiceClient().RestoreBackup(cmd.Context(), &v1.RestoreBackupRequest{
 			Version: args[0],
 		})
 		return err
@@ -226,12 +226,12 @@ var restoreListCmd = &cobra.Command{
 	Aliases: []string{"ls"},
 	Short:   "lists available backups",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.New(context.Background(), viper.GetString(serverAddrFlg))
+		c, err := client.New(cmd.Context(), viper.GetString(serverAddrFlg))
 		if err != nil {
 			return fmt.Errorf("error creating client: %w", err)
 		}
 
-		backups, err := c.BackupServiceClient().ListBackups(context.Background(), &v1.ListBackupsRequest{})
+		backups, err := c.BackupServiceClient().ListBackups(cmd.Context(), &v1.ListBackupsRequest{})
 		if err != nil {
 			return fmt.Errorf("error listing backups: %w", err)
 		}
@@ -287,12 +287,12 @@ var downloadBackupCmd = &cobra.Command{
 			return errors.New("no version argument specified")
 		}
 
-		c, err := client.New(context.Background(), viper.GetString(serverAddrFlg))
+		c, err := client.New(cmd.Context(), viper.GetString(serverAddrFlg))
 		if err != nil {
 			return fmt.Errorf("error creating client: %w", err)
 		}
 
-		backup, err := c.BackupServiceClient().GetBackupByVersion(context.Background(), &v1.GetBackupByVersionRequest{Version: args[0]})
+		backup, err := c.BackupServiceClient().GetBackupByVersion(cmd.Context(), &v1.GetBackupByVersionRequest{Version: args[0]})
 
 		if err != nil {
 			return fmt.Errorf("error getting backup by version: %w", err)
@@ -306,7 +306,7 @@ var downloadBackupCmd = &cobra.Command{
 			return fmt.Errorf("failed opening output file: %w", err)
 		}
 
-		err = bp.DownloadBackup(context.Background(), &providers.BackupVersion{Name: backup.GetBackup().GetName()}, outputFile)
+		err = bp.DownloadBackup(cmd.Context(), &providers.BackupVersion{Name: backup.GetBackup().GetName()}, outputFile)
 
 		if err != nil {
 			return fmt.Errorf("failed downloading backup: %w", err)

@@ -18,8 +18,9 @@ func IsEmpty(name string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer f.Close()
-
+	defer func() {
+		_ = f.Close()
+	}()
 	_, err = f.Readdirnames(1)
 	if errors.Is(err, io.EOF) {
 		return true, nil
@@ -33,7 +34,9 @@ func RemoveContents(dir string) error {
 	if err != nil {
 		return err
 	}
-	defer d.Close()
+	defer func() {
+		_ = d.Close()
+	}()
 	names, err := d.Readdirnames(-1)
 	if err != nil {
 		return err
@@ -53,14 +56,16 @@ func Copy(fs afero.Fs, src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
-
+	defer func() {
+		_ = in.Close()
+	}()
 	out, err := fs.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
-
+	defer func() {
+		_ = out.Close()
+	}()
 	_, err = io.Copy(out, in)
 	if err != nil {
 		return err
@@ -96,7 +101,9 @@ func CopyFS(dir string, fsys fs.FS) error {
 		if err != nil {
 			return err
 		}
-		defer r.Close()
+		defer func() {
+			_ = r.Close()
+		}()
 		info, err := r.Stat()
 		if err != nil {
 			return err
@@ -106,7 +113,7 @@ func CopyFS(dir string, fsys fs.FS) error {
 			return err
 		}
 		if _, err := io.Copy(w, r); err != nil {
-			w.Close()
+			_ = w.Close()
 			return fmt.Errorf("copying %s: %w", path, err)
 		}
 		if err := w.Close(); err != nil {
