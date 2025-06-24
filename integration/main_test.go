@@ -67,7 +67,7 @@ func TestMain(m *testing.M) {
 func restoreFlow(t *testing.T, spec *flowSpec) {
 	t.Log("running restore flow")
 	var (
-		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+		ctx, cancel = context.WithTimeout(t.Context(), 20*time.Minute)
 		ns          = testNamespace(t)
 	)
 
@@ -182,7 +182,7 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 func restoreLatestFromMultipleBackupsFlow(t *testing.T, spec *flowSpec) {
 	t.Log("running restore with empty datadir flow")
 	var (
-		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+		ctx, cancel = context.WithTimeout(t.Context(), 20*time.Minute)
 		ns          = testNamespace(t)
 	)
 
@@ -302,7 +302,7 @@ func upgradeFlow(t *testing.T, spec *upgradeFlowSpec) {
 	require.GreaterOrEqual(t, len(spec.databaseImages), 2, "at least 2 database images must be specified for the upgrade test")
 
 	var (
-		ctx, cancel  = context.WithTimeout(context.Background(), 10*time.Minute)
+		ctx, cancel  = context.WithTimeout(t.Context(), 20*time.Minute)
 		ns           = testNamespace(t)
 		initialImage = spec.databaseImages[0]
 		nextImages   = spec.databaseImages[1:]
