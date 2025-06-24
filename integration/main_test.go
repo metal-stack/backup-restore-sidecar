@@ -396,8 +396,6 @@ func upgradeFlow(t *testing.T, spec *upgradeFlowSpec) {
 		}
 		t.Logf("deploy sts with next database version %q, container %q", image, nextSts.Spec.Template.Spec.Containers[0].Image)
 
-		time.Sleep(10 * time.Second)
-
 		err = c.Update(ctx, nextSts, &client.UpdateOptions{})
 		require.NoError(t, err)
 
