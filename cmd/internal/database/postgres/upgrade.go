@@ -251,9 +251,13 @@ func (db *Postgres) getBinaryVersion(ctx context.Context, pgConfigCmd string) (u
 		return 0, fmt.Errorf("unable to detect postgres binary version: %w", err)
 	}
 
-	versionSlice := strings.Split(string(out), " ")
+	return db.extractVersion(string(out))
+}
+
+func (db *Postgres) extractVersion(commandOutput string) (uint64, error) {
+	versionSlice := strings.Fields(commandOutput)
 	if len(versionSlice) < 2 {
-		return 0, fmt.Errorf("unable to detect postgres binary version in pg_config output %q", string(out))
+		return 0, fmt.Errorf("unable to detect postgres binary version in pg_config output %q", commandOutput)
 	}
 
 	binaryVersionString := versionSlice[1]
