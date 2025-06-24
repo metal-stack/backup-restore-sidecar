@@ -25,11 +25,6 @@ func main() {
 			backing: examples.EtcdBackingResources,
 		},
 		{
-			db:      examples.Meilisearch,
-			sts:     examples.MeilisearchSts,
-			backing: examples.MeilisearchBackingResources,
-		},
-		{
 			db:      examples.Postgres,
 			sts:     examples.PostgresSts,
 			backing: examples.PostgresBackingResources,
