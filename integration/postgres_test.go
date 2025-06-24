@@ -48,9 +48,14 @@ func Test_Postgres_Upgrade(t *testing.T) {
 		},
 		databaseImages: []string{
 			"postgres:12-alpine",
-			// "postgres:13-alpine", commented to test if two versions upgrade also work
-			"postgres:14-alpine",
+			// Upgrade from 12-alpine to 13-alpine is not possible because of library differences in icu-lib.
+			// The solution is to upgrade to a older 14.10-alpine which has the same icu-lib version as 12-alpine
+			// and then update to 14.18-alpine or newer which does not require to run pg_upgrade.
+			// "postgres:13-alpine",
+			"postgres:14.10-alpine",
+			"postgres:14.18-alpine",
 			"postgres:15-alpine",
+			"postgres:17-alpine",
 		},
 	})
 }
@@ -80,7 +85,9 @@ func newPostgresSession(t *testing.T, ctx context.Context) *sql.DB {
 
 func addPostgresTestData(t *testing.T, ctx context.Context) {
 	db := newPostgresSession(t, ctx)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	var (
 		createStmt = `CREATE TABLE backuprestore (
@@ -98,7 +105,9 @@ func addPostgresTestData(t *testing.T, ctx context.Context) {
 
 func addPostgresTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
 	db := newPostgresSession(t, ctx)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	var (
 		createStmt = `CREATE TABLE IF NOT EXISTS backuprestore (
@@ -116,12 +125,16 @@ func addPostgresTestDataWithIndex(t *testing.T, ctx context.Context, index int) 
 
 func verifyPostgresTestDataWithIndex(t *testing.T, ctx context.Context, index int) {
 	db := newPostgresSession(t, ctx)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	rows, err := db.Query(fmt.Sprintf("SELECT \"data\" FROM backuprestore WHERE data='idx-%d';", index))
 	require.NoError(t, err)
 	require.NoError(t, rows.Err())
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	require.True(t, rows.Next())
 	var data string
@@ -134,12 +147,16 @@ func verifyPostgresTestDataWithIndex(t *testing.T, ctx context.Context, index in
 }
 func verifyPostgresTestData(t *testing.T, ctx context.Context) {
 	db := newPostgresSession(t, ctx)
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	rows, err := db.Query(`SELECT "data" FROM backuprestore;`)
 	require.NoError(t, err)
 	require.NoError(t, rows.Err())
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	require.True(t, rows.Next())
 	var data string

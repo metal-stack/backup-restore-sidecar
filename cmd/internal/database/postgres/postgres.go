@@ -160,8 +160,9 @@ func (db *Postgres) Probe(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("unable to open postgres connection %w", err)
 	}
-	defer dbc.Close()
-
+	defer func() {
+		_ = dbc.Close()
+	}()
 	err = dbc.PingContext(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to ping postgres connection %w", err)
@@ -189,7 +190,10 @@ func (db *Postgres) updateTimescaleDB(ctx context.Context, dbc *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("unable to get database names: %w", err)
 	}
-	defer databaseNameRows.Close()
+
+	defer func() {
+		_ = databaseNameRows.Close()
+	}()
 
 	for databaseNameRows.Next() {
 		var name string
@@ -212,13 +216,17 @@ func (db *Postgres) updateTimescaleDB(ctx context.Context, dbc *sql.DB) error {
 		if err != nil {
 			return fmt.Errorf("unable to open postgres connection %w", err)
 		}
-		defer dbc2.Close()
+		defer func() {
+			_ = dbc2.Close()
+		}()
 
 		rows, err := dbc2.QueryContext(ctx, "SELECT extname FROM pg_extension")
 		if err != nil {
 			return fmt.Errorf("unable to get extensions: %w", err)
 		}
-		defer rows.Close()
+		defer func() {
+			_ = rows.Close()
+		}()
 
 		for rows.Next() {
 			var extName string

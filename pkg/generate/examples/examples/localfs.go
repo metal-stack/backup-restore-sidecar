@@ -12,7 +12,7 @@ import (
 
 var (
 	Localfs               = "localfs"
-	LocalfsContainerImage = "alpine:3.19"
+	LocalfsContainerImage = "alpine:3.22"
 )
 
 func LocalfsSts(namespace string) *appsv1.StatefulSet {

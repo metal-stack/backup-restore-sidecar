@@ -100,8 +100,9 @@ func (b *BackupProviderLocal) DownloadBackup(_ context.Context, version *provide
 	if err != nil {
 		return fmt.Errorf("could not open file %s: %w", source, err)
 	}
-	defer infile.Close()
-
+	defer func() {
+		_ = infile.Close()
+	}()
 	_, err = io.Copy(writer, infile)
 	if err != nil {
 		return err
@@ -115,7 +116,7 @@ func (b *BackupProviderLocal) UploadBackup(ctx context.Context, reader io.Reader
 	b.log.Info("upload backups called for provider local")
 
 	destination := b.config.LocalBackupPath + "/" + b.currentBackupName + b.suffix
-	fmt.Println("dest of provider file: ", "dest", destination)
+	b.log.Info("dest of provider file", "dest", destination)
 
 	output, err := b.fs.Create(destination)
 	if err != nil {
@@ -147,7 +148,9 @@ func (b *BackupProviderLocal) ListBackups(_ context.Context) (providers.BackupVe
 	if err != nil {
 		return nil, err
 	}
-	defer d.Close()
+	defer func() {
+		_ = d.Close()
+	}()
 	names, err := d.Readdirnames(-1)
 	if err != nil {
 		return nil, err
