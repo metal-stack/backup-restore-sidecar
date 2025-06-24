@@ -179,6 +179,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 		"--old-bindir", oldPostgresBinDir,
 		"--new-bindir", newPostgresBinDir,
 		"--link",
+		"--verbose",
 	}
 
 	runsTimescaleDB, err := db.runningTimescaleDB(ctx, postgresConfigCmd)

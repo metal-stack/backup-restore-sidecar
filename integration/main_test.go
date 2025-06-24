@@ -365,12 +365,14 @@ func upgradeFlow(t *testing.T, spec *upgradeFlowSpec) {
 
 		var backup *v1.Backup
 		err = retry.Do(func() error {
+			t.Log("trigger backup")
 			_, err = brsc.DatabaseServiceClient().CreateBackup(ctx, &v1.CreateBackupRequest{})
 			if err != nil {
 				t.Log(err)
 				return err
 			}
 
+			t.Log("list backups")
 			backups, err := brsc.BackupServiceClient().ListBackups(ctx, &v1.ListBackupsRequest{})
 			if err != nil {
 				return err
@@ -381,6 +383,7 @@ func upgradeFlow(t *testing.T, spec *upgradeFlowSpec) {
 			}
 
 			backup = backups.GetBackups()[0]
+			t.Logf("found %d backups, consider backup with version:%s", len(backups.GetBackups()), backup.Version)
 
 			return nil
 		}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
@@ -392,6 +395,8 @@ func upgradeFlow(t *testing.T, spec *upgradeFlowSpec) {
 			nextSts.Spec.Template.Spec.Containers[i].Image = image
 		}
 		t.Logf("deploy sts with next database version %q, container %q", image, nextSts.Spec.Template.Spec.Containers[0].Image)
+
+		time.Sleep(10 * time.Second)
 
 		err = c.Update(ctx, nextSts, &client.UpdateOptions{})
 		require.NoError(t, err)

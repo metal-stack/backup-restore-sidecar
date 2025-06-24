@@ -116,7 +116,7 @@ func (b *BackupProviderLocal) UploadBackup(ctx context.Context, reader io.Reader
 	b.log.Info("upload backups called for provider local")
 
 	destination := b.config.LocalBackupPath + "/" + b.currentBackupName + b.suffix
-	fmt.Println("dest of provider file: ", "dest", destination)
+	b.log.Info("dest of provider file", "dest", destination)
 
 	output, err := b.fs.Create(destination)
 	if err != nil {
