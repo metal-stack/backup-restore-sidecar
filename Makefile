@@ -64,10 +64,6 @@ start-rethinkdb:
 start-etcd:
 	$(MAKE)	start	DB=etcd
 
-.PHONY: start-meilisearch
-start-meilisearch:
-	$(MAKE)	start	DB=meilisearch
-
 .PHONY: start-redis
 start-redis:
 	$(MAKE)	start	DB=redis
