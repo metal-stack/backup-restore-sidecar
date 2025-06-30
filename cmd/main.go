@@ -238,8 +238,8 @@ var restoreListCmd = &cobra.Command{
 		}
 
 		p := utils.NewTablePrinter()
-		p.Print([]string{"Date", "Name", "Version"}, data)
-		return nil
+		err = p.Print([]string{"Date", "Name", "Version"}, data)
+		return err
 	},
 }
 
