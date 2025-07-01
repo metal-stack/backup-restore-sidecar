@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
@@ -31,9 +34,8 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/wait"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/client"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
+	"github.com/metal-stack/metal-lib/pkg/pointer"
 	"github.com/metal-stack/v"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -88,7 +90,8 @@ const (
 	s3EndpointFlg   = "s3-endpoint"
 	s3AccessKeyFlg  = "s3-access-key"
 	//nolint
-	s3SecretKeyFlg = "s3-secret-key"
+	s3SecretKeyFlg  = "s3-secret-key"
+	s3TrustedCaCert = "s3-trusted-ca-cert"
 
 	compressionMethod = "compression-method"
 
@@ -583,19 +586,20 @@ func initBackupProvider() error {
 			},
 		)
 	case "s3":
-		bp, err = s3.New(
-			logger.WithGroup("backup"),
-			&s3.BackupProviderConfigS3{
-				ObjectPrefix:  viper.GetString(objectPrefixFlg),
-				ObjectsToKeep: viper.GetInt32(objectsToKeepFlg),
-				Region:        viper.GetString(s3RegionFlg),
-				BucketName:    viper.GetString(s3BucketNameFlg),
-				Endpoint:      viper.GetString(s3EndpointFlg),
-				AccessKey:     viper.GetString(s3AccessKeyFlg),
-				SecretKey:     viper.GetString(s3SecretKeyFlg),
-				Suffix:        suffix,
-			},
-		)
+		bkpConfig := &s3.BackupProviderConfigS3{
+			ObjectPrefix:  viper.GetString(objectPrefixFlg),
+			ObjectsToKeep: viper.GetInt32(objectsToKeepFlg),
+			Region:        viper.GetString(s3RegionFlg),
+			BucketName:    viper.GetString(s3BucketNameFlg),
+			Endpoint:      viper.GetString(s3EndpointFlg),
+			AccessKey:     viper.GetString(s3AccessKeyFlg),
+			SecretKey:     viper.GetString(s3SecretKeyFlg),
+			Suffix:        suffix,
+		}
+		if viper.IsSet(s3TrustedCaCert) {
+			bkpConfig.TrustedCaCert = pointer.Pointer(viper.GetString(s3TrustedCaCert))
+		}
+		bp, err = s3.New(logger.WithGroup("backup"), bkpConfig)
 	case "local":
 		bp, err = local.New(
 			logger.WithGroup("backup"),

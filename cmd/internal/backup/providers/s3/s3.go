@@ -2,9 +2,12 @@ package s3
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"io"
 	"log/slog"
+	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -44,6 +47,7 @@ type BackupProviderConfigS3 struct {
 	ObjectsToKeep int32
 	FS            afero.Fs
 	Suffix        string
+	TrustedCaCert *string
 }
 
 func (c *BackupProviderConfigS3) validate() error {
@@ -84,9 +88,23 @@ func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, erro
 		return nil, err
 	}
 
+	httpClient := http.DefaultClient
+	if cfg.TrustedCaCert != nil {
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM([]byte(*cfg.TrustedCaCert))
+		httpClient.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs:            caCertPool,
+				InsecureSkipVerify: false,
+				MinVersion:         tls.VersionTLS13,
+			},
+		}
+	}
+
 	s3Cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, "")),
 		config.WithRegion(cfg.Region),
+		config.WithHTTPClient(httpClient),
 	)
 	if err != nil {
 		return nil, err
