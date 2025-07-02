@@ -90,8 +90,9 @@ const (
 	s3EndpointFlg   = "s3-endpoint"
 	s3AccessKeyFlg  = "s3-access-key"
 	//nolint
-	s3SecretKeyFlg  = "s3-secret-key"
-	s3TrustedCaCert = "s3-trusted-ca-cert"
+	s3SecretKeyFlg       = "s3-secret-key"
+	s3InsecureSkipVerify = "s3-insecure-skip-verify"
+	s3TrustedCaCert      = "s3-trusted-ca-cert"
 
 	compressionMethod = "compression-method"
 
@@ -595,6 +596,9 @@ func initBackupProvider() error {
 			AccessKey:     viper.GetString(s3AccessKeyFlg),
 			SecretKey:     viper.GetString(s3SecretKeyFlg),
 			Suffix:        suffix,
+		}
+		if viper.IsSet(s3InsecureSkipVerify) {
+			bkpConfig.InsecureSkipVerify = pointer.Pointer(viper.GetBool(s3InsecureSkipVerify))
 		}
 		if viper.IsSet(s3TrustedCaCert) {
 			bkpConfig.TrustedCaCert = pointer.Pointer(viper.GetString(s3TrustedCaCert))
