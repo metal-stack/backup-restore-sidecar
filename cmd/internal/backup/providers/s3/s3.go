@@ -2,9 +2,12 @@ package s3
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"io"
 	"log/slog"
+	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -34,16 +37,18 @@ type BackupProviderS3 struct {
 
 // BackupProviderConfigS3 provides configuration for the BackupProviderS3
 type BackupProviderConfigS3 struct {
-	BucketName    string
-	Endpoint      string
-	Region        string
-	AccessKey     string
-	SecretKey     string
-	BackupName    string
-	ObjectPrefix  string
-	ObjectsToKeep int32
-	FS            afero.Fs
-	Suffix        string
+	BucketName         string
+	Endpoint           string
+	Region             string
+	AccessKey          string
+	SecretKey          string
+	BackupName         string
+	InsecureSkipVerify *bool
+	TrustedCaCert      *string
+	ObjectPrefix       string
+	ObjectsToKeep      int32
+	FS                 afero.Fs
+	Suffix             string
 }
 
 func (c *BackupProviderConfigS3) validate() error {
@@ -59,7 +64,9 @@ func (c *BackupProviderConfigS3) validate() error {
 	if c.SecretKey == "" {
 		return errors.New("s3 secretkey must not be empty")
 	}
-
+	if c.InsecureSkipVerify != nil && *c.InsecureSkipVerify && c.TrustedCaCert != nil {
+		return errors.New("s3 skip verify certificate and trusted CA certificate cannot be set at the same time")
+	}
 	return nil
 }
 
@@ -84,9 +91,31 @@ func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, erro
 		return nil, err
 	}
 
+	httpClient := http.DefaultClient
+	if cfg.InsecureSkipVerify != nil && *cfg.InsecureSkipVerify {
+		httpClient.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+	}
+
+	if cfg.TrustedCaCert != nil {
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM([]byte(*cfg.TrustedCaCert))
+		httpClient.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs:            caCertPool,
+				InsecureSkipVerify: false,
+				MinVersion:         tls.VersionTLS13,
+			},
+		}
+	}
+
 	s3Cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, "")),
 		config.WithRegion(cfg.Region),
+		config.WithHTTPClient(httpClient),
 	)
 	if err != nil {
 		return nil, err
