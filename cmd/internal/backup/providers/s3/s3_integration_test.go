@@ -13,14 +13,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
-	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
+	"github.com/mdelapenya/tlscert"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	tlog "github.com/testcontainers/testcontainers-go/log"
 	"github.com/testcontainers/testcontainers-go/wait"
+
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/compress"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 )
 
 func Test_BackupProviderS3(t *testing.T) {
@@ -50,6 +52,7 @@ func Test_BackupProviderS3(t *testing.T) {
 
 	var (
 		endpoint           = conn.Endpoint
+		trustedCaCert      = &conn.TrustedCaCert
 		backupAmount       = 5
 		expectedBackupName = "db.tar.gz"
 		prefix             = fmt.Sprintf("test-with-%d", backupAmount)
@@ -61,14 +64,15 @@ func Test_BackupProviderS3(t *testing.T) {
 	require.NoError(t, err)
 
 	p, err := New(log, &BackupProviderConfigS3{
-		BucketName:   "test",
-		Endpoint:     endpoint,
-		Region:       "dummy",
-		AccessKey:    "ACCESSKEY",
-		SecretKey:    "SECRETKEY",
-		ObjectPrefix: prefix,
-		FS:           fs,
-		Suffix:       compressor.Extension(),
+		BucketName:    "test",
+		Endpoint:      endpoint,
+		Region:        "dummy",
+		AccessKey:     "ACCESSKEY",
+		SecretKey:     "SECRETKEY",
+		TrustedCaCert: trustedCaCert,
+		ObjectPrefix:  prefix,
+		FS:            fs,
+		Suffix:        compressor.Extension(),
 	})
 	require.NoError(t, err)
 	require.NotNil(t, p)
@@ -198,15 +202,20 @@ func Test_BackupProviderS3(t *testing.T) {
 }
 
 type connectionDetails struct {
-	Endpoint string
+	Endpoint      string
+	TrustedCaCert string
 }
 
 func startMinioContainer(t testing.TB, ctx context.Context) (testcontainers.Container, *connectionDetails) {
+	certsDir := "/certs"
+	caCert, err := tlscert.SelfSignedCAE("ignored")
+	require.NoError(t, err)
+
 	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
 			Image:        "quay.io/minio/minio",
 			ExposedPorts: []string{"9000"},
-			Cmd:          []string{"server", "/data"},
+			Cmd:          []string{"server", "--certs-dir", certsDir, "/data"},
 			Env: map[string]string{
 				"MINIO_ROOT_USER":     "ACCESSKEY",
 				"MINIO_ROOT_PASSWORD": "SECRETKEY",
@@ -214,21 +223,54 @@ func startMinioContainer(t testing.TB, ctx context.Context) (testcontainers.Cont
 			WaitingFor: wait.ForAll(
 				wait.ForListeningPort("9000/tcp"),
 			),
+			LifecycleHooks: []testcontainers.ContainerLifecycleHooks{createCertificatesContainerHook(certsDir, caCert)},
 		},
 		Started: true,
 		Logger:  tlog.TestLogger(t),
 	})
 	require.NoError(t, err)
 
-	host, err := c.Host(ctx)
-	require.NoError(t, err)
-
-	port, err := c.MappedPort(ctx, "9000")
+	endpoint, err := c.PortEndpoint(ctx, "9000", "https")
 	require.NoError(t, err)
 
 	conn := &connectionDetails{
-		Endpoint: "http://" + host + ":" + port.Port(),
+		Endpoint:      endpoint,
+		TrustedCaCert: string(caCert.Bytes),
 	}
 
 	return c, conn
+}
+
+func createCertificatesContainerHook(certsDir string, caCert *tlscert.Certificate) testcontainers.ContainerLifecycleHooks {
+	return testcontainers.ContainerLifecycleHooks{
+		PostCreates: []testcontainers.ContainerHook{
+			func(ctx context.Context, c testcontainers.Container) error {
+				host, err := c.Host(ctx)
+				if err != nil {
+					return err
+				}
+
+				cert, err := tlscert.SelfSignedFromRequestE(tlscert.Request{
+					Name:   "server",
+					Host:   host,
+					Parent: caCert,
+				})
+				if err != nil {
+					return fmt.Errorf("failed to create self signed cert: %w", err)
+				}
+
+				certPath := path.Join(certsDir, "public.crt")
+				err = c.CopyToContainer(ctx, cert.Bytes, certPath, 0o644)
+				if err != nil {
+					return fmt.Errorf("failed to copy cert to container: %w", err)
+				}
+				keyPath := path.Join(certsDir, "private.key")
+				err = c.CopyToContainer(ctx, cert.KeyBytes, keyPath, 0o644)
+				if err != nil {
+					return fmt.Errorf("failed to copy private key to container: %w", err)
+				}
+				return nil
+			},
+		},
+	}
 }
