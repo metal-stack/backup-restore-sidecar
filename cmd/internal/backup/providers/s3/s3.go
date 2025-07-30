@@ -167,6 +167,7 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 		{
 			NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
 				NewerNoncurrentVersions: &b.config.ObjectsToKeep,
+				NoncurrentDays:          aws.Int32(14),
 			},
 			Status: types.ExpirationStatusEnabled,
 			ID:     lifecycleRuleID,
