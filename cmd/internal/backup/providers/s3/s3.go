@@ -254,9 +254,10 @@ func (b *BackupProviderS3) UploadBackup(ctx context.Context, reader io.Reader) e
 
 	uploader := manager.NewUploader(b.c)
 	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
-		Bucket: bucket,
-		Key:    aws.String(destination),
-		Body:   reader,
+		Bucket:            bucket,
+		Key:               aws.String(destination),
+		Body:              reader,
+		ChecksumAlgorithm: types.ChecksumAlgorithmSha256,
 	})
 	if err != nil {
 		return err
