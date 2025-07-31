@@ -248,18 +248,10 @@ func withContentMD5(u *manager.Uploader) {
 	clientOptions := make([]func(*s3.Options), 0, len(u.ClientOptions)+1)
 	clientOptions = append(clientOptions, func(o *s3.Options) {
 		o.APIOptions = append(o.APIOptions, func(stack *middleware.Stack) error {
-			if _, err := stack.Initialize.Remove("AWSChecksum:SetupInputContext"); err != nil {
-				return err
-			}
-			if _, err := stack.Build.Remove("AWSChecksum:RequestMetricsTracking"); err != nil {
-				return err
-			}
-			if _, err := stack.Finalize.Remove("AWSChecksum:ComputeInputPayloadChecksum"); err != nil {
-				return err
-			}
-			if _, err := stack.Finalize.Remove("addInputChecksumTrailer"); err != nil {
-				return err
-			}
+			_, _ = stack.Initialize.Remove("AWSChecksum:SetupInputContext")
+			_, _ = stack.Build.Remove("AWSChecksum:RequestMetricsTracking")
+			_, _ = stack.Finalize.Remove("AWSChecksum:ComputeInputPayloadChecksum")
+			_, _ = stack.Finalize.Remove("addInputChecksumTrailer")
 			return smithyhttp.AddContentChecksumMiddleware(stack)
 		})
 	})
