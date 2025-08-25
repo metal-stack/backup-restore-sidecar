@@ -340,7 +340,7 @@ func init() {
 	rootCmd.AddCommand(startCmd, waitCmd, restoreCmd, createBackupCmd, downloadBackupCmd)
 
 	rootCmd.PersistentFlags().StringP(logLevelFlg, "", "info", "sets the application log level")
-	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb|etcd|redis|keydb|localfs]")
+	rootCmd.PersistentFlags().StringP(databaseFlg, "", "", "the kind of the database [postgres|rethinkdb|etcd|redis|keydb|valkey|localfs]")
 	rootCmd.PersistentFlags().StringP(databaseDatadirFlg, "", "", "the directory where the database stores its data in")
 
 	err := viper.BindPFlags(rootCmd.PersistentFlags())
@@ -509,7 +509,7 @@ func initDatabase() error {
 			viper.GetString(etcdEndpoints),
 			viper.GetString(etcdName),
 		)
-	case "redis", "keydb":
+	case "redis", "keydb", "valkey":
 		var err error
 		var password string
 		if viper.IsSet(redisPasswordFlg) {

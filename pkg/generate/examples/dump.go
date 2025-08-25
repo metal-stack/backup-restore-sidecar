@@ -45,6 +45,11 @@ func main() {
 			backing: examples.KeyDBBackingResources,
 		},
 		{
+			db:      examples.Valkey,
+			sts:     examples.ValkeySts,
+			backing: examples.ValkeyBackingResources,
+		},
+		{
 			db:      examples.Localfs,
 			sts:     examples.LocalfsSts,
 			backing: examples.LocalfsBackingResources,
