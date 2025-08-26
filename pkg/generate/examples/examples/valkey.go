@@ -12,7 +12,7 @@ import (
 
 var (
 	Valkey               = "valkey"
-	valkeyContainerImage = "valkey/valkey:7.2"
+	valkeyContainerImage = "ghcr.io/valkey-io/valkey:8.1-alpine"
 )
 
 func ValkeySts(namespace string) *appsv1.StatefulSet {

@@ -24,7 +24,7 @@ spec:
       - command:
         - backup-restore-sidecar
         - wait
-        image: valkey/valkey:7.2
+        image: ghcr.io/valkey-io/valkey:8.1-alpine
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
@@ -64,7 +64,7 @@ spec:
         - backup-restore-sidecar
         - start
         - --log-level=debug
-        image: valkey/valkey:7.2
+        image: ghcr.io/valkey-io/valkey:8.1-alpine
         imagePullPolicy: IfNotPresent
         name: backup-restore-sidecar
         ports:
