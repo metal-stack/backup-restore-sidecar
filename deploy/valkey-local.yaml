@@ -1,0 +1,151 @@
+# THESE EXAMPLES ARE GENERATED!
+# Use them as a template for your deployment, but do not commit manual changes to these files.
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  creationTimestamp: null
+  labels:
+    app: valkey
+  name: valkey
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: valkey
+  serviceName: valkey
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: valkey
+    spec:
+      containers:
+      - command:
+        - backup-restore-sidecar
+        - wait
+        image: ghcr.io/valkey-io/valkey:8.1-alpine
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - valkey-cli
+            - ping
+          failureThreshold: 3
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: valkey
+        ports:
+        - containerPort: 6379
+          name: client
+          protocol: TCP
+        readinessProbe:
+          exec:
+            command:
+            - valkey-cli
+            - ping
+          failureThreshold: 3
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources: {}
+        volumeMounts:
+        - mountPath: /data
+          name: data
+        - mountPath: /usr/local/bin/backup-restore-sidecar
+          name: bin-provision
+          subPath: backup-restore-sidecar
+        - mountPath: /etc/backup-restore-sidecar
+          name: backup-restore-sidecar-config
+      - command:
+        - backup-restore-sidecar
+        - start
+        - --log-level=debug
+        image: ghcr.io/valkey-io/valkey:8.1-alpine
+        imagePullPolicy: IfNotPresent
+        name: backup-restore-sidecar
+        ports:
+        - containerPort: 8000
+          name: grpc
+        resources: {}
+        volumeMounts:
+        - mountPath: /backup
+          name: backup
+        - mountPath: /data
+          name: data
+        - mountPath: /etc/backup-restore-sidecar
+          name: backup-restore-sidecar-config
+        - mountPath: /usr/local/bin/backup-restore-sidecar
+          name: bin-provision
+          subPath: backup-restore-sidecar
+      initContainers:
+      - command:
+        - cp
+        - /backup-restore-sidecar
+        - /bin-provision
+        image: ghcr.io/metal-stack/backup-restore-sidecar:latest
+        imagePullPolicy: IfNotPresent
+        name: backup-restore-sidecar-provider
+        resources: {}
+        volumeMounts:
+        - mountPath: /bin-provision
+          name: bin-provision
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: data
+      - name: backup
+        persistentVolumeClaim:
+          claimName: backup
+      - configMap:
+          name: backup-restore-sidecar-config-valkey
+        name: backup-restore-sidecar-config
+      - emptyDir: {}
+        name: bin-provision
+  updateStrategy: {}
+  volumeClaimTemplates:
+  - metadata:
+      creationTimestamp: null
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+    status: {}
+  - metadata:
+      creationTimestamp: null
+      name: backup
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+    status: {}
+status:
+  availableReplicas: 0
+  replicas: 0
+---
+apiVersion: v1
+data:
+  config.yaml: |
+    ---
+    bind-addr: 0.0.0.0
+    db: valkey
+    db-data-directory: /data/
+    backup-provider: local
+    backup-cron-schedule: "*/1 * * * *"
+    object-prefix: valkey-test
+    redis-addr: localhost:6379
+    encryption-key: "01234567891234560123456789123456"
+    post-exec-cmds:
+    - valkey-server
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: backup-restore-sidecar-config-valkey
