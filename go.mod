@@ -11,7 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.70
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.17.82
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.82.0
-	github.com/docker/docker v28.3.0+incompatible
+	github.com/docker/docker v28.3.3+incompatible
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/lib/pq v1.10.9
 	github.com/mdelapenya/tlscert v0.2.0
