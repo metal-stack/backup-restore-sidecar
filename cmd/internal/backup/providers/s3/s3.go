@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go/middleware"
 	"github.com/spf13/afero"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
@@ -166,7 +167,7 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 	rules := []types.LifecycleRule{
 		{
 			NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
-				NewerNoncurrentVersions: &b.config.ObjectsToKeep,
+				NoncurrentDays:          &b.config.ObjectsToKeep,
 			},
 			Status: types.ExpirationStatusEnabled,
 			ID:     lifecycleRuleID,
@@ -239,6 +240,23 @@ func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *provider
 	return nil
 }
 
+// See https://github.com/aws/aws-sdk-go-v2/discussions/2960
+func withoutTrailingChecksum(u *manager.Uploader) {
+	clientOptions := make([]func(*s3.Options), 0, len(u.ClientOptions)+1)
+	clientOptions = append(clientOptions, func(o *s3.Options) {
+		o.APIOptions = append(o.APIOptions, func(stack *middleware.Stack) error {
+			_, _ = stack.Initialize.Remove("AWSChecksum:SetupInputContext")
+			_, _ = stack.Build.Remove("AWSChecksum:RequestMetricsTracking")
+			_, _ = stack.Finalize.Remove("AWSChecksum:ComputeInputPayloadChecksum")
+			_, _ = stack.Finalize.Get("AWSChecksum:ComputeInputPayloadChecksum")
+			_, _ = stack.Finalize.Remove("addInputChecksumTrailer")
+			return nil
+		})
+	})
+	clientOptions = append(clientOptions, u.ClientOptions...)
+	u.ClientOptions = clientOptions
+}
+
 // UploadBackup uploads a backup to the backup provider
 func (b *BackupProviderS3) UploadBackup(ctx context.Context, reader io.Reader) error {
 	bucket := aws.String(b.config.BucketName)
@@ -251,11 +269,12 @@ func (b *BackupProviderS3) UploadBackup(ctx context.Context, reader io.Reader) e
 
 	b.log.Debug("uploading object", "dest", destination)
 
-	uploader := manager.NewUploader(b.c)
+	uploader := manager.NewUploader(b.c, withoutTrailingChecksum)
 	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
-		Bucket: bucket,
-		Key:    aws.String(destination),
-		Body:   reader,
+		Bucket:            bucket,
+		Key:               aws.String(destination),
+		Body:              reader,
+		ChecksumAlgorithm: types.ChecksumAlgorithmSha256,
 	})
 	if err != nil {
 		return err
