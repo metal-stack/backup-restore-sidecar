@@ -30,7 +30,7 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 		},
 		Spec: appsv1.StatefulSetSpec{
 			ServiceName: "valkey",
-			Replicas:    pointer.Pointer(int32(1)),
+			Replicas:    pointer.Pointer(int32(3)),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"app": "valkey",
@@ -43,7 +43,7 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 					},
 				},
 				Spec: corev1.PodSpec{
-					HostNetwork: true,
+					//HostNetwork: true,
 					Containers: []corev1.Container{
 						{
 							Name:            "valkey",
@@ -61,6 +61,24 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 								PeriodSeconds:       5,
 								SuccessThreshold:    1,
 								FailureThreshold:    3,
+							},
+							Env: []corev1.EnvVar{
+								{
+									Name: "POD_NAMESPACE",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "metadata.namespace",
+										},
+									},
+								},
+								{
+									Name: "POD_NAME",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "metadata.name",
+										},
+									},
+								},
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
@@ -106,6 +124,24 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 								{
 									Name:          "grpc",
 									ContainerPort: 8000,
+								},
+							},
+							Env: []corev1.EnvVar{
+								{
+									Name: "POD_NAMESPACE",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "metadata.namespace",
+										},
+									},
+								},
+								{
+									Name: "POD_NAME",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "metadata.name",
+										},
+									},
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
@@ -232,8 +268,12 @@ func ValkeyBackingResources(namespace string) []client.Object {
 			},
 			Data: map[string]string{
 				"config.yaml": `---
-bind-addr: 0.0.0.0
 db: valkey
+valkey-cluster-mode: true
+valkey-cluster-size: 3 #Set cluster size here
+valkey-statefulset-name: valkey
+
+bind-addr: 0.0.0.0
 db-data-directory: /data/
 backup-provider: local
 backup-cron-schedule: "*/1 * * * *"
@@ -241,7 +281,7 @@ object-prefix: valkey-test
 redis-addr: localhost:6379
 encryption-key: "01234567891234560123456789123456"
 post-exec-cmds:
-- valkey-server
+- valkey-server --cluster-enabled yes --cluster-config-file /data/nodes.conf --cluster-node-timeout 5000 --appendonly yes
 `,
 			},
 		},
