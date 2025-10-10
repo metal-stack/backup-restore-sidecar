@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/leaderelection"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/redis/go-redis/v9"
@@ -17,7 +18,6 @@ import (
 
 const (
 	valkeyDumpFile = "dump.rdb"
-	nodeConfFile   = "nodes.conf"
 )
 
 type Valkey struct {
@@ -32,6 +32,9 @@ type Valkey struct {
 
 	statefulsetName string
 	password        string
+
+	leaderElection        *leaderelection.LeaderElection
+	leaderElectionStarted bool
 }
 
 func (db *Valkey) Check(ctx context.Context) (bool, error) {
@@ -51,6 +54,23 @@ func (db *Valkey) Recover(ctx context.Context) error {
 		return fmt.Errorf("restore file not present: %s", dump)
 	}
 
+	if db.clusterMode {
+		if db.leaderElection == nil {
+			return fmt.Errorf("leader election not initialized")
+		}
+
+		if !db.leaderElection.IsLeader() {
+			db.log.Info("no the leader, skipping restore. Will sync from master")
+			return nil
+		}
+
+		db.log.Info("restoring from master")
+		return db.performRestore(ctx, dump)
+	}
+	return db.performRestore(ctx, dump)
+}
+
+func (db *Valkey) performRestore(ctx context.Context, dump string) error {
 	if err := utils.RemoveContents(db.datadir); err != nil {
 		return fmt.Errorf("could not clean database data directory: %w", err)
 	}
@@ -59,7 +79,6 @@ func (db *Valkey) Recover(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("unable to recover: %w", err)
 	}
-
 	db.log.Info("successfully restored valkey database")
 	return nil
 }
@@ -133,191 +152,54 @@ func New(log *slog.Logger, datadir string, password *string, addr string,
 
 	log.Info("Creating Valkey instance", "clusterMode", clusterMode, "clusterSize", clusterSize)
 
+	v.client = redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: getPassword(password),
+	})
 	if clusterMode {
-		v.client = redis.NewClient(&redis.Options{
-			Addr:     "localhost:6379",
-			Password: getPassword(password),
+		leaderElection, err := leaderelection.New(leaderelection.Config{
+			Log:      log,
+			LockName: fmt.Sprintf("valkey-backup-restore-%s", v.statefulsetName),
+			OnStartedLeading: func(ctx context.Context) {
+				log.Info("became leader for valkey-cluster backup/restore coordination")
+			},
+			OnStoppedLeading: func() {
+				log.Info("stopped being leader for valkey-cluster backup/restore coordination")
+			},
+			OnNewLeader: func(identity string) {
+				log.Info("new leader elected for valkey-cluster backup/restore coordination",
+					"leader", identity)
+			},
 		})
-		//nodes := v.getClusterNodes()
-		//v.clusterClient = redis.NewClusterClient(&redis.ClusterOptions{
-		//	Addrs:    nodes,
-		//	Password: getPassword(password),
-		//})
-	} else {
-		v.client = redis.NewClient(&redis.Options{
-			Addr:     addr,
-			Password: getPassword(password),
-		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create leader election: %w", err)
+		}
+		v.leaderElection = leaderElection
+
+		log.Info("cluster mode enabled with leader election coordination")
 	}
 	return v, nil
 }
 
-func (db *Valkey) initializeClusterClient(ctx context.Context) error {
-	if !db.clusterMode {
-		return nil
-	}
-
-	if _, err := os.Stat("/data/nodes.conf"); os.IsNotExist(err) {
-		leader := db.determineLeader(ctx)
-		hostname, _ := os.Hostname()
-		if leader == hostname {
-			db.log.Info("initializing cluster, leader ->", "hostname", hostname)
-
-			if err := db.waitForAllNodes(ctx); err != nil {
-				return err
-			}
-
-			if err := db.createCluster(ctx); err != nil {
-				return err
-			}
-		} else {
-			db.log.Info("Not the leader, waiting for cluster formation", "leader", leader)
-		}
-	}
-
-	if db.clusterClient == nil {
-		nodes := db.getClusterNodes()
-		db.clusterClient = redis.NewClusterClient(&redis.ClusterOptions{
-			Addrs:    nodes,
-			Password: db.password,
-		})
-		db.log.Info("cluster client initialized", "nodes", nodes)
-	}
-
-	return nil
-}
-
-func (db *Valkey) initializeCluster(ctx context.Context) error {
-	if !db.clusterMode {
-		return nil
-	}
-
-	if _, err := os.Stat("/data/nodes.conf"); os.IsNotExist(err) {
-		leader := db.determineLeader(ctx)
-		hostname, _ := os.Hostname()
-		if leader == hostname {
-			db.log.Info("initializing cluster, leader ->", "hostname", hostname)
-			return db.createCluster(ctx)
-		} else {
-			db.log.Info("Not the leader, waiting for cluster formation", "leader", leader)
-		}
-	}
-	if db.clusterClient == nil {
-		return db.initializeClusterClient(ctx)
-	}
-	return nil
-}
-
-func (db *Valkey) waitForAllNodes(ctx context.Context) error {
-	nodes := db.getClusterNodes()
-
-	namespace := os.Getenv("POD_NAMESPACE")
-	if namespace == "" {
-		namespace = "default"
-	}
-	statefulsetName := os.Getenv("STATEFULSET_NAME")
-	if statefulsetName == "" {
-		statefulsetName = "valkey"
-	}
-
-	db.log.Info("waiting for all nodes to be up", "nodes", nodes)
-
-	for _, node := range nodes {
-		for attempt := 0; attempt < 50; attempt++ {
-			testClient := redis.NewClient(&redis.Options{
-				Addr:        node,
-				DialTimeout: 2 * time.Second,
-			})
-			_, err := testClient.Ping(ctx).Result()
-			testClient.Close()
-
-			if err == nil {
-				db.log.Info("node is up", "node", node)
-				break
-			}
-			if attempt == 49 {
-				return fmt.Errorf("node %s did not get ready", node)
-			}
-			time.Sleep(5 * time.Second)
-		}
-	}
-	return nil
-}
-
-func (db *Valkey) createCluster(ctx context.Context) error {
-	args := []string{"--cluster", "create"}
-	args = append(args, db.getClusterNodes()...)
-	args = append(args, "--cluster-replicas", "0", "--cluster-yes")
-
-	db.log.Info("creating cluster", "command", "valkey-cli", "args", args)
-
-	output, err := db.executor.ExecuteCommandWithOutput(ctx, "valkey-cli", args)
-	if err != nil {
-		return fmt.Errorf("error creating cluster: %w , output: %s", err, output)
-	}
-
-	db.log.Info("cluster created successfully", "output", output)
-
-	if err := db.initializeClusterClient(ctx); err != nil {
-		return fmt.Errorf("error initializing cluster client: %w", err)
-	}
-
-	return nil
-}
-
-func (db *Valkey) determineLeader(ctx context.Context) string {
-	hostname, _ := os.Hostname()
-
-	for i, node := range db.getClusterNodes() {
-		testClient := redis.NewClient(&redis.Options{
-			//Addr: fmt.Sprintf("%s:6379", node),
-			Addr: node,
-		})
-		defer func(testClient *redis.Client) {
-			err := testClient.Close()
-			if err != nil {
-
-			}
-		}(testClient)
-
-		_, err := testClient.Ping(ctx).Result()
-		if err == nil {
-			//return fmt.Sprintf("valkey-%d", i)
-			return fmt.Sprintf("%s-%d", db.statefulsetName, i)
-		}
-	}
-	return hostname
-}
-
 func (db *Valkey) Probe(ctx context.Context) error {
-	if err := db.initializeCluster(ctx); err != nil {
-		return err
-	}
-	if db.clusterMode {
-		if db.clusterClient == nil {
-			if err := db.initializeClusterClient(ctx); err != nil {
-				return fmt.Errorf("error initializing cluster client: %w", err)
+	if db.clusterMode && db.leaderElection != nil && !db.leaderElectionStarted {
+		db.leaderElectionStarted = true
+		go func() {
+			if err := db.leaderElection.Start(context.Background()); err != nil {
+				db.log.Error("leader election failed", "error", err)
 			}
-		}
-		_, err := db.clusterClient.Ping(ctx).Result()
-		return err
-	} else {
-		_, err := db.client.Ping(ctx).Result()
-		return err
+		}()
+
+		db.log.Info("waiting for leader election to establish")
+		time.Sleep(3 * time.Second)
 	}
+
+	_, err := db.client.Ping(ctx).Result()
+	return err
 }
 
 func (db *Valkey) isMaster(ctx context.Context) (bool, error) {
-	var info string
-	var err error
-	if db.clusterMode {
-		if db.clusterClient == nil {
-			return false, fmt.Errorf("cluster client not initialized")
-		}
-		info, err = db.clusterClient.Info(ctx, "replication").Result()
-	} else {
-		info, err = db.clusterClient.Info(ctx, "replication").Result()
-	}
+	info, err := db.client.Info(ctx, "replication").Result()
 	if err != nil {
 		return false, fmt.Errorf("unable to get database info %w", err)
 	}
@@ -326,26 +208,9 @@ func (db *Valkey) isMaster(ctx context.Context) (bool, error) {
 		db.log.Info("this is database master")
 		return true, nil
 	}
+
+	db.log.Debug("this is a replica, not master")
 	return false, nil
-}
-
-func (db *Valkey) getClusterNodes() []string {
-	namespace := os.Getenv("POD_NAMESPACE")
-	if namespace == "" {
-		namespace = "default"
-	}
-
-	nodes := make([]string, db.clusterSize)
-	for i := 0; i < db.clusterSize; i++ {
-		nodes[i] = fmt.Sprintf(
-			"%s-%d.%s.%s.svc.cluster.local:6379",
-			db.statefulsetName,
-			i,
-			db.statefulsetName,
-			namespace,
-		)
-	}
-	return nodes
 }
 
 func getPassword(p *string) string {

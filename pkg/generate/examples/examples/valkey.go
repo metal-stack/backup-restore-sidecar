@@ -5,8 +5,10 @@ import (
 	"github.com/metal-stack/metal-lib/pkg/pointer"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -43,7 +45,8 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 					},
 				},
 				Spec: corev1.PodSpec{
-					//HostNetwork: true,
+					HostNetwork:        true,
+					ServiceAccountName: "valkey-backup-restore",
 					Containers: []corev1.Container{
 						{
 							Name:            "valkey",
@@ -78,6 +81,10 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 											FieldPath: "metadata.name",
 										},
 									},
+								},
+								{
+									Name:  "STATEFUL_NAME",
+									Value: "valkey",
 								},
 							},
 							ReadinessProbe: &corev1.Probe{
@@ -142,6 +149,10 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 											FieldPath: "metadata.name",
 										},
 									},
+								},
+								{
+									Name:  "STATEFUL_NAME",
+									Value: "valkey",
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
@@ -257,6 +268,82 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 
 func ValkeyBackingResources(namespace string) []client.Object {
 	return []client.Object{
+		&corev1.Service{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Service",
+				APIVersion: corev1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "valkey",
+				Namespace: namespace,
+				Labels: map[string]string{
+					"app": "valkey",
+				},
+			},
+			Spec: corev1.ServiceSpec{
+				ClusterIP: "None",
+				Ports: []corev1.ServicePort{
+					{
+						Name:       "client",
+						Port:       6379,
+						TargetPort: intstr.FromInt(6379),
+						Protocol:   corev1.ProtocolTCP,
+					},
+				},
+				Selector: map[string]string{
+					"app": "valkey",
+				},
+			},
+		},
+		&corev1.ServiceAccount{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ServiceAccount",
+				APIVersion: corev1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "valkey-backup-restore",
+				Namespace: namespace,
+			},
+		},
+		&rbacv1.Role{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Role",
+				APIVersion: rbacv1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "valkey-backup-restore",
+				Namespace: namespace,
+			},
+			Rules: []rbacv1.PolicyRule{
+				{
+					APIGroups: []string{"coordination.k8s.io"},
+					Resources: []string{"leases"},
+					Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+				},
+			},
+		},
+		&rbacv1.RoleBinding{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "RoleBinding",
+				APIVersion: rbacv1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "valkey-backup-restore",
+				Namespace: namespace,
+			},
+			Subjects: []rbacv1.Subject{
+				{
+					Kind:      "ServiceAccount",
+					Name:      "valkey-backup-restore",
+					Namespace: namespace,
+				},
+			},
+			RoleRef: rbacv1.RoleRef{
+				Kind:     "Role",
+				Name:     "valkey-backup-restore",
+				APIGroup: "rbac.authorization.k8s.io",
+			},
+		},
 		&corev1.ConfigMap{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "ConfigMap",
@@ -269,19 +356,18 @@ func ValkeyBackingResources(namespace string) []client.Object {
 			Data: map[string]string{
 				"config.yaml": `---
 db: valkey
-valkey-cluster-mode: true
-valkey-cluster-size: 3 #Set cluster size here
+valkey-cluster-mode: false
 valkey-statefulset-name: valkey
 
 bind-addr: 0.0.0.0
 db-data-directory: /data/
 backup-provider: local
 backup-cron-schedule: "*/1 * * * *"
-object-prefix: valkey-test
+object-prefix: valkey-test-${POD_NAME}
 redis-addr: localhost:6379
 encryption-key: "01234567891234560123456789123456"
 post-exec-cmds:
-- valkey-server --cluster-enabled yes --cluster-config-file /data/nodes.conf --cluster-node-timeout 5000 --appendonly yes
+  - valkey-server --cluster-config-file /data/nodes.conf --port 6379 --bind 0.0.0.0
 `,
 			},
 		},

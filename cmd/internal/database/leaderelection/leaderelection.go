@@ -33,20 +33,20 @@ type Config struct {
 	PodName   string
 	LockName  string
 
-	onStartedLeading func(ctx context.Context)
-	onStoppedLeading func()
-	onNewLeader      func(identity string)
+	OnStartedLeading func(ctx context.Context)
+	OnStoppedLeading func()
+	OnNewLeader      func(identity string)
 }
 
 func New(config Config) (*LeaderElection, error) {
 	kubeConfig, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, fmt.Errorf("error creating in-cluster config: %v", err)
+		return nil, fmt.Errorf("failed to get in-cluster config: %w", err)
 	}
 
 	client, err := kubernetes.NewForConfig(kubeConfig)
 	if err != nil {
-		return nil, fmt.Errorf("error creating kubernetes client: %v", err)
+		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 
 	namespace := config.Namespace
@@ -61,7 +61,7 @@ func New(config Config) (*LeaderElection, error) {
 	if podName == "" {
 		podName = os.Getenv("POD_NAME")
 		if podName == "" {
-			return nil, fmt.Errorf("no POD_NAME environment variable")
+			return nil, fmt.Errorf("pod name is required")
 		}
 	}
 
@@ -70,18 +70,16 @@ func New(config Config) (*LeaderElection, error) {
 		client:      client,
 		namespace:   namespace,
 		podName:     podName,
-		lockName:    config.LockName,
-		onStarted:   config.onStartedLeading,
-		onStopped:   config.onStoppedLeading,
-		onNewLeader: config.onNewLeader,
+		onStarted:   config.OnStartedLeading,
+		onStopped:   config.OnStoppedLeading,
+		onNewLeader: config.OnNewLeader,
 	}, nil
 }
 
 func (le *LeaderElection) Start(ctx context.Context) error {
-	le.log.Info("starting leader election,"+
+	le.log.Info("starting leader election",
 		"namespace", le.namespace,
-		"podName", le.podName,
-		"lockName", le.lockName)
+		"podName", le.podName)
 
 	lock := &resourcelock.LeaseLock{
 		LeaseMeta: metav1.ObjectMeta{
@@ -101,17 +99,24 @@ func (le *LeaderElection) Start(ctx context.Context) error {
 		RetryPeriod:   5 * time.Second,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
-				le.log.Info("started leader election", "identity", le.podName)
+				le.log.Info("started leading", "identity", le.podName)
 				le.isLeader = true
 				if le.onStarted != nil {
 					le.onStarted(ctx)
 				}
 			},
+			OnStoppedLeading: func() {
+				le.log.Info("stopped leading", "identity", le.podName)
+				le.isLeader = false
+				if le.onStopped != nil {
+					le.onStopped()
+				}
+			},
 			OnNewLeader: func(identity string) {
 				if identity == le.podName {
-					le.log.Info("acquired leadership", "identity", le.podName)
+					le.log.Info("successfully acquired leadership", "identity", identity)
 				} else {
-					le.log.Info("new leader elected", "identity", identity)
+					le.log.Info("new leader elected", "leader", identity, "self", le.podName)
 				}
 				if le.onNewLeader != nil {
 					le.onNewLeader(identity)
@@ -124,4 +129,6 @@ func (le *LeaderElection) Start(ctx context.Context) error {
 	return nil
 }
 
-func (le *LeaderElection) IsLeader() bool { return le.isLeader }
+func (le *LeaderElection) IsLeader() bool {
+	return le.isLeader
+}
