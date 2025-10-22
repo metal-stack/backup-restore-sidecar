@@ -25,16 +25,15 @@ type Valkey struct {
 	executor *utils.CmdExecutor
 	datadir  string
 
-	client        *redis.Client
-	clusterClient *redis.ClusterClient
-	clusterMode   bool
-	clusterSize   int
+	client *redis.Client
 
+	clusterMode     bool
+	clusterSize     int
 	statefulsetName string
 	password        string
 
-	leaderElection        *leaderelection.LeaderElection
-	leaderElectionStarted bool
+	leaderElection       *leaderelection.LeaderElection
+	leaderElectionCancel context.CancelFunc
 }
 
 func (db *Valkey) Check(ctx context.Context) (bool, error) {
@@ -59,13 +58,41 @@ func (db *Valkey) Recover(ctx context.Context) error {
 			return fmt.Errorf("leader election not initialized")
 		}
 
-		if !db.leaderElection.IsLeader() {
-			db.log.Info("no the leader, skipping restore. Will sync from master")
-			return nil
-		}
+		db.log.Info("cluster mode: waiting for leader election before restore")
 
-		db.log.Info("restoring from master")
-		return db.performRestore(ctx, dump)
+		// Wait for leader election to complete (90 seconds to allow for initialization + election)
+		// This is longer than the lease duration (60s) to ensure election completes
+		waitCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+		defer cancel()
+
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		startTime := time.Now()
+		for {
+			select {
+			case <-waitCtx.Done():
+				// Timeout reached
+				elapsed := time.Since(startTime)
+				db.log.Info("leader election timeout - not the leader, will sync from master via replication",
+					"elapsed", elapsed.String())
+				return nil
+			case <-ticker.C:
+				if db.leaderElection.IsLeader() {
+					elapsed := time.Since(startTime)
+					db.log.Info("this pod is the leader, performing restore from backup",
+						"electionTime", elapsed.String())
+					return db.performRestore(ctx, dump)
+				}
+				// Still waiting for election log progress every 10 seconds
+				elapsed := time.Since(startTime)
+				if int(elapsed.Seconds())%10 == 0 && elapsed.Seconds() > 0 {
+					db.log.Debug("waiting for leader election",
+						"elapsed", elapsed.String(),
+						"timeout", "90s")
+				}
+			}
+		}
 	}
 	return db.performRestore(ctx, dump)
 }
@@ -88,13 +115,15 @@ func (db *Valkey) Upgrade(ctx context.Context) error {
 }
 
 func (db *Valkey) Backup(ctx context.Context) error {
-	isMaster, err := db.isMaster(ctx)
-	if err != nil {
-		return err
-	}
-	if !isMaster {
-		db.log.Info("this database is not master, not taking a backup")
-		return nil
+	if !db.clusterMode {
+		isMaster, err := db.isMaster(ctx)
+		if err != nil {
+			return err
+		}
+		if !isMaster {
+			db.log.Info("this database is not master, not taking a backup")
+			return nil
+		}
 	}
 
 	if err := os.RemoveAll(constants.BackupDir); err != nil {
@@ -107,18 +136,9 @@ func (db *Valkey) Backup(ctx context.Context) error {
 
 	start := time.Now()
 
-	var saveErr error
-	if db.clusterMode {
-		if db.clusterClient == nil {
-			return fmt.Errorf("cluster client not initialized")
-		}
-		_, saveErr = db.clusterClient.Save(ctx).Result()
-	} else {
-		_, saveErr = db.client.Save(ctx).Result()
-	}
-
-	if saveErr != nil {
-		return fmt.Errorf("could not create a dump: %w", saveErr)
+	_, err := db.client.Save(ctx).Result()
+	if err != nil {
+		return fmt.Errorf("could not create a dump: %w", err)
 	}
 
 	dumpFile := path.Join(db.datadir, valkeyDumpFile)
@@ -157,6 +177,17 @@ func New(log *slog.Logger, datadir string, password *string, addr string,
 		Password: getPassword(password),
 	})
 	if clusterMode {
+		podName := os.Getenv("POD_NAME")
+		podNamespace := os.Getenv("POD_NAMESPACE")
+
+		if podName == "" {
+			return nil, fmt.Errorf("cluster mode requires POD_NAME environment variable to be set")
+		}
+		if podNamespace == "" {
+			return nil, fmt.Errorf("cluster mode requires POD_NAMESPACE environment variable to be set")
+		}
+
+		log.Info("cluster mode environment validated", "podName", podName, "namespace", podNamespace)
 		leaderElection, err := leaderelection.New(leaderelection.Config{
 			Log:      log,
 			LockName: fmt.Sprintf("valkey-backup-restore-%s", v.statefulsetName),
@@ -177,25 +208,48 @@ func New(log *slog.Logger, datadir string, password *string, addr string,
 		v.leaderElection = leaderElection
 
 		log.Info("cluster mode enabled with leader election coordination")
+
+		leCtx, leCancel := context.WithCancel(context.Background())
+		v.leaderElectionCancel = leCancel
+
+		go func() {
+			if err := leaderElection.Start(leCtx); err != nil {
+				log.Error("leader election failed", "error", err)
+			}
+		}()
 	}
 	return v, nil
 }
 
 func (db *Valkey) Probe(ctx context.Context) error {
-	if db.clusterMode && db.leaderElection != nil && !db.leaderElectionStarted {
-		db.leaderElectionStarted = true
-		go func() {
-			if err := db.leaderElection.Start(context.Background()); err != nil {
-				db.log.Error("leader election failed", "error", err)
-			}
-		}()
-
-		db.log.Info("waiting for leader election to establish")
-		time.Sleep(3 * time.Second)
+	_, err := db.client.Ping(ctx).Result()
+	if err != nil {
+		return err
 	}
 
-	_, err := db.client.Ping(ctx).Result()
-	return err
+	if db.clusterMode && db.leaderElection != nil {
+		isLeader := db.leaderElection.IsLeader()
+		db.log.Debug("cluster mode probe", "isLeader", isLeader)
+	}
+
+	return nil
+}
+
+func (db *Valkey) ShouldPerformBackup(ctx context.Context) bool {
+	if !db.clusterMode {
+		return true
+	}
+
+	if db.leaderElection == nil {
+		db.log.Warn("cluster mode enabled but leader election not initialized")
+		return false
+	}
+
+	isLeader := db.leaderElection.IsLeader()
+	if !isLeader {
+		db.log.Debug("not the leader, skipping backup coordination")
+	}
+	return isLeader
 }
 
 func (db *Valkey) isMaster(ctx context.Context) (bool, error) {
@@ -218,4 +272,20 @@ func getPassword(p *string) string {
 		return *p
 	}
 	return ""
+}
+
+// Close gracefully shuts down the Valkey database connection and leader election
+func (db *Valkey) Close() error {
+	if db.leaderElectionCancel != nil {
+		db.log.Info("stopping leader election")
+		db.leaderElectionCancel()
+	}
+
+	if db.client != nil {
+		if err := db.client.Close(); err != nil {
+			return fmt.Errorf("failed to close valkey client: %w", err)
+		}
+	}
+
+	return nil
 }

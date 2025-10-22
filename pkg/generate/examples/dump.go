@@ -50,6 +50,11 @@ func main() {
 			backing: examples.ValkeyBackingResources,
 		},
 		{
+			db:      "valkey-cluster",
+			sts:     examples.ValkeyClusterSts,
+			backing: examples.ValkeyClusterBackingResources,
+		},
+		{
 			db:      examples.Localfs,
 			sts:     examples.LocalfsSts,
 			backing: examples.LocalfsBackingResources,

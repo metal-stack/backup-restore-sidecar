@@ -30,3 +30,12 @@ type Database interface {
 	DatabaseInitializer
 	DatabaseProber
 }
+
+// DatabaseLeaderElector is an optional interface that databases can implement
+// to indicate whether they should perform backups based on leader election.
+// If not implemented, the database will always perform backups.
+type DatabaseLeaderElector interface {
+	// ShouldPerformBackup returns true if this instance should perform backups.
+	// For clustered databases with leader election, only the leader should return true.
+	ShouldPerformBackup(ctx context.Context) bool
+}

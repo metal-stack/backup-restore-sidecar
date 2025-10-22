@@ -18,9 +18,9 @@ import (
 
 func Test_Valkey_Cluster_Restore(t *testing.T) {
 	restoreFlow(t, &flowSpec{
-		databaseType:     examples.Valkey,
-		sts:              examples.ValkeySts,
-		backingResources: examples.ValkeyBackingResources,
+		databaseType:     "valkey-cluster",
+		sts:              examples.ValkeyClusterSts,
+		backingResources: examples.ValkeyClusterBackingResources,
 		addTestData:      addValkeyClusterTestData,
 		verifyTestData:   verifyValkeyClusterTestData,
 	})
@@ -28,9 +28,9 @@ func Test_Valkey_Cluster_Restore(t *testing.T) {
 
 func Test_Valkey_Cluster_RestoreLatestFromMultipleBackups(t *testing.T) {
 	restoreLatestFromMultipleBackupsFlow(t, &flowSpec{
-		databaseType:            examples.Valkey,
-		sts:                     examples.ValkeySts,
-		backingResources:        examples.ValkeyBackingResources,
+		databaseType:            "valkey-cluster",
+		sts:                     examples.ValkeyClusterSts,
+		backingResources:        examples.ValkeyClusterBackingResources,
 		addTestDataWithIndex:    addValkeyClusterTestDataWithIndex,
 		verifyTestDataWithIndex: verifyValkeyClusterTestDataWithIndex,
 	})
@@ -43,7 +43,8 @@ func newValkeyClusterClient(t *testing.T, ctx context.Context) *redis.Client {
 		cli = redis.NewClient(&redis.Options{
 			Addr: "localhost:6379",
 		})
-		return nil
+		_, err := cli.Ping(ctx).Result()
+		return err
 	}, retry.Context(ctx))
 	require.NoError(t, err)
 
@@ -93,7 +94,13 @@ func verifyValkeyClusterTestDataWithIndex(t *testing.T, ctx context.Context, ind
 		_ = cli.Close()
 	}()
 
-	resp, err := cli.Get(ctx, fmt.Sprintf("valkey-cluster-%d", index)).Result()
+	var resp string
+	err := retry.Do(func() error {
+		var err error
+		resp, err = cli.Get(ctx, fmt.Sprintf("valkey-cluster-%d", index)).Result()
+		return err
+	}, retry.Context(ctx), retry.Attempts(30), retry.Delay(2*time.Second))
+
 	require.NoError(t, err)
 	require.NotEmpty(t, resp)
 	assert.Equal(t, fmt.Sprintf("valkey-cluster-idx-%d", index), resp)

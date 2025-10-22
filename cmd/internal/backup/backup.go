@@ -59,6 +59,14 @@ func (b *Backuper) Start(ctx context.Context) error {
 	c := cron.New()
 
 	id, err := c.AddFunc(b.backupSchedule, func() {
+		// Check if this database instance should perform backups (leader election check)
+		if leaderElector, ok := b.db.(database.DatabaseLeaderElector); ok {
+			if !leaderElector.ShouldPerformBackup(ctx) {
+				b.log.Debug("skipping backup - not elected as leader")
+				return
+			}
+		}
+
 		err := b.CreateBackup(ctx)
 		if err != nil {
 			b.log.Error("error creating backup", "error", err)

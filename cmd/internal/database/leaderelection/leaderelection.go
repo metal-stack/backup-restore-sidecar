@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync/atomic"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,7 +22,7 @@ type LeaderElection struct {
 	podName   string
 	lockName  string
 
-	isLeader    bool
+	isLeader    atomic.Bool
 	onStarted   func(ctx context.Context)
 	onStopped   func()
 	onNewLeader func(identity string)
@@ -70,6 +71,7 @@ func New(config Config) (*LeaderElection, error) {
 		client:      client,
 		namespace:   namespace,
 		podName:     podName,
+		lockName:    config.LockName,
 		onStarted:   config.OnStartedLeading,
 		onStopped:   config.OnStoppedLeading,
 		onNewLeader: config.OnNewLeader,
@@ -100,14 +102,14 @@ func (le *LeaderElection) Start(ctx context.Context) error {
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
 				le.log.Info("started leading", "identity", le.podName)
-				le.isLeader = true
+				le.isLeader.Store(true)
 				if le.onStarted != nil {
 					le.onStarted(ctx)
 				}
 			},
 			OnStoppedLeading: func() {
 				le.log.Info("stopped leading", "identity", le.podName)
-				le.isLeader = false
+				le.isLeader.Store(false)
 				if le.onStopped != nil {
 					le.onStopped()
 				}
@@ -130,5 +132,5 @@ func (le *LeaderElection) Start(ctx context.Context) error {
 }
 
 func (le *LeaderElection) IsLeader() bool {
-	return le.isLeader
+	return le.isLeader.Load()
 }
