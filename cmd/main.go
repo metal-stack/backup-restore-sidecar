@@ -534,21 +534,13 @@ func initDatabase() error {
 			password = &p
 		}
 
-		clusterMode := viper.GetBool("valkey-cluster-mode")
-		clusterSize := viper.GetInt("valkey-cluster-size")
-		statefulsetName := viper.GetString("valkey-statefulset-name")
-		if statefulsetName == "" {
-			statefulsetName = "valkey"
+		masterReplicaMode := viper.GetBool("valkey-master-replica-mode")
+		replicaCount := viper.GetInt("valkey-replica-count")
+		statefulSetName := viper.GetString("valkey-statefulset-name")
+		if statefulSetName == "" {
+			statefulSetName = "valkey"
 		}
-		db, err = valkey.New(
-			logger.WithGroup("valkey"),
-			datadir,
-			password,
-			viper.GetString(redisAddrFlg),
-			statefulsetName,
-			clusterMode,
-			clusterSize,
-		)
+		db, err = valkey.New(logger.WithGroup("valkey"), datadir, password, statefulSetName, masterReplicaMode, replicaCount)
 		if err != nil {
 			return err
 		}

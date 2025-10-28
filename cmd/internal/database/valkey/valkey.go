@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,14 +30,14 @@ type Valkey struct {
 
 	clusterMode     bool
 	clusterSize     int
-	statefulsetName string
+	statefulSetName string
 	password        string
 
 	leaderElection       *leaderelection.LeaderElection
 	leaderElectionCancel context.CancelFunc
 }
 
-func (db *Valkey) Check(ctx context.Context) (bool, error) {
+func (db *Valkey) Check(context.Context) (bool, error) {
 	empty, err := utils.IsEmpty(db.datadir)
 	if err != nil {
 		return false, err
@@ -60,8 +61,14 @@ func (db *Valkey) Recover(ctx context.Context) error {
 
 		db.log.Info("cluster mode: waiting for leader election before restore")
 
-		// Wait for leader election to complete (90 seconds to allow for initialization + election)
-		// This is longer than the lease duration (60s) to ensure election completes
+		/* Wait for leader election to complete before restore.
+		Timeout calculation (90 seconds):
+		LeaseDuration: 60s (maximum time for a failed leader's lease to expire)
+		RetryPeriod: 5s (time for a new leader to acquire the lease after expiration)
+		Buffer: 25s (accounts for pod startup time, Kubernetes API latency, and clock skew)
+		If this timeout is reached, the pod is not the leader and will rely on Valkey replication
+		to sync data from the master instead of restoring from backup.
+		*/
 		waitCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 		defer cancel()
 
@@ -80,9 +87,27 @@ func (db *Valkey) Recover(ctx context.Context) error {
 			case <-ticker.C:
 				if db.leaderElection.IsLeader() {
 					elapsed := time.Since(startTime)
-					db.log.Info("this pod is the leader, performing restore from backup",
+
+					// Leader election considers database role: only restore if this pod will be the Valkey master
+					// In master-replica mode, pod-0 is always the master (determined by init.sh)
+					podName := os.Getenv("POD_NAME")
+					ordinal := extractOrdinalFromPodName(podName)
+
+					if ordinal == -1 {
+						return fmt.Errorf("failed to extract pod ordinal from POD_NAME: %s", podName)
+					}
+
+					if ordinal != 0 {
+						db.log.Info("elected as backup leader but not pod-0 (won't be Valkey master), skipping restore",
+							"ordinal", ordinal,
+							"electionTime", elapsed.String())
+						return nil
+					}
+
+					db.log.Info("elected as backup leader AND pod-0 (will be Valkey master), performing restore from backup",
+						"ordinal", ordinal,
 						"electionTime", elapsed.String())
-					return db.performRestore(ctx, dump)
+					return db.performRestore(dump)
 				}
 				// Still waiting for election log progress every 10 seconds
 				elapsed := time.Since(startTime)
@@ -94,10 +119,10 @@ func (db *Valkey) Recover(ctx context.Context) error {
 			}
 		}
 	}
-	return db.performRestore(ctx, dump)
+	return db.performRestore(dump)
 }
 
-func (db *Valkey) performRestore(ctx context.Context, dump string) error {
+func (db *Valkey) performRestore(dump string) error {
 	if err := utils.RemoveContents(db.datadir); err != nil {
 		return fmt.Errorf("could not clean database data directory: %w", err)
 	}
@@ -110,7 +135,7 @@ func (db *Valkey) performRestore(ctx context.Context, dump string) error {
 	return nil
 }
 
-func (db *Valkey) Upgrade(ctx context.Context) error {
+func (db *Valkey) Upgrade(context.Context) error {
 	return nil
 }
 
@@ -158,8 +183,13 @@ func (db *Valkey) Backup(ctx context.Context) error {
 	return nil
 }
 
-func New(log *slog.Logger, datadir string, password *string, addr string,
-	statefulsetName string, clusterMode bool, clusterSize int) (*Valkey, error) {
+func New(
+	log *slog.Logger,
+	datadir string,
+	password *string,
+	statefulSetName string,
+	clusterMode bool,
+	clusterSize int) (*Valkey, error) {
 	v := &Valkey{
 		log:             log,
 		datadir:         datadir,
@@ -167,7 +197,7 @@ func New(log *slog.Logger, datadir string, password *string, addr string,
 		executor:        utils.NewExecutor(log),
 		clusterMode:     clusterMode,
 		clusterSize:     clusterSize,
-		statefulsetName: statefulsetName,
+		statefulSetName: statefulSetName,
 	}
 
 	log.Info("Creating Valkey instance", "clusterMode", clusterMode, "clusterSize", clusterSize)
@@ -190,15 +220,15 @@ func New(log *slog.Logger, datadir string, password *string, addr string,
 		log.Info("cluster mode environment validated", "podName", podName, "namespace", podNamespace)
 		leaderElection, err := leaderelection.New(leaderelection.Config{
 			Log:      log,
-			LockName: fmt.Sprintf("valkey-backup-restore-%s", v.statefulsetName),
+			LockName: fmt.Sprintf("valkey-backup-restore-%s", v.statefulSetName),
 			OnStartedLeading: func(ctx context.Context) {
-				log.Info("became leader for valkey-cluster backup/restore coordination")
+				log.Info("became leader for valkey master-replica backup/restore coordination")
 			},
 			OnStoppedLeading: func() {
-				log.Info("stopped being leader for valkey-cluster backup/restore coordination")
+				log.Info("stopped being leader for valkey master-replica backup/restore coordination")
 			},
 			OnNewLeader: func(identity string) {
-				log.Info("new leader elected for valkey-cluster backup/restore coordination",
+				log.Info("new leader elected for valkey master-replica backup/restore coordination",
 					"leader", identity)
 			},
 		})
@@ -248,8 +278,24 @@ func (db *Valkey) ShouldPerformBackup(ctx context.Context) bool {
 	isLeader := db.leaderElection.IsLeader()
 	if !isLeader {
 		db.log.Debug("not the leader, skipping backup coordination")
+		return false
 	}
-	return isLeader
+
+	// Leader election considers database role: only backup if this pod is the Valkey master
+	isMaster, err := db.isMaster(ctx)
+	if err != nil {
+		db.log.Warn("elected as backup leader but failed to check Valkey master status, skipping backup",
+			"error", err)
+		return false
+	}
+
+	if !isMaster {
+		db.log.Info("elected as backup leader but not Valkey master, skipping backup")
+		return false
+	}
+
+	db.log.Debug("elected as backup leader AND Valkey master, performing backup")
+	return true
 }
 
 func (db *Valkey) isMaster(ctx context.Context) (bool, error) {
@@ -288,4 +334,26 @@ func (db *Valkey) Close() error {
 	}
 
 	return nil
+}
+
+// extractOrdinalFromPodName extracts the ordinal number from a StatefulSet pod name.
+// Expected format: <statefulset-name>-<ordinal> (e.g., valkey-master-replica-0)
+// Returns the ordinal number or -1 if extraction fails.
+func extractOrdinalFromPodName(podName string) int {
+	if podName == "" {
+		return -1
+	}
+
+	parts := strings.Split(podName, "-")
+	if len(parts) == 0 {
+		return -1
+	}
+
+	ordinalStr := parts[len(parts)-1]
+	ordinal, err := strconv.Atoi(ordinalStr)
+	if err != nil {
+		return -1
+	}
+
+	return ordinal
 }

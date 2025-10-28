@@ -286,7 +286,7 @@ func ValkeyBackingResources(namespace string) []client.Object {
 					{
 						Name:       "client",
 						Port:       6379,
-						TargetPort: intstr.FromInt(6379),
+						TargetPort: intstr.FromInt32(6379),
 						Protocol:   corev1.ProtocolTCP,
 					},
 				},
@@ -356,8 +356,8 @@ func ValkeyBackingResources(namespace string) []client.Object {
 			Data: map[string]string{
 				"config.yaml": `---
 db: valkey
-valkey-cluster-mode: false
-valkey-statefulset-name: valkey
+valkey-master-replica-mode: false
+valkey-statefulSet-name: valkey
 
 bind-addr: 0.0.0.0
 db-data-directory: /data/
@@ -401,13 +401,13 @@ fi
 	}
 }
 
-func ValkeyClusterSts(namespace string) *appsv1.StatefulSet {
+func ValkeyMasterReplicaSts(namespace string) *appsv1.StatefulSet {
 	sts := ValkeySts(namespace)
-	sts.Name = "valkey-cluster"
-	sts.ObjectMeta.Labels["app"] = "valkey-cluster"
-	sts.Spec.Selector.MatchLabels["app"] = "valkey-cluster"
-	sts.Spec.Template.ObjectMeta.Labels["app"] = "valkey-cluster"
-	sts.Spec.ServiceName = "valkey-cluster"
+	sts.Name = "valkey-master-replica"
+	sts.ObjectMeta.Labels["app"] = "valkey-master-replica"
+	sts.Spec.Selector.MatchLabels["app"] = "valkey-master-replica"
+	sts.Spec.Template.ObjectMeta.Labels["app"] = "valkey-master-replica"
+	sts.Spec.ServiceName = "valkey-master-replica"
 	sts.Spec.Replicas = pointer.Pointer(int32(3))
 
 	for i := range sts.Spec.Template.Spec.Containers {
@@ -424,7 +424,7 @@ func ValkeyClusterSts(namespace string) *appsv1.StatefulSet {
 		if sts.Spec.Template.Spec.Containers[i].Name == "backup-restore-sidecar" {
 			for j := range sts.Spec.Template.Spec.Containers[i].Env {
 				if sts.Spec.Template.Spec.Containers[i].Env[j].Name == "STATEFUL_NAME" {
-					sts.Spec.Template.Spec.Containers[i].Env[j].Value = "valkey-cluster"
+					sts.Spec.Template.Spec.Containers[i].Env[j].Value = "valkey-master-replica"
 				}
 			}
 		}
@@ -433,7 +433,7 @@ func ValkeyClusterSts(namespace string) *appsv1.StatefulSet {
 	for i := range sts.Spec.Template.Spec.Volumes {
 		if sts.Spec.Template.Spec.Volumes[i].Name == "backup-restore-sidecar-config" {
 			if sts.Spec.Template.Spec.Volumes[i].ConfigMap != nil {
-				sts.Spec.Template.Spec.Volumes[i].ConfigMap.Name = "backup-restore-sidecar-config-valkey-cluster"
+				sts.Spec.Template.Spec.Volumes[i].ConfigMap.Name = "backup-restore-sidecar-config-valkey-master-replica"
 			}
 		}
 	}
@@ -443,7 +443,7 @@ func ValkeyClusterSts(namespace string) *appsv1.StatefulSet {
 		VolumeSource: corev1.VolumeSource{
 			ConfigMap: &corev1.ConfigMapVolumeSource{
 				LocalObjectReference: corev1.LocalObjectReference{
-					Name: "valkey-init-script-cluster",
+					Name: "valkey-init-script-master-replica",
 				},
 				DefaultMode: pointer.Pointer(int32(0755)),
 			},
@@ -453,29 +453,29 @@ func ValkeyClusterSts(namespace string) *appsv1.StatefulSet {
 	return sts
 }
 
-func ValkeyClusterBackingResources(namespace string) []client.Object {
+func ValkeyMasterReplicaBackingResources(namespace string) []client.Object {
 	baseResources := ValkeyBackingResources(namespace)
 
 	for i, obj := range baseResources {
 		if svc, ok := obj.(*corev1.Service); ok {
-			svc.Name = "valkey-cluster"
-			svc.ObjectMeta.Labels["app"] = "valkey-cluster"
-			svc.Spec.Selector["app"] = "valkey-cluster"
+			svc.Name = "valkey-master-replica"
+			svc.ObjectMeta.Labels["app"] = "valkey-master-replica"
+			svc.Spec.Selector["app"] = "valkey-master-replica"
 			baseResources[i] = svc
 		}
 		if cm, ok := obj.(*corev1.ConfigMap); ok && cm.Name == "backup-restore-sidecar-config-valkey" {
-			cm.Name = "backup-restore-sidecar-config-valkey-cluster"
+			cm.Name = "backup-restore-sidecar-config-valkey-master-replica"
 			cm.Data["config.yaml"] = `---
 db: valkey
-valkey-cluster-mode: true
-valkey-cluster-size: 3
-valkey-statefulset-name: valkey-cluster
+valkey-master-replica-mode: true
+valkey-replica-count: 3
+valkey-statefulset-name: valkey-master-replica
 
 bind-addr: 0.0.0.0
 db-data-directory: /data/
 backup-provider: local
 backup-cron-schedule: "*/1 * * * *"
-object-prefix: valkey-cluster-test-${POD_NAME}
+object-prefix: valkey-master-replica-test-${POD_NAME}
 redis-addr: localhost:6379
 encryption-key: "01234567891234560123456789123456"
 post-exec-cmds:
@@ -491,7 +491,7 @@ post-exec-cmds:
 			APIVersion: corev1.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "valkey-init-script-cluster",
+			Name:      "valkey-init-script-master-replica",
 			Namespace: namespace,
 		},
 		Data: map[string]string{
@@ -522,7 +522,7 @@ case "$ORDINAL" in
 esac
 
 # Extract StatefulSet name by removing the ordinal suffix
-# E.g., valkey-cluster-0 -> valkey-cluster
+# E.g., valkey-master-replica-0 -> valkey-master-replica
 STATEFULSET_NAME="${POD_NAME%-*}"
 
 echo "Pod ordinal: $ORDINAL"

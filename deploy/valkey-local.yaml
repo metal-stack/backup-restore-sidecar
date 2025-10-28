@@ -217,8 +217,8 @@ data:
   config.yaml: |
     ---
     db: valkey
-    valkey-cluster-mode: false
-    valkey-statefulset-name: valkey
+    valkey-master-replica-mode: false
+    valkey-statefulSet-name: valkey
 
     bind-addr: 0.0.0.0
     db-data-directory: /data/
