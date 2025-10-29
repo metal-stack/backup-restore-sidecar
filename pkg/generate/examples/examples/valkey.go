@@ -404,9 +404,9 @@ fi
 func ValkeyMasterReplicaSts(namespace string) *appsv1.StatefulSet {
 	sts := ValkeySts(namespace)
 	sts.Name = "valkey-master-replica"
-	sts.ObjectMeta.Labels["app"] = "valkey-master-replica"
+	sts.Labels["app"] = "valkey-master-replica"
 	sts.Spec.Selector.MatchLabels["app"] = "valkey-master-replica"
-	sts.Spec.Template.ObjectMeta.Labels["app"] = "valkey-master-replica"
+	sts.Spec.Template.Labels["app"] = "valkey-master-replica"
 	sts.Spec.ServiceName = "valkey-master-replica"
 	sts.Spec.Replicas = pointer.Pointer(int32(3))
 
@@ -459,7 +459,7 @@ func ValkeyMasterReplicaBackingResources(namespace string) []client.Object {
 	for i, obj := range baseResources {
 		if svc, ok := obj.(*corev1.Service); ok {
 			svc.Name = "valkey-master-replica"
-			svc.ObjectMeta.Labels["app"] = "valkey-master-replica"
+			svc.Labels["app"] = "valkey-master-replica"
 			svc.Spec.Selector["app"] = "valkey-master-replica"
 			baseResources[i] = svc
 		}
