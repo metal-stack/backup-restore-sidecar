@@ -206,48 +206,51 @@ func New(
 		Addr:     "localhost:6379",
 		Password: getPassword(password),
 	})
-	if clusterMode {
-		podName := os.Getenv("POD_NAME")
-		podNamespace := os.Getenv("POD_NAMESPACE")
 
-		if podName == "" {
-			return nil, fmt.Errorf("cluster mode requires POD_NAME environment variable to be set")
-		}
-		if podNamespace == "" {
-			return nil, fmt.Errorf("cluster mode requires POD_NAMESPACE environment variable to be set")
-		}
-
-		log.Info("cluster mode environment validated", "podName", podName, "namespace", podNamespace)
-		leaderElection, err := leaderelection.New(leaderelection.Config{
-			Log:      log,
-			LockName: fmt.Sprintf("valkey-backup-restore-%s", v.statefulSetName),
-			OnStartedLeading: func(ctx context.Context) {
-				log.Info("became leader for valkey master-replica backup/restore coordination")
-			},
-			OnStoppedLeading: func() {
-				log.Info("stopped being leader for valkey master-replica backup/restore coordination")
-			},
-			OnNewLeader: func(identity string) {
-				log.Info("new leader elected for valkey master-replica backup/restore coordination",
-					"leader", identity)
-			},
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create leader election: %w", err)
-		}
-		v.leaderElection = leaderElection
-
-		log.Info("cluster mode enabled with leader election coordination")
-
-		leCtx, leCancel := context.WithCancel(context.Background())
-		v.leaderElectionCancel = leCancel
-
-		go func() {
-			if err := leaderElection.Start(leCtx); err != nil {
-				log.Error("leader election failed", "error", err)
-			}
-		}()
+	if !clusterMode {
+		return v, nil
 	}
+	podName := os.Getenv("POD_NAME")
+	podNamespace := os.Getenv("POD_NAMESPACE")
+
+	if podName == "" {
+		return nil, fmt.Errorf("cluster mode requires POD_NAME environment variable to be set")
+	}
+	if podNamespace == "" {
+		return nil, fmt.Errorf("cluster mode requires POD_NAMESPACE environment variable to be set")
+	}
+
+	log.Info("cluster mode environment validated", "podName", podName, "namespace", podNamespace)
+	leaderElection, err := leaderelection.New(leaderelection.Config{
+		Log:      log,
+		LockName: fmt.Sprintf("valkey-backup-restore-%s", v.statefulSetName),
+		OnStartedLeading: func(ctx context.Context) {
+			log.Info("became leader for valkey master-replica backup/restore coordination")
+		},
+		OnStoppedLeading: func() {
+			log.Info("stopped being leader for valkey master-replica backup/restore coordination")
+		},
+		OnNewLeader: func(identity string) {
+			log.Info("new leader elected for valkey master-replica backup/restore coordination",
+				"leader", identity)
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create leader election: %w", err)
+	}
+	v.leaderElection = leaderElection
+
+	log.Info("cluster mode enabled with leader election coordination")
+
+	leCtx, leCancel := context.WithCancel(context.Background())
+	v.leaderElectionCancel = leCancel
+
+	go func() {
+		if err := leaderElection.Start(leCtx); err != nil {
+			log.Error("leader election failed", "error", err)
+		}
+	}()
+
 	return v, nil
 }
 
@@ -344,12 +347,12 @@ func extractOrdinalFromPodName(podName string) int {
 		return -1
 	}
 
-	parts := strings.Split(podName, "-")
-	if len(parts) == 0 {
+	lastDash := strings.LastIndex(podName, "-")
+	if lastDash == -1 || lastDash == len(podName)-1 {
 		return -1
 	}
 
-	ordinalStr := parts[len(parts)-1]
+	ordinalStr := podName[lastDash+1:]
 	ordinal, err := strconv.Atoi(ordinalStr)
 	if err != nil {
 		return -1

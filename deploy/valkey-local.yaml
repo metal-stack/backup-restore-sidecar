@@ -236,13 +236,21 @@ metadata:
 ---
 apiVersion: v1
 data:
-  init.sh: "#!/bin/sh\nset -e\n\n# Extract pod ordinal from hostname (valkey-0, valkey-1,
-    etc.)\nORDINAL=$(hostname | sed 's/.*-//')\n\n# Pod 0 is the master, others are
-    replicas\nif [ \"$ORDINAL\" = \"0\" ]; then\n  echo \"I am the master (pod-0)\"\t\t\n
-    \ exec valkey-server --port 6379 --bind 0.0.0.0\nelse\n  echo \"I am a replica
-    (pod-$ORDINAL), connecting to master at valkey-0.valkey.${POD_NAMESPACE}.svc.cluster.local\"\n
-    \ exec valkey-server --port 6379 --bind 0.0.0.0 --replicaof valkey-0.valkey.${POD_NAMESPACE}.svc.cluster.local
-    6379\nfi\n"
+  init.sh: |
+    #!/bin/sh
+    set -e
+
+    # Extract pod ordinal from hostname (valkey-0, valkey-1, etc.)
+    ORDINAL=$(hostname | sed 's/.*-//')
+
+    # Pod 0 is the master, others are replicas
+    if [ "$ORDINAL" = "0" ]; then
+      echo "I am the master (pod-0)"
+      exec valkey-server --port 6379 --bind 0.0.0.0
+    else
+      echo "I am a replica (pod-$ORDINAL), connecting to master at valkey-0.valkey.${POD_NAMESPACE}.svc.cluster.local"
+      exec valkey-server --port 6379 --bind 0.0.0.0 --replicaof valkey-0.valkey.${POD_NAMESPACE}.svc.cluster.local 6379
+    fi
 kind: ConfigMap
 metadata:
   creationTimestamp: null

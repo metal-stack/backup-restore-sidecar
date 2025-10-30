@@ -389,7 +389,7 @@ ORDINAL=$(hostname | sed 's/.*-//')
 
 # Pod 0 is the master, others are replicas
 if [ "$ORDINAL" = "0" ]; then
-  echo "I am the master (pod-0)"		
+  echo "I am the master (pod-0)"
   exec valkey-server --port 6379 --bind 0.0.0.0
 else
   echo "I am a replica (pod-$ORDINAL), connecting to master at valkey-0.valkey.${POD_NAMESPACE}.svc.cluster.local"
@@ -455,13 +455,19 @@ func ValkeyMasterReplicaSts(namespace string) *appsv1.StatefulSet {
 
 func ValkeyMasterReplicaBackingResources(namespace string) []client.Object {
 	baseResources := ValkeyBackingResources(namespace)
+	filteredResources := make([]client.Object, 0, len(baseResources))
 
-	for i, obj := range baseResources {
+	for _, obj := range baseResources {
+		if cm, ok := obj.(*corev1.ConfigMap); ok && cm.Name == "valkey-init-script" {
+			continue
+		}
+
 		if svc, ok := obj.(*corev1.Service); ok {
 			svc.Name = "valkey-master-replica"
 			svc.Labels["app"] = "valkey-master-replica"
 			svc.Spec.Selector["app"] = "valkey-master-replica"
-			baseResources[i] = svc
+			filteredResources = append(filteredResources, svc)
+			continue
 		}
 		if cm, ok := obj.(*corev1.ConfigMap); ok && cm.Name == "backup-restore-sidecar-config-valkey" {
 			cm.Name = "backup-restore-sidecar-config-valkey-master-replica"
@@ -481,11 +487,14 @@ encryption-key: "01234567891234560123456789123456"
 post-exec-cmds:
   - /usr/local/bin/init.sh
 `
-			baseResources[i] = cm
+			filteredResources = append(filteredResources, cm)
+			continue
 		}
+
+		filteredResources = append(filteredResources, obj)
 	}
 
-	baseResources = append(baseResources, &corev1.ConfigMap{
+	filteredResources = append(filteredResources, &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
 			APIVersion: corev1.SchemeGroupVersion.String(),
@@ -543,5 +552,5 @@ fi
 		},
 	})
 
-	return baseResources
+	return filteredResources
 }
