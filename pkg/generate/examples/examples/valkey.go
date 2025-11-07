@@ -5,8 +5,10 @@ import (
 	"github.com/metal-stack/metal-lib/pkg/pointer"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -43,7 +45,8 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 					},
 				},
 				Spec: corev1.PodSpec{
-					HostNetwork: true,
+					HostNetwork:        true,
+					ServiceAccountName: "valkey-backup-restore",
 					Containers: []corev1.Container{
 						{
 							Name:            "valkey",
@@ -61,6 +64,28 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 								PeriodSeconds:       5,
 								SuccessThreshold:    1,
 								FailureThreshold:    3,
+							},
+							Env: []corev1.EnvVar{
+								{
+									Name: "POD_NAMESPACE",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "metadata.namespace",
+										},
+									},
+								},
+								{
+									Name: "POD_NAME",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "metadata.name",
+										},
+									},
+								},
+								{
+									Name:  "STATEFUL_NAME",
+									Value: "valkey",
+								},
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
@@ -106,6 +131,28 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 								{
 									Name:          "grpc",
 									ContainerPort: 8000,
+								},
+							},
+							Env: []corev1.EnvVar{
+								{
+									Name: "POD_NAMESPACE",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "metadata.namespace",
+										},
+									},
+								},
+								{
+									Name: "POD_NAME",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "metadata.name",
+										},
+									},
+								},
+								{
+									Name:  "STATEFUL_NAME",
+									Value: "valkey",
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
@@ -221,6 +268,82 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 
 func ValkeyBackingResources(namespace string) []client.Object {
 	return []client.Object{
+		&corev1.Service{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Service",
+				APIVersion: corev1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "valkey",
+				Namespace: namespace,
+				Labels: map[string]string{
+					"app": "valkey",
+				},
+			},
+			Spec: corev1.ServiceSpec{
+				ClusterIP: "None",
+				Ports: []corev1.ServicePort{
+					{
+						Name:       "client",
+						Port:       6379,
+						TargetPort: intstr.FromInt32(6379),
+						Protocol:   corev1.ProtocolTCP,
+					},
+				},
+				Selector: map[string]string{
+					"app": "valkey",
+				},
+			},
+		},
+		&corev1.ServiceAccount{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ServiceAccount",
+				APIVersion: corev1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "valkey-backup-restore",
+				Namespace: namespace,
+			},
+		},
+		&rbacv1.Role{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Role",
+				APIVersion: rbacv1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "valkey-backup-restore",
+				Namespace: namespace,
+			},
+			Rules: []rbacv1.PolicyRule{
+				{
+					APIGroups: []string{"coordination.k8s.io"},
+					Resources: []string{"leases"},
+					Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+				},
+			},
+		},
+		&rbacv1.RoleBinding{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "RoleBinding",
+				APIVersion: rbacv1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "valkey-backup-restore",
+				Namespace: namespace,
+			},
+			Subjects: []rbacv1.Subject{
+				{
+					Kind:      "ServiceAccount",
+					Name:      "valkey-backup-restore",
+					Namespace: namespace,
+				},
+			},
+			RoleRef: rbacv1.RoleRef{
+				Kind:     "Role",
+				Name:     "valkey-backup-restore",
+				APIGroup: "rbac.authorization.k8s.io",
+			},
+		},
 		&corev1.ConfigMap{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "ConfigMap",
@@ -232,18 +355,202 @@ func ValkeyBackingResources(namespace string) []client.Object {
 			},
 			Data: map[string]string{
 				"config.yaml": `---
-bind-addr: 0.0.0.0
 db: valkey
+valkey-master-replica-mode: false
+valkey-statefulSet-name: valkey
+
+bind-addr: 0.0.0.0
 db-data-directory: /data/
 backup-provider: local
 backup-cron-schedule: "*/1 * * * *"
-object-prefix: valkey-test
+object-prefix: valkey-test-${POD_NAME}
 redis-addr: localhost:6379
 encryption-key: "01234567891234560123456789123456"
 post-exec-cmds:
-- valkey-server
+  - valkey-server --port 6379 --bind 0.0.0.0
+`,
+			},
+		},
+		&corev1.ConfigMap{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ConfigMap",
+				APIVersion: corev1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "valkey-init-script",
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				"init.sh": `#!/bin/sh
+set -e
+
+# Extract pod ordinal from hostname (valkey-0, valkey-1, etc.)
+ORDINAL=$(hostname | sed 's/.*-//')
+
+# Pod 0 is the master, others are replicas
+if [ "$ORDINAL" = "0" ]; then
+  echo "I am the master (pod-0)"
+  exec valkey-server --port 6379 --bind 0.0.0.0
+else
+  echo "I am a replica (pod-$ORDINAL), connecting to master at valkey-0.valkey.${POD_NAMESPACE}.svc.cluster.local"
+  exec valkey-server --port 6379 --bind 0.0.0.0 --replicaof valkey-0.valkey.${POD_NAMESPACE}.svc.cluster.local 6379
+fi
 `,
 			},
 		},
 	}
+}
+
+func ValkeyMasterReplicaSts(namespace string) *appsv1.StatefulSet {
+	sts := ValkeySts(namespace)
+	sts.Name = "valkey-master-replica"
+	sts.Labels["app"] = "valkey-master-replica"
+	sts.Spec.Selector.MatchLabels["app"] = "valkey-master-replica"
+	sts.Spec.Template.Labels["app"] = "valkey-master-replica"
+	sts.Spec.ServiceName = "valkey-master-replica"
+	sts.Spec.Replicas = pointer.Pointer(int32(3))
+
+	for i := range sts.Spec.Template.Spec.Containers {
+		if sts.Spec.Template.Spec.Containers[i].Name == "valkey" {
+			sts.Spec.Template.Spec.Containers[i].VolumeMounts = append(
+				sts.Spec.Template.Spec.Containers[i].VolumeMounts,
+				corev1.VolumeMount{
+					Name:      "init-script",
+					MountPath: "/usr/local/bin/init.sh",
+					SubPath:   "init.sh",
+				},
+			)
+		}
+		if sts.Spec.Template.Spec.Containers[i].Name == "backup-restore-sidecar" {
+			for j := range sts.Spec.Template.Spec.Containers[i].Env {
+				if sts.Spec.Template.Spec.Containers[i].Env[j].Name == "STATEFUL_NAME" {
+					sts.Spec.Template.Spec.Containers[i].Env[j].Value = "valkey-master-replica"
+				}
+			}
+		}
+	}
+
+	for i := range sts.Spec.Template.Spec.Volumes {
+		if sts.Spec.Template.Spec.Volumes[i].Name == "backup-restore-sidecar-config" {
+			if sts.Spec.Template.Spec.Volumes[i].ConfigMap != nil {
+				sts.Spec.Template.Spec.Volumes[i].ConfigMap.Name = "backup-restore-sidecar-config-valkey-master-replica"
+			}
+		}
+	}
+
+	sts.Spec.Template.Spec.Volumes = append(sts.Spec.Template.Spec.Volumes, corev1.Volume{
+		Name: "init-script",
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: "valkey-init-script-master-replica",
+				},
+				DefaultMode: pointer.Pointer(int32(0755)),
+			},
+		},
+	})
+
+	return sts
+}
+
+func ValkeyMasterReplicaBackingResources(namespace string) []client.Object {
+	baseResources := ValkeyBackingResources(namespace)
+	filteredResources := make([]client.Object, 0, len(baseResources))
+
+	for _, obj := range baseResources {
+		if cm, ok := obj.(*corev1.ConfigMap); ok && cm.Name == "valkey-init-script" {
+			continue
+		}
+
+		if svc, ok := obj.(*corev1.Service); ok {
+			svc.Name = "valkey-master-replica"
+			svc.Labels["app"] = "valkey-master-replica"
+			svc.Spec.Selector["app"] = "valkey-master-replica"
+			filteredResources = append(filteredResources, svc)
+			continue
+		}
+		if cm, ok := obj.(*corev1.ConfigMap); ok && cm.Name == "backup-restore-sidecar-config-valkey" {
+			cm.Name = "backup-restore-sidecar-config-valkey-master-replica"
+			cm.Data["config.yaml"] = `---
+db: valkey
+valkey-master-replica-mode: true
+valkey-replica-count: 3
+valkey-statefulset-name: valkey-master-replica
+
+bind-addr: 0.0.0.0
+db-data-directory: /data/
+backup-provider: local
+backup-cron-schedule: "*/1 * * * *"
+object-prefix: valkey-master-replica-test-${POD_NAME}
+redis-addr: localhost:6379
+encryption-key: "01234567891234560123456789123456"
+post-exec-cmds:
+  - /usr/local/bin/init.sh
+`
+			filteredResources = append(filteredResources, cm)
+			continue
+		}
+
+		filteredResources = append(filteredResources, obj)
+	}
+
+	filteredResources = append(filteredResources, &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConfigMap",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "valkey-init-script-master-replica",
+			Namespace: namespace,
+		},
+		Data: map[string]string{
+			"init.sh": `#!/bin/sh
+set -e
+
+# Validate required environment variables
+if [ -z "$POD_NAME" ]; then
+  echo "ERROR: POD_NAME environment variable is not set"
+  exit 1
+fi
+
+if [ -z "$POD_NAMESPACE" ]; then
+  echo "ERROR: POD_NAMESPACE environment variable is not set"
+  exit 1
+fi
+
+# Extract pod ordinal from POD_NAME
+# Expected format: <statefulset-name>-<ordinal>
+ORDINAL="${POD_NAME##*-}"
+
+# Validate that ORDINAL is a number
+case "$ORDINAL" in
+  ''|*[!0-9]*)
+    echo "ERROR: Could not extract valid ordinal from POD_NAME: $POD_NAME"
+    exit 1
+    ;;
+esac
+
+# Extract StatefulSet name by removing the ordinal suffix
+# E.g., valkey-master-replica-0 -> valkey-master-replica
+STATEFULSET_NAME="${POD_NAME%-*}"
+
+echo "Pod ordinal: $ORDINAL"
+echo "StatefulSet name: $STATEFULSET_NAME"
+
+# Pod 0 is the master, others are replicas
+if [ "$ORDINAL" -eq 0 ]; then
+  echo "Starting as master (pod-0)"
+  exec valkey-server --port 6379 --bind 0.0.0.0 --dir /data
+else
+  # Headless service DNS: <pod-name>.<service-name>.<namespace>.svc.cluster.local
+  # For StatefulSet, service name typically matches StatefulSet name
+  MASTER_ADDR="${STATEFULSET_NAME}-0.${STATEFULSET_NAME}.${POD_NAMESPACE}.svc.cluster.local"
+  echo "Starting as replica (pod-$ORDINAL), master: $MASTER_ADDR"
+  exec valkey-server --port 6379 --bind 0.0.0.0 --dir /data --replicaof "$MASTER_ADDR" 6379
+fi
+`,
+		},
+	})
+
+	return filteredResources
 }

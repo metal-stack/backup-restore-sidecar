@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/valkey"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -509,7 +510,7 @@ func initDatabase() error {
 			viper.GetString(etcdEndpoints),
 			viper.GetString(etcdName),
 		)
-	case "redis", "keydb", "valkey":
+	case "redis", "keydb":
 		var err error
 		var password string
 		if viper.IsSet(redisPasswordFlg) {
@@ -521,6 +522,25 @@ func initDatabase() error {
 			viper.GetString(redisAddrFlg),
 			&password,
 		)
+		if err != nil {
+			return err
+		}
+	case "valkey":
+		var password *string
+		var err error
+
+		if viper.IsSet(redisPasswordFlg) {
+			p := viper.GetString(redisPasswordFlg)
+			password = &p
+		}
+
+		masterReplicaMode := viper.GetBool("valkey-master-replica-mode")
+		replicaCount := viper.GetInt("valkey-replica-count")
+		statefulSetName := viper.GetString("valkey-statefulset-name")
+		if statefulSetName == "" {
+			statefulSetName = "valkey"
+		}
+		db, err = valkey.New(logger.WithGroup("valkey"), datadir, password, statefulSetName, masterReplicaMode, replicaCount)
 		if err != nil {
 			return err
 		}

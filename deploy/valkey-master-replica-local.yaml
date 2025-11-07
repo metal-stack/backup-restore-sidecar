@@ -6,19 +6,19 @@ kind: StatefulSet
 metadata:
   creationTimestamp: null
   labels:
-    app: valkey
-  name: valkey
+    app: valkey-master-replica
+  name: valkey-master-replica
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
-      app: valkey
-  serviceName: valkey
+      app: valkey-master-replica
+  serviceName: valkey-master-replica
   template:
     metadata:
       creationTimestamp: null
       labels:
-        app: valkey
+        app: valkey-master-replica
     spec:
       containers:
       - command:
@@ -71,6 +71,9 @@ spec:
           subPath: backup-restore-sidecar
         - mountPath: /etc/backup-restore-sidecar
           name: backup-restore-sidecar-config
+        - mountPath: /usr/local/bin/init.sh
+          name: init-script
+          subPath: init.sh
       - command:
         - backup-restore-sidecar
         - start
@@ -85,7 +88,7 @@ spec:
             fieldRef:
               fieldPath: metadata.name
         - name: STATEFUL_NAME
-          value: valkey
+          value: valkey-master-replica
         image: ghcr.io/valkey-io/valkey:8.1-alpine
         imagePullPolicy: IfNotPresent
         name: backup-restore-sidecar
@@ -124,10 +127,14 @@ spec:
         persistentVolumeClaim:
           claimName: backup
       - configMap:
-          name: backup-restore-sidecar-config-valkey
+          name: backup-restore-sidecar-config-valkey-master-replica
         name: backup-restore-sidecar-config
       - emptyDir: {}
         name: bin-provision
+      - configMap:
+          defaultMode: 493
+          name: valkey-init-script-master-replica
+        name: init-script
   updateStrategy: {}
   volumeClaimTemplates:
   - metadata:
@@ -159,8 +166,8 @@ kind: Service
 metadata:
   creationTimestamp: null
   labels:
-    app: valkey
-  name: valkey
+    app: valkey-master-replica
+  name: valkey-master-replica
 spec:
   clusterIP: None
   ports:
@@ -169,7 +176,7 @@ spec:
     protocol: TCP
     targetPort: 6379
   selector:
-    app: valkey
+    app: valkey-master-replica
 status:
   loadBalancer: {}
 ---
@@ -217,22 +224,23 @@ data:
   config.yaml: |
     ---
     db: valkey
-    valkey-master-replica-mode: false
-    valkey-statefulSet-name: valkey
+    valkey-master-replica-mode: true
+    valkey-replica-count: 3
+    valkey-statefulset-name: valkey-master-replica
 
     bind-addr: 0.0.0.0
     db-data-directory: /data/
     backup-provider: local
     backup-cron-schedule: "*/1 * * * *"
-    object-prefix: valkey-test-${POD_NAME}
+    object-prefix: valkey-master-replica-test-${POD_NAME}
     redis-addr: localhost:6379
     encryption-key: "01234567891234560123456789123456"
     post-exec-cmds:
-      - valkey-server --port 6379 --bind 0.0.0.0
+      - /usr/local/bin/init.sh
 kind: ConfigMap
 metadata:
   creationTimestamp: null
-  name: backup-restore-sidecar-config-valkey
+  name: backup-restore-sidecar-config-valkey-master-replica
 ---
 apiVersion: v1
 data:
@@ -240,18 +248,48 @@ data:
     #!/bin/sh
     set -e
 
-    # Extract pod ordinal from hostname (valkey-0, valkey-1, etc.)
-    ORDINAL=$(hostname | sed 's/.*-//')
+    # Validate required environment variables
+    if [ -z "$POD_NAME" ]; then
+      echo "ERROR: POD_NAME environment variable is not set"
+      exit 1
+    fi
+
+    if [ -z "$POD_NAMESPACE" ]; then
+      echo "ERROR: POD_NAMESPACE environment variable is not set"
+      exit 1
+    fi
+
+    # Extract pod ordinal from POD_NAME
+    # Expected format: <statefulset-name>-<ordinal>
+    ORDINAL="${POD_NAME##*-}"
+
+    # Validate that ORDINAL is a number
+    case "$ORDINAL" in
+      ''|*[!0-9]*)
+        echo "ERROR: Could not extract valid ordinal from POD_NAME: $POD_NAME"
+        exit 1
+        ;;
+    esac
+
+    # Extract StatefulSet name by removing the ordinal suffix
+    # E.g., valkey-master-replica-0 -> valkey-master-replica
+    STATEFULSET_NAME="${POD_NAME%-*}"
+
+    echo "Pod ordinal: $ORDINAL"
+    echo "StatefulSet name: $STATEFULSET_NAME"
 
     # Pod 0 is the master, others are replicas
-    if [ "$ORDINAL" = "0" ]; then
-      echo "I am the master (pod-0)"
-      exec valkey-server --port 6379 --bind 0.0.0.0
+    if [ "$ORDINAL" -eq 0 ]; then
+      echo "Starting as master (pod-0)"
+      exec valkey-server --port 6379 --bind 0.0.0.0 --dir /data
     else
-      echo "I am a replica (pod-$ORDINAL), connecting to master at valkey-0.valkey.${POD_NAMESPACE}.svc.cluster.local"
-      exec valkey-server --port 6379 --bind 0.0.0.0 --replicaof valkey-0.valkey.${POD_NAMESPACE}.svc.cluster.local 6379
+      # Headless service DNS: <pod-name>.<service-name>.<namespace>.svc.cluster.local
+      # For StatefulSet, service name typically matches StatefulSet name
+      MASTER_ADDR="${STATEFULSET_NAME}-0.${STATEFULSET_NAME}.${POD_NAMESPACE}.svc.cluster.local"
+      echo "Starting as replica (pod-$ORDINAL), master: $MASTER_ADDR"
+      exec valkey-server --port 6379 --bind 0.0.0.0 --dir /data --replicaof "$MASTER_ADDR" 6379
     fi
 kind: ConfigMap
 metadata:
   creationTimestamp: null
-  name: valkey-init-script
+  name: valkey-init-script-master-replica
