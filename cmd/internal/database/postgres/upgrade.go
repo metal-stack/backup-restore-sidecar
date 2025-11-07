@@ -133,7 +133,8 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	}
 
 	// initdb -D /data/postgres-new
-	cmd := exec.Command(postgresInitDBCmd, "-D", newDataDirTemp)
+	// TODO enable checksums for newer postgres versions after the upgrade
+	cmd := exec.Command(postgresInitDBCmd, "-D", newDataDirTemp, "--no-data-checksums")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
