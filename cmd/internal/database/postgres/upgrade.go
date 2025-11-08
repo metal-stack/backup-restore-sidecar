@@ -136,9 +136,10 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	// TODO enable checksums for newer postgres versions after the upgrade
 	// This is enabled by default since v18
 	initdbCommandArgs := []string{"-D", newDataDirTemp}
-	if oldBinaryVersionMajor > 17 {
+	if oldBinaryVersionMajor == 17 {
 		initdbCommandArgs = append(initdbCommandArgs, "--no-data-checksums")
 	}
+	db.log.Info("running", "initdb with args", initdbCommandArgs)
 	cmd := exec.Command(postgresInitDBCmd, initdbCommandArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
