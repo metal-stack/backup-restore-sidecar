@@ -242,6 +242,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 		return fmt.Errorf("unable to rename upgraded datadir to destination, a full restore is required: %w", err)
 	}
 
+	// FIXME check if this is possible earlier
 	if oldBinaryVersionMajor == 17 {
 		checksumsCommandArgs := []string{"--enable", "--pgdata", db.datadir}
 		db.log.Info("running", "command", postgresChecksumsCmd, "args", checksumsCommandArgs)
