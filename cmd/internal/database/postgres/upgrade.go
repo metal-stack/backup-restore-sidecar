@@ -25,6 +25,7 @@ const (
 	postgresConfigCmd       = "pg_config"
 	postgresUpgradeCmd      = "pg_upgrade"
 	postgresInitDBCmd       = "initdb"
+	postgresChecksumsCmd    = "pg_checksums"
 	postgresVersionFile     = "PG_VERSION"
 	postgresBinBackupPrefix = "pg-bin-v"
 )
@@ -241,8 +242,21 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 		return fmt.Errorf("unable to rename upgraded datadir to destination, a full restore is required: %w", err)
 	}
 
-	// TODO run:
-	// pg_checksums --enable --pgdata /var/lib/postgres/data
+	if oldBinaryVersionMajor == 17 {
+		checksumsCommandArgs := []string{"--enable", "--pgdata", db.datadir}
+		db.log.Info("running", "command", postgresChecksumsCmd, "args", checksumsCommandArgs)
+		cmd := exec.Command(postgresChecksumsCmd, checksumsCommandArgs...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Env = os.Environ()
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			Credential: &syscall.Credential{Uid: uint32(uid)}, // nolint:gosec
+		}
+		err = cmd.Run()
+		if err != nil {
+			db.log.Warn("unable to run checksums on new new datadir, ignoring", "error", err)
+		}
+	}
 
 	db.log.Info("pg_upgrade done and new data in place", "took", time.Since(start).String())
 
