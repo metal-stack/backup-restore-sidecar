@@ -134,7 +134,12 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 
 	// initdb -D /data/postgres-new
 	// TODO enable checksums for newer postgres versions after the upgrade
-	cmd := exec.Command(postgresInitDBCmd, "-D", newDataDirTemp, "--no-data-checksums")
+	// This is enabled by default since v18
+	initdbCommandArgs := []string{"-D", newDataDirTemp}
+	if oldBinaryVersionMajor > 17 {
+		initdbCommandArgs = append(initdbCommandArgs, "--no-data-checksums")
+	}
+	cmd := exec.Command(postgresInitDBCmd, initdbCommandArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
@@ -234,6 +239,9 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("unable to rename upgraded datadir to destination, a full restore is required: %w", err)
 	}
+
+	// TODO run:
+	// pg_checksums --enable --pgdata /var/lib/postgres/data
 
 	db.log.Info("pg_upgrade done and new data in place", "took", time.Since(start).String())
 
