@@ -25,6 +25,7 @@ const (
 	postgresConfigCmd       = "pg_config"
 	postgresUpgradeCmd      = "pg_upgrade"
 	postgresInitDBCmd       = "initdb"
+	postgresChecksumsCmd    = "pg_checksums"
 	postgresVersionFile     = "PG_VERSION"
 	postgresBinBackupPrefix = "pg-bin-v"
 )
@@ -133,7 +134,13 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	}
 
 	// initdb -D /data/postgres-new
-	cmd := exec.Command(postgresInitDBCmd, "-D", newDataDirTemp)
+	// This is enabled by default since v18
+	initdbCommandArgs := []string{"-D", newDataDirTemp}
+	if oldBinaryVersionMajor == 17 {
+		initdbCommandArgs = append(initdbCommandArgs, "--no-data-checksums")
+	}
+	db.log.Info("running", "initdb with args", initdbCommandArgs)
+	cmd := exec.Command(postgresInitDBCmd, initdbCommandArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
@@ -232,6 +239,23 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	err = os.Rename(newDataDirTemp, db.datadir)
 	if err != nil {
 		return fmt.Errorf("unable to rename upgraded datadir to destination, a full restore is required: %w", err)
+	}
+
+	// TODO check if we should enable checksum with earlier versions
+	if oldBinaryVersionMajor == 17 {
+		checksumsCommandArgs := []string{"--enable", "--pgdata", db.datadir}
+		db.log.Info("running", "command", postgresChecksumsCmd, "args", checksumsCommandArgs)
+		cmd := exec.Command(postgresChecksumsCmd, checksumsCommandArgs...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Env = os.Environ()
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			Credential: &syscall.Credential{Uid: uint32(uid)}, // nolint:gosec
+		}
+		err = cmd.Run()
+		if err != nil {
+			db.log.Warn("unable to run checksums on new new datadir, ignoring", "error", err)
+		}
 	}
 
 	db.log.Info("pg_upgrade done and new data in place", "took", time.Since(start).String())
