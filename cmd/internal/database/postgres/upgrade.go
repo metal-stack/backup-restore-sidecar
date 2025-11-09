@@ -134,7 +134,6 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	}
 
 	// initdb -D /data/postgres-new
-	// TODO enable checksums for newer postgres versions after the upgrade
 	// This is enabled by default since v18
 	initdbCommandArgs := []string{"-D", newDataDirTemp}
 	if oldBinaryVersionMajor == 17 {
@@ -242,7 +241,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 		return fmt.Errorf("unable to rename upgraded datadir to destination, a full restore is required: %w", err)
 	}
 
-	// FIXME check if this is possible earlier
+	// TODO check if we should enable checksum with earlier versions
 	if oldBinaryVersionMajor == 17 {
 		checksumsCommandArgs := []string{"--enable", "--pgdata", db.datadir}
 		db.log.Info("running", "command", postgresChecksumsCmd, "args", checksumsCommandArgs)
