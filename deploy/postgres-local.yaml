@@ -84,6 +84,18 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
         resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          privileged: false
+          readOnlyRootFilesystem: false
+          runAsGroup: 9999
+          runAsNonRoot: true
+          runAsUser: 9999
+          seccompProfile:
+            type: RuntimeDefault
         volumeMounts:
         - mountPath: /data
           name: data
@@ -113,6 +125,18 @@ spec:
         - containerPort: 8000
           name: grpc
         resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          privileged: false
+          readOnlyRootFilesystem: false
+          runAsGroup: 9999
+          runAsNonRoot: true
+          runAsUser: 9999
+          seccompProfile:
+            type: RuntimeDefault
         volumeMounts:
         - mountPath: /backup
           name: backup
@@ -132,6 +156,18 @@ spec:
         imagePullPolicy: IfNotPresent
         name: backup-restore-sidecar-provider
         resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          privileged: false
+          readOnlyRootFilesystem: false
+          runAsGroup: 9999
+          runAsNonRoot: true
+          runAsUser: 9999
+          seccompProfile:
+            type: RuntimeDefault
         volumeMounts:
         - mountPath: /bin-provision
           name: bin-provision

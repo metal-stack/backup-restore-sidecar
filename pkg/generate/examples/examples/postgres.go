@@ -77,6 +77,20 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 								TimeoutSeconds:      5,
 								PeriodSeconds:       10,
 							},
+							SecurityContext: &corev1.SecurityContext{
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
+								Privileged:               pointer.Pointer(false),
+								RunAsUser:                pointer.Pointer(int64(9999)),
+								RunAsGroup:               pointer.Pointer(int64(9999)),
+								RunAsNonRoot:             pointer.Pointer(true),
+								ReadOnlyRootFilesystem:   pointer.Pointer(false),
+								AllowPrivilegeEscalation: pointer.Pointer(false),
+								SeccompProfile: &corev1.SeccompProfile{
+									Type: corev1.SeccompProfileTypeRuntimeDefault,
+								},
+							},
 							Env: []corev1.EnvVar{
 								{
 									Name: "POSTGRES_DB",
@@ -172,6 +186,20 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 									},
 								},
 							},
+							SecurityContext: &corev1.SecurityContext{
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
+								Privileged:               pointer.Pointer(false),
+								RunAsUser:                pointer.Pointer(int64(9999)),
+								RunAsGroup:               pointer.Pointer(int64(9999)),
+								RunAsNonRoot:             pointer.Pointer(true),
+								ReadOnlyRootFilesystem:   pointer.Pointer(false),
+								AllowPrivilegeEscalation: pointer.Pointer(false),
+								SeccompProfile: &corev1.SeccompProfile{
+									Type: corev1.SeccompProfileTypeRuntimeDefault,
+								},
+							},
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "grpc",
@@ -208,6 +236,20 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 								"cp",
 								"/backup-restore-sidecar",
 								"/bin-provision",
+							},
+							SecurityContext: &corev1.SecurityContext{
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
+								Privileged:               pointer.Pointer(false),
+								RunAsUser:                pointer.Pointer(int64(9999)),
+								RunAsGroup:               pointer.Pointer(int64(9999)),
+								RunAsNonRoot:             pointer.Pointer(true),
+								ReadOnlyRootFilesystem:   pointer.Pointer(false),
+								AllowPrivilegeEscalation: pointer.Pointer(false),
+								SeccompProfile: &corev1.SeccompProfile{
+									Type: corev1.SeccompProfileTypeRuntimeDefault,
+								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
