@@ -138,9 +138,6 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
-	// cmd.SysProcAttr = &syscall.SysProcAttr{
-	// 	Credential: &syscall.Credential{Uid: uint32(uid)}, // nolint:gosec
-	// }
 	err = cmd.Run()
 	if err != nil {
 		db.log.Error("unable to run initdb on new new datadir, skipping upgrade", "error", err)
@@ -199,9 +196,6 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
-	// cmd.SysProcAttr = &syscall.SysProcAttr{
-	// 	Credential: &syscall.Credential{Uid: uint32(uid)}, // nolint:gosec
-	// }
 	cmd.Dir = pgUser.HomeDir
 
 	db.log.Info("running pg_upgrade with", "args", pgUpgradeArgs)
@@ -316,6 +310,7 @@ func (db *Postgres) getLibDir(ctx context.Context, pgConfigCmd string) (string, 
 }
 
 // copyPostgresBinaries is needed to save old postgres binaries for a later major upgrade
+// it returns the path to the destination bin dir, e.g. /data/postgres-new/pg-bin-x
 func (db *Postgres) copyPostgresBinaries(ctx context.Context, override bool) (string, error) {
 	binDir, err := db.getBinDir(ctx, postgresConfigCmd)
 	if err != nil {
