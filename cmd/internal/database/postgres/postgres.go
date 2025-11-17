@@ -65,7 +65,7 @@ func (db *Postgres) Backup(ctx context.Context) error {
 	// therefore this happens in the backup task where the database is already available
 	//
 	// implication: one backup has to be taken before an upgrade can be made
-	err := db.copyPostgresBinaries(ctx, false)
+	_, err := db.copyPostgresBinaries(ctx, false)
 	if err != nil {
 		return err
 	}

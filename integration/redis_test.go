@@ -11,6 +11,7 @@ import (
 
 	"github.com/avast/retry-go/v4"
 	"github.com/redis/go-redis/v9"
+	"github.com/redis/go-redis/v9/maintnotifications"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -43,6 +44,12 @@ func newRedisClient(t *testing.T, ctx context.Context) *redis.Client {
 	err := retry.Do(func() error {
 		cli = redis.NewClient(&redis.Options{
 			Addr: "localhost:6379",
+
+			// Explicitly disable maintenance notifications
+			// This prevents the client from sending CLIENT MAINT_NOTIFICATIONS ON
+			MaintNotificationsConfig: &maintnotifications.Config{
+				Mode: maintnotifications.ModeDisabled,
+			},
 		})
 		return nil
 	}, retry.Context(ctx))

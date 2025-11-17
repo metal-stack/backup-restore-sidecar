@@ -19,6 +19,7 @@ const (
 	PostgresUser     = "postgres"
 
 	postgresContainerImage = "postgres:16-alpine"
+	postgresRunUser        = int64(70)
 )
 
 func PostgresSts(namespace string) *appsv1.StatefulSet {
@@ -50,11 +51,21 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 				},
 				Spec: corev1.PodSpec{
 					HostNetwork: true,
+					SecurityContext: &corev1.PodSecurityContext{
+						FSGroup:      pointer.Pointer(postgresRunUser),
+						RunAsUser:    pointer.Pointer(postgresRunUser),
+						RunAsGroup:   pointer.Pointer(postgresRunUser),
+						RunAsNonRoot: pointer.Pointer(true),
+						SeccompProfile: &corev1.SeccompProfile{
+							Type: corev1.SeccompProfileTypeRuntimeDefault,
+						},
+					},
 					Containers: []corev1.Container{
 						{
-							Name:    "postgres",
-							Image:   postgresContainerImage,
-							Command: []string{"backup-restore-sidecar", "wait"},
+							Name:            "postgres",
+							Image:           postgresContainerImage,
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							Command:         []string{"backup-restore-sidecar", "wait"},
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
@@ -76,6 +87,14 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 								InitialDelaySeconds: 5,
 								TimeoutSeconds:      5,
 								PeriodSeconds:       10,
+							},
+							SecurityContext: &corev1.SecurityContext{
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
+								Privileged:               pointer.Pointer(false),
+								ReadOnlyRootFilesystem:   pointer.Pointer(false),
+								AllowPrivilegeEscalation: pointer.Pointer(false),
 							},
 							Env: []corev1.EnvVar{
 								{
@@ -145,9 +164,10 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 							},
 						},
 						{
-							Name:    "backup-restore-sidecar",
-							Image:   postgresContainerImage,
-							Command: []string{"backup-restore-sidecar", "start", "--log-level=debug"},
+							Name:            "backup-restore-sidecar",
+							Image:           postgresContainerImage,
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							Command:         []string{"backup-restore-sidecar", "start", "--log-level=debug"},
 							Env: []corev1.EnvVar{
 								{
 									Name: "BACKUP_RESTORE_SIDECAR_POSTGRES_PASSWORD",
@@ -171,6 +191,14 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 										},
 									},
 								},
+							},
+							SecurityContext: &corev1.SecurityContext{
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
+								Privileged:               pointer.Pointer(false),
+								ReadOnlyRootFilesystem:   pointer.Pointer(false),
+								AllowPrivilegeEscalation: pointer.Pointer(false),
 							},
 							Ports: []corev1.ContainerPort{
 								{
@@ -208,6 +236,14 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 								"cp",
 								"/backup-restore-sidecar",
 								"/bin-provision",
+							},
+							SecurityContext: &corev1.SecurityContext{
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
+								Privileged:               pointer.Pointer(false),
+								ReadOnlyRootFilesystem:   pointer.Pointer(false),
+								AllowPrivilegeEscalation: pointer.Pointer(false),
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{

@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -45,7 +44,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	}
 
 	// If this is a database directory, save actual postgres binaries for a later major upgrade
-	err := db.copyPostgresBinaries(ctx, true)
+	newPostgresBinDir, err := db.copyPostgresBinaries(ctx, true)
 	if err != nil {
 		return err
 	}
@@ -110,14 +109,6 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	uid, err := strconv.Atoi(pgUser.Uid)
-	if err != nil {
-		return err
-	}
-	gid, err := strconv.Atoi(pgUser.Gid)
-	if err != nil {
-		return err
-	}
 
 	// remove /data/postgres-new if present
 	newDataDirTemp := path.Join("/data", "postgres-new") // TODO: /data should not be hardcoded
@@ -127,19 +118,13 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 		return nil
 	}
 
-	err = os.Chown("/data", uid, gid)
-	if err != nil {
-		return err
-	}
+	db.log.Info("running init-db", "bin", path.Join(newPostgresBinDir, postgresInitDBCmd))
 
 	// initdb -D /data/postgres-new
-	cmd := exec.Command(postgresInitDBCmd, "-D", newDataDirTemp)
+	cmd := exec.Command(path.Join(newPostgresBinDir, postgresInitDBCmd), "-D", newDataDirTemp)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Credential: &syscall.Credential{Uid: uint32(uid)}, // nolint:gosec
-	}
 	err = cmd.Run()
 	if err != nil {
 		db.log.Error("unable to run initdb on new new datadir, skipping upgrade", "error", err)
@@ -168,11 +153,6 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 		return err
 	}
 
-	newPostgresBinDir, err := db.getBinDir(ctx, postgresConfigCmd)
-	if err != nil {
-		return fmt.Errorf("unable to detect bin dir of actual postgres %w", err)
-	}
-
 	pgUpgradeArgs := []string{
 		"--old-datadir", db.datadir,
 		"--new-datadir", newDataDirTemp,
@@ -199,13 +179,10 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 		)
 	}
 
-	cmd = exec.CommandContext(ctx, postgresUpgradeCmd, pgUpgradeArgs...) //nolint:gosec
+	cmd = exec.CommandContext(ctx, path.Join(newPostgresBinDir, postgresUpgradeCmd), pgUpgradeArgs...) //nolint:gosec
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Credential: &syscall.Credential{Uid: uint32(uid)}, // nolint:gosec
-	}
 	cmd.Dir = pgUser.HomeDir
 
 	db.log.Info("running pg_upgrade with", "args", pgUpgradeArgs)
@@ -320,15 +297,16 @@ func (db *Postgres) getLibDir(ctx context.Context, pgConfigCmd string) (string, 
 }
 
 // copyPostgresBinaries is needed to save old postgres binaries for a later major upgrade
-func (db *Postgres) copyPostgresBinaries(ctx context.Context, override bool) error {
+// it returns the path to the destination bin dir, e.g. /data/postgres-new/pg-bin-x
+func (db *Postgres) copyPostgresBinaries(ctx context.Context, override bool) (string, error) {
 	binDir, err := db.getBinDir(ctx, postgresConfigCmd)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	version, err := db.getBinaryVersion(ctx, postgresConfigCmd)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	pgBinDir := path.Join(db.datadir, fmt.Sprintf("%s%d", postgresBinBackupPrefix, version))
@@ -336,13 +314,13 @@ func (db *Postgres) copyPostgresBinaries(ctx context.Context, override bool) err
 	if !override {
 		if _, err := os.Stat(path.Join(pgBinDir, postgresConfigCmd)); err == nil {
 			db.log.Info("postgres binaries for later upgrade already in place, not copying")
-			return nil
+			return "", nil
 		}
 	}
 
 	err = os.RemoveAll(pgBinDir)
 	if err != nil {
-		return fmt.Errorf("unable to remove old pg bin dir: %w", err)
+		return "", fmt.Errorf("unable to remove old pg bin dir: %w", err)
 	}
 
 	db.log.Info("copying postgres binaries for later upgrades", "from", binDir, "to", pgBinDir)
@@ -351,10 +329,10 @@ func (db *Postgres) copyPostgresBinaries(ctx context.Context, override bool) err
 	copy.Stderr = os.Stderr
 	err = copy.Run()
 	if err != nil {
-		return fmt.Errorf("unable to copy pg bin dir: %w", err)
+		return "", fmt.Errorf("unable to copy pg bin dir: %w", err)
 	}
 
-	return nil
+	return pgBinDir, nil
 }
 
 func (db *Postgres) restoreOldPostgresBinaries(src, dst string) error {

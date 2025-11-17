@@ -46,6 +46,7 @@ spec:
               key: POSTGRES_DATA
               name: postgres
         image: postgres:16-alpine
+        imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
             command:
@@ -84,6 +85,13 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
         resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          privileged: false
+          readOnlyRootFilesystem: false
         volumeMounts:
         - mountPath: /data
           name: data
@@ -108,11 +116,19 @@ spec:
               key: POSTGRES_USER
               name: postgres
         image: postgres:16-alpine
+        imagePullPolicy: IfNotPresent
         name: backup-restore-sidecar
         ports:
         - containerPort: 8000
           name: grpc
         resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          privileged: false
+          readOnlyRootFilesystem: false
         volumeMounts:
         - mountPath: /backup
           name: backup
@@ -132,9 +148,23 @@ spec:
         imagePullPolicy: IfNotPresent
         name: backup-restore-sidecar-provider
         resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          privileged: false
+          readOnlyRootFilesystem: false
         volumeMounts:
         - mountPath: /bin-provision
           name: bin-provision
+      securityContext:
+        fsGroup: 70
+        runAsGroup: 70
+        runAsNonRoot: true
+        runAsUser: 70
+        seccompProfile:
+          type: RuntimeDefault
       volumes:
       - name: data
         persistentVolumeClaim:
