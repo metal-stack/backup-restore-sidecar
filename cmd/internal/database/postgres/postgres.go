@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
+	"os/user"
 	"path"
 	"strconv"
+	"syscall"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
@@ -53,6 +56,31 @@ func (db *Postgres) Check(_ context.Context) (bool, error) {
 	}
 	if empty {
 		db.log.Info("data directory is empty")
+		return true, err
+	}
+
+	pgUser, err := user.Lookup("postgres")
+	if err != nil {
+		return false, err
+	}
+	uid, err := strconv.Atoi(pgUser.Uid)
+	if err != nil {
+		return false, err
+	}
+	
+	// calling pg_checksums --pgdaata db.datadir --check
+	checksumsCommandArgs := []string{"--check", "--pgdata", db.datadir}
+	db.log.Info("running", "command", postgresChecksumsCmd, "args", checksumsCommandArgs)
+	cmd := exec.Command(postgresChecksumsCmd, checksumsCommandArgs...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Credential: &syscall.Credential{Uid: uint32(uid)}, // nolint:gosec
+	}
+	err = cmd.Run()
+	if err != nil {
+		db.log.Error("pg_checksums reported errors", "args", checksumsCommandArgs, "error", err)
 		return true, err
 	}
 

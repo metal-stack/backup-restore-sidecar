@@ -81,6 +81,10 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 		db.log.Error("database is newer than postgres binary, aborting", "database-version", pgVersion, "binary-version", binaryVersionMajor)
 		return fmt.Errorf("database is newer than postgres binary")
 	}
+	if pgVersion < 17 && binaryVersionMajor == 18 {
+		db.log.Error("you must not skip a major version before upgrading to v18, skipping upgrade", "old database", pgVersion, "binary-version", binaryVersionMajor)
+		return nil
+	}
 
 	oldPostgresBinDir := path.Join(db.datadir, fmt.Sprintf("%s%d", postgresBinBackupPrefix, pgVersion))
 
