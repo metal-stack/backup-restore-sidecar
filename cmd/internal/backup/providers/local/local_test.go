@@ -102,10 +102,7 @@ func Test_BackupProviderLocal(t *testing.T) {
 				require.Error(t, err)
 
 				allVersions := versions.List()
-				amount := backupAmount
-				if backupAmount > constants.DefaultObjectsToKeep {
-					amount = constants.DefaultObjectsToKeep
-				}
+				amount := min(backupAmount, constants.DefaultObjectsToKeep)
 				require.Len(t, allVersions, amount)
 
 				for i, v := range allVersions {
