@@ -2,11 +2,13 @@ package initializer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers/common"
+	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -116,6 +118,9 @@ func newDatabaseService(backupFn func() error) *databaseService {
 func (s *databaseService) CreateBackup(ctx context.Context, _ *v1.CreateBackupRequest) (*v1.CreateBackupResponse, error) {
 	err := s.backupFn()
 	if err != nil {
+		if errors.Is(err, constants.ErrBackupAlreadyInProgress) {
+			return nil, status.Error(codes.AlreadyExists, err.Error())
+		}
 		return nil, status.Error(codes.Internal, fmt.Sprintf("error creating backup: %s", err))
 	}
 

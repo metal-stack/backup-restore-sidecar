@@ -5,7 +5,6 @@ package integration_test
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -15,8 +14,9 @@ import (
 	"github.com/avast/retry-go/v4"
 	v1 "github.com/metal-stack/backup-restore-sidecar/api/v1"
 	brsclient "github.com/metal-stack/backup-restore-sidecar/pkg/client"
-	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
@@ -121,8 +121,10 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 	require.NoError(t, err)
 
 	_, err = brsc.DatabaseServiceClient().CreateBackup(ctx, &v1.CreateBackupRequest{})
-	if err != nil && !errors.Is(err, constants.ErrBackupAlreadyInProgress) {
-		require.NoError(t, err)
+	if err != nil {
+		if st, ok := status.FromError(err); !ok || st.Code() != codes.AlreadyExists {
+			require.NoError(t, err)
+		}
 	}
 
 	var backup *v1.Backup
@@ -238,8 +240,10 @@ func restoreLatestFromMultipleBackupsFlow(t *testing.T, spec *flowSpec) {
 
 		t.Log("taking a backup")
 		_, err = brsc.DatabaseServiceClient().CreateBackup(ctx, &v1.CreateBackupRequest{})
-		if err != nil && !errors.Is(err, constants.ErrBackupAlreadyInProgress) {
-			require.NoError(t, err)
+		if err != nil {
+			if st, ok := status.FromError(err); !ok || st.Code() != codes.AlreadyExists {
+				require.NoError(t, err)
+			}
 		}
 		lastindex = i
 	}

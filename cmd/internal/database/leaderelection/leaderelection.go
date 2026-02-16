@@ -134,3 +134,7 @@ func (le *LeaderElection) Start(ctx context.Context) error {
 func (le *LeaderElection) IsLeader() bool {
 	return le.isLeader.Load()
 }
+
+func (le *LeaderElection) PodName() string {
+	return le.podName
+}

@@ -245,3 +245,7 @@ func (db *RethinkDB) Probe(ctx context.Context) error {
 func (db *RethinkDB) Upgrade(_ context.Context) error {
 	return nil
 }
+
+func (db *RethinkDB) ShouldPerformBackup(ctx context.Context) bool {
+	return true
+}

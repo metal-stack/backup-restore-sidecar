@@ -47,6 +47,18 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 				Spec: corev1.PodSpec{
 					HostNetwork:        true,
 					ServiceAccountName: "valkey-backup-restore",
+					TopologySpreadConstraints: []corev1.TopologySpreadConstraint{
+						{
+							MaxSkew:           1,
+							TopologyKey:       "kubernetes.io/hostname",
+							WhenUnsatisfiable: corev1.ScheduleAnyway,
+							LabelSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"app": "valkey",
+								},
+							},
+						},
+					},
 					Containers: []corev1.Container{
 						{
 							Name:            "valkey",
@@ -357,13 +369,12 @@ func ValkeyBackingResources(namespace string) []client.Object {
 				"config.yaml": `---
 db: valkey
 valkey-master-replica-mode: false
-valkey-statefulSet-name: valkey
+valkey-statefulset-name: valkey
 
 bind-addr: 0.0.0.0
 db-data-directory: /data/
 backup-provider: local
 backup-cron-schedule: "*/1 * * * *"
-object-prefix: valkey-test-${POD_NAME}
 redis-addr: localhost:6379
 encryption-key: "01234567891234560123456789123456"
 post-exec-cmds:
@@ -409,6 +420,12 @@ func ValkeyMasterReplicaSts(namespace string) *appsv1.StatefulSet {
 	sts.Spec.Template.Labels["app"] = "valkey-master-replica"
 	sts.Spec.ServiceName = "valkey-master-replica"
 	sts.Spec.Replicas = pointer.Pointer(int32(3))
+	sts.Spec.Template.Spec.HostNetwork = false
+
+	// Update TopologySpreadConstraints label selector for master-replica
+	for i := range sts.Spec.Template.Spec.TopologySpreadConstraints {
+		sts.Spec.Template.Spec.TopologySpreadConstraints[i].LabelSelector.MatchLabels["app"] = "valkey-master-replica"
+	}
 
 	for i := range sts.Spec.Template.Spec.Containers {
 		if sts.Spec.Template.Spec.Containers[i].Name == "valkey" {
@@ -421,11 +438,9 @@ func ValkeyMasterReplicaSts(namespace string) *appsv1.StatefulSet {
 				},
 			)
 		}
-		if sts.Spec.Template.Spec.Containers[i].Name == "backup-restore-sidecar" {
-			for j := range sts.Spec.Template.Spec.Containers[i].Env {
-				if sts.Spec.Template.Spec.Containers[i].Env[j].Name == "STATEFUL_NAME" {
-					sts.Spec.Template.Spec.Containers[i].Env[j].Value = "valkey-master-replica"
-				}
+		for j := range sts.Spec.Template.Spec.Containers[i].Env {
+			if sts.Spec.Template.Spec.Containers[i].Env[j].Name == "STATEFUL_NAME" {
+				sts.Spec.Template.Spec.Containers[i].Env[j].Value = "valkey-master-replica"
 			}
 		}
 	}
@@ -474,14 +489,12 @@ func ValkeyMasterReplicaBackingResources(namespace string) []client.Object {
 			cm.Data["config.yaml"] = `---
 db: valkey
 valkey-master-replica-mode: true
-valkey-replica-count: 3
 valkey-statefulset-name: valkey-master-replica
 
 bind-addr: 0.0.0.0
 db-data-directory: /data/
 backup-provider: local
 backup-cron-schedule: "*/1 * * * *"
-object-prefix: valkey-master-replica-test-${POD_NAME}
 redis-addr: localhost:6379
 encryption-key: "01234567891234560123456789123456"
 post-exec-cmds:

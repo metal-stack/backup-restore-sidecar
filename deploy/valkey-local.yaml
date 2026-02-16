@@ -116,6 +116,13 @@ spec:
         - mountPath: /bin-provision
           name: bin-provision
       serviceAccountName: valkey-backup-restore
+      topologySpreadConstraints:
+      - labelSelector:
+          matchLabels:
+            app: valkey
+        maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
       volumes:
       - name: data
         persistentVolumeClaim:
@@ -218,13 +225,12 @@ data:
     ---
     db: valkey
     valkey-master-replica-mode: false
-    valkey-statefulSet-name: valkey
+    valkey-statefulset-name: valkey
 
     bind-addr: 0.0.0.0
     db-data-directory: /data/
     backup-provider: local
     backup-cron-schedule: "*/1 * * * *"
-    object-prefix: valkey-test-${POD_NAME}
     redis-addr: localhost:6379
     encryption-key: "01234567891234560123456789123456"
     post-exec-cmds:

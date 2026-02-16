@@ -43,7 +43,8 @@ func newValkeyClient(t *testing.T, ctx context.Context) *redis.Client {
 		cli = redis.NewClient(&redis.Options{
 			Addr: "localhost:6379",
 		})
-		return nil
+		_, err := cli.Ping(ctx).Result()
+		return err
 	}, retry.Context(ctx))
 	require.NoError(t, err)
 
