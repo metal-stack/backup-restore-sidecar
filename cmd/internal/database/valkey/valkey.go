@@ -13,7 +13,6 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/leaderelection"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
-	"github.com/metal-stack/metal-lib/pkg/pointer"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/afero"
 )
@@ -192,10 +191,15 @@ func New(
 	password *string,
 	statefulSetName string,
 	masterReplicaMode bool) (*Valkey, error) {
+	var pw string
+	if password != nil {
+		pw = *password
+	}
+
 	v := &Valkey{
 		log:               log,
 		datadir:           datadir,
-		password:          pointer.SafeDerefOrDefault(password, ""),
+		password:          pw,
 		masterReplicaMode: masterReplicaMode,
 		statefulSetName:   statefulSetName,
 	}
@@ -204,7 +208,7 @@ func New(
 
 	v.client = redis.NewClient(&redis.Options{
 		Addr:     addr,
-		Password: pointer.SafeDerefOrDefault(password, ""),
+		Password: pw,
 	})
 	if !masterReplicaMode {
 		return v, nil
