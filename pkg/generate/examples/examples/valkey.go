@@ -419,7 +419,8 @@ func ValkeyMasterReplicaSts(namespace string) *appsv1.StatefulSet {
 	sts.Spec.Selector.MatchLabels["app"] = "valkey-master-replica"
 	sts.Spec.Template.Labels["app"] = "valkey-master-replica"
 	sts.Spec.ServiceName = "valkey-master-replica"
-	sts.Spec.Replicas = pointer.Pointer(int32(3))
+	replicas := int32(3)
+	sts.Spec.Replicas = &replicas
 	sts.Spec.Template.Spec.HostNetwork = false
 
 	// Update TopologySpreadConstraints label selector for master-replica
@@ -453,6 +454,7 @@ func ValkeyMasterReplicaSts(namespace string) *appsv1.StatefulSet {
 		}
 	}
 
+	initScriptMode := int32(0755)
 	sts.Spec.Template.Spec.Volumes = append(sts.Spec.Template.Spec.Volumes, corev1.Volume{
 		Name: "init-script",
 		VolumeSource: corev1.VolumeSource{
@@ -460,7 +462,7 @@ func ValkeyMasterReplicaSts(namespace string) *appsv1.StatefulSet {
 				LocalObjectReference: corev1.LocalObjectReference{
 					Name: "valkey-init-script-master-replica",
 				},
-				DefaultMode: pointer.Pointer(int32(0755)),
+				DefaultMode: &initScriptMode,
 			},
 		},
 	})
