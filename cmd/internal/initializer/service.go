@@ -52,7 +52,6 @@ func (s *backupService) ListBackups(ctx context.Context, _ *v1.ListBackupsReques
 
 	response := &v1.BackupListResponse{}
 	for _, b := range backups {
-		b := b
 		response.Backups = append(response.GetBackups(), &v1.Backup{
 			Name:      b.Name,
 			Version:   b.Version,

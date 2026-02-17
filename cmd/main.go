@@ -35,7 +35,6 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/wait"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/client"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
-	"github.com/metal-stack/metal-lib/pkg/pointer"
 	"github.com/metal-stack/v"
 )
 
@@ -618,10 +617,10 @@ func initBackupProvider() error {
 			Suffix:        suffix,
 		}
 		if viper.IsSet(s3InsecureSkipVerify) {
-			bkpConfig.InsecureSkipVerify = pointer.Pointer(viper.GetBool(s3InsecureSkipVerify))
+			bkpConfig.InsecureSkipVerify = new(viper.GetBool(s3InsecureSkipVerify))
 		}
 		if viper.IsSet(s3TrustedCaCert) {
-			bkpConfig.TrustedCaCert = pointer.Pointer(viper.GetString(s3TrustedCaCert))
+			bkpConfig.TrustedCaCert = new(viper.GetString(s3TrustedCaCert))
 		}
 		bp, err = s3.New(logger.WithGroup("backup"), bkpConfig)
 	case "local":
