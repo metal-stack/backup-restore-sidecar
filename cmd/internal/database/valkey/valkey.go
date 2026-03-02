@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database/leaderelection"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	"github.com/redis/go-redis/v9"
@@ -31,8 +30,7 @@ type Valkey struct {
 	statefulSetName   string
 	password          string
 
-	leaderElection       *leaderelection.LeaderElection
-	leaderElectionCancel context.CancelFunc
+	podName string
 }
 
 func (db *Valkey) Check(context.Context) (bool, error) {
@@ -56,71 +54,23 @@ func (db *Valkey) Recover(ctx context.Context) error {
 		return db.performRestore(dump)
 	}
 
-	if db.leaderElection == nil {
-		return fmt.Errorf("leader election not initialized")
+	// In master-replica mode, only pod-0 (the Valkey master) restores from backup.
+	// Replicas skip restore and sync data from the master via Valkey replication.
+	// The ordinal is deterministic from the StatefulSet pod name — no distributed
+	// coordination is needed because each pod already knows its own role.
+	ordinal := extractOrdinalFromPodName(db.podName)
+	if ordinal == -1 {
+		return fmt.Errorf("failed to extract pod ordinal from POD_NAME: %s", db.podName)
 	}
 
-	db.log.Info("master-replica mode: waiting for leader election before restore")
-
-	/* Wait for leader election to complete before restore.
-	Timeout calculation (90 seconds):
-	LeaseDuration: 60s (maximum time for a failed leader's lease to expire)
-	RetryPeriod: 5s (time for a new leader to acquire the lease after expiration)
-	Buffer: 25s (accounts for pod startup time, Kubernetes API latency, and clock skew)
-	If this timeout is reached, the pod is not the leader and will rely on Valkey replication
-	to sync data from the master instead of restoring from backup.
-	*/
-	waitCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
-	defer cancel()
-
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	startTime := time.Now()
-	for {
-		select {
-		case <-waitCtx.Done():
-			// Timeout reached
-			elapsed := time.Since(startTime)
-			db.log.Info("leader election timeout - not the leader, will sync from master via replication",
-				"elapsed", elapsed.String())
-			return nil
-		case <-ticker.C:
-			if !db.leaderElection.IsLeader() {
-				// Still waiting for election, log progress every 10 seconds
-				elapsed := time.Since(startTime)
-				if int(elapsed.Seconds())%10 == 0 && elapsed.Seconds() > 0 {
-					db.log.Debug("waiting for leader election",
-						"elapsed", elapsed.String(),
-						"timeout", "90s")
-				}
-				continue
-			}
-
-			elapsed := time.Since(startTime)
-
-			// Leader election considers database role: only restore if this pod will be the Valkey master
-			// In master-replica mode, pod-0 is always the master (determined by init.sh)
-			podName := db.leaderElection.PodName()
-			ordinal := extractOrdinalFromPodName(podName)
-
-			if ordinal == -1 {
-				return fmt.Errorf("failed to extract pod ordinal from POD_NAME: %s", podName)
-			}
-
-			if ordinal != 0 {
-				db.log.Info("elected as backup leader but not pod-0 (won't be Valkey master), skipping restore",
-					"ordinal", ordinal,
-					"electionTime", elapsed.String())
-				return nil
-			}
-
-			db.log.Info("elected as backup leader AND pod-0 (will be Valkey master), performing restore from backup",
-				"ordinal", ordinal,
-				"electionTime", elapsed.String())
-			return db.performRestore(dump)
-		}
+	if ordinal != 0 {
+		db.log.Info("not pod-0, skipping restore - will sync from master via replication",
+			"ordinal", ordinal)
+		return nil
 	}
+
+	db.log.Info("pod-0 (will be Valkey master), performing restore from backup")
+	return db.performRestore(dump)
 }
 
 func (db *Valkey) performRestore(dump string) error {
@@ -202,6 +152,7 @@ func New(
 		password:          pw,
 		masterReplicaMode: masterReplicaMode,
 		statefulSetName:   statefulSetName,
+		podName:           os.Getenv("POD_NAME"),
 	}
 
 	log.Info("creating valkey instance", "masterReplicaMode", masterReplicaMode, "addr", addr)
@@ -210,55 +161,13 @@ func New(
 		Addr:     addr,
 		Password: pw,
 	})
-	if !masterReplicaMode {
-		return v, nil
-	}
-
-	leaderElection, err := leaderelection.New(leaderelection.Config{
-		Log:      log,
-		LockName: fmt.Sprintf("valkey-backup-restore-%s", v.statefulSetName),
-		OnStartedLeading: func(ctx context.Context) {
-			log.Info("became leader for valkey master-replica backup/restore coordination")
-		},
-		OnStoppedLeading: func() {
-			log.Info("stopped being leader for valkey master-replica backup/restore coordination")
-		},
-		OnNewLeader: func(identity string) {
-			log.Info("new leader elected for valkey master-replica backup/restore coordination",
-				"leader", identity)
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create leader election: %w", err)
-	}
-	v.leaderElection = leaderElection
-
-	log.Info("master-replica mode enabled with leader election coordination")
-
-	leCtx, leCancel := context.WithCancel(context.Background())
-	v.leaderElectionCancel = leCancel
-
-	go func() {
-		if err := leaderElection.Start(leCtx); err != nil {
-			log.Error("leader election failed", "error", err)
-		}
-	}()
 
 	return v, nil
 }
 
 func (db *Valkey) Probe(ctx context.Context) error {
 	_, err := db.client.Ping(ctx).Result()
-	if err != nil {
-		return err
-	}
-
-	if db.masterReplicaMode && db.leaderElection != nil {
-		isLeader := db.leaderElection.IsLeader()
-		db.log.Debug("master-replica mode probe", "isLeader", isLeader)
-	}
-
-	return nil
+	return err
 }
 
 func (db *Valkey) ShouldPerformBackup(ctx context.Context) bool {
@@ -267,9 +176,8 @@ func (db *Valkey) ShouldPerformBackup(ctx context.Context) bool {
 	}
 
 	// In master-replica mode, only the Valkey master (pod-0) should take backups.
-	// We check the database role directly rather than using leader election here,
-	// because the leader election winner may not be the Valkey master (pod-0 is always master,
-	// but any pod can win the lease). Leader election is used for restore coordination only.
+	// We check the database role directly via INFO replication because it is the
+	// authoritative source of truth at runtime.
 	isMaster, err := db.isMaster(ctx)
 	if err != nil {
 		db.log.Warn("failed to check Valkey master status, skipping backup", "error", err)
@@ -300,13 +208,8 @@ func (db *Valkey) isMaster(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-// Close gracefully shuts down the Valkey database connection and leader election
+// Close gracefully shuts down the Valkey database connection.
 func (db *Valkey) Close() error {
-	if db.leaderElectionCancel != nil {
-		db.log.Info("stopping leader election")
-		db.leaderElectionCancel()
-	}
-
 	if db.client != nil {
 		if err := db.client.Close(); err != nil {
 			return fmt.Errorf("failed to close valkey client: %w", err)

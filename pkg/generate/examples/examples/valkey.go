@@ -4,7 +4,6 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -44,8 +43,7 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 					},
 				},
 				Spec: corev1.PodSpec{
-					HostNetwork:        true,
-					ServiceAccountName: "valkey-backup-restore",
+					HostNetwork: true,
 					TopologySpreadConstraints: []corev1.TopologySpreadConstraint{
 						{
 							MaxSkew:           1,
@@ -304,55 +302,6 @@ func ValkeyBackingResources(namespace string) []client.Object {
 				Selector: map[string]string{
 					"app": "valkey",
 				},
-			},
-		},
-		&corev1.ServiceAccount{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "ServiceAccount",
-				APIVersion: corev1.SchemeGroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "valkey-backup-restore",
-				Namespace: namespace,
-			},
-		},
-		&rbacv1.Role{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Role",
-				APIVersion: rbacv1.SchemeGroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "valkey-backup-restore",
-				Namespace: namespace,
-			},
-			Rules: []rbacv1.PolicyRule{
-				{
-					APIGroups: []string{"coordination.k8s.io"},
-					Resources: []string{"leases"},
-					Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
-				},
-			},
-		},
-		&rbacv1.RoleBinding{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "RoleBinding",
-				APIVersion: rbacv1.SchemeGroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "valkey-backup-restore",
-				Namespace: namespace,
-			},
-			Subjects: []rbacv1.Subject{
-				{
-					Kind:      "ServiceAccount",
-					Name:      "valkey-backup-restore",
-					Namespace: namespace,
-				},
-			},
-			RoleRef: rbacv1.RoleRef{
-				Kind:     "Role",
-				Name:     "valkey-backup-restore",
-				APIGroup: "rbac.authorization.k8s.io",
 			},
 		},
 		&corev1.ConfigMap{

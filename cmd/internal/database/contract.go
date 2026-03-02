@@ -27,7 +27,7 @@ type DatabaseProber interface {
 
 	// ShouldPerformBackup returns true if this instance should perform backups.
 	// For standalone databases, this always returns true.
-	// For clustered databases with leader election, only the leader should return true.
+	// For master-replica databases, only the master should return true.
 	ShouldPerformBackup(ctx context.Context) bool
 }
 

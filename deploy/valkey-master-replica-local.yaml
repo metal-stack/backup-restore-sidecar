@@ -118,7 +118,6 @@ spec:
         volumeMounts:
         - mountPath: /bin-provision
           name: bin-provision
-      serviceAccountName: valkey-backup-restore
       topologySpreadConstraints:
       - labelSelector:
           matchLabels:
@@ -186,45 +185,6 @@ spec:
     app: valkey-master-replica
 status:
   loadBalancer: {}
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  creationTimestamp: null
-  name: valkey-backup-restore
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  creationTimestamp: null
-  name: valkey-backup-restore
-rules:
-- apiGroups:
-  - coordination.k8s.io
-  resources:
-  - leases
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  creationTimestamp: null
-  name: valkey-backup-restore
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: valkey-backup-restore
-subjects:
-- kind: ServiceAccount
-  name: valkey-backup-restore
-  namespace: default
 ---
 apiVersion: v1
 data:
