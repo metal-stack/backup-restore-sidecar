@@ -141,6 +141,8 @@ func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, erro
 func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 	// some s3 storage implementations do not properly return the already exists or already owned by you
 	// error codes. therefore, we check if the bucket already exists in the backend by listing them first.
+	alreadyExists := false
+
 	buckets, err := b.c.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err != nil {
 		return fmt.Errorf("unable to list backup buckets: %w", err)
@@ -153,20 +155,22 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 
 		return *bucket.Name == b.config.BucketName
 	}) {
-		return nil
+		alreadyExists = true
 	}
 
-	// create bucket
-	_, err = b.c.CreateBucket(ctx, &s3.CreateBucketInput{
-		Bucket: aws.String(b.config.BucketName),
-	})
-	if err != nil {
-		var (
-			bucketAlreadyExists     *types.BucketAlreadyExists
-			bucketAlreadyOwnerByYou *types.BucketAlreadyOwnedByYou
-		)
-		if !errors.As(err, &bucketAlreadyExists) && !errors.As(err, &bucketAlreadyOwnerByYou) {
-			return err
+	if !alreadyExists {
+		// create bucket
+		_, err = b.c.CreateBucket(ctx, &s3.CreateBucketInput{
+			Bucket: aws.String(b.config.BucketName),
+		})
+		if err != nil {
+			var (
+				bucketAlreadyExists     *types.BucketAlreadyExists
+				bucketAlreadyOwnerByYou *types.BucketAlreadyOwnedByYou
+			)
+			if !errors.As(err, &bucketAlreadyExists) && !errors.As(err, &bucketAlreadyOwnerByYou) {
+				return err
+			}
 		}
 	}
 
