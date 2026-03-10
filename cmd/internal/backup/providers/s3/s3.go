@@ -5,9 +5,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -137,8 +139,25 @@ func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, erro
 
 // EnsureBackupBucket ensures a backup bucket at the backup provider
 func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
+	// some s3 storage implementations do not properly return the already exists or already owned by you
+	// error codes. therefore, we check if the bucket already exists in the backend by listing them first.
+	buckets, err := b.c.ListBuckets(ctx, &s3.ListBucketsInput{})
+	if err != nil {
+		return fmt.Errorf("unable to list backup buckets: %w", err)
+	}
+
+	if slices.ContainsFunc(buckets.Buckets, func(bucket types.Bucket) bool {
+		if bucket.Name == nil {
+			return false
+		}
+
+		return *bucket.Name == b.config.BucketName
+	}) {
+		return nil
+	}
+
 	// create bucket
-	_, err := b.c.CreateBucket(ctx, &s3.CreateBucketInput{
+	_, err = b.c.CreateBucket(ctx, &s3.CreateBucketInput{
 		Bucket: aws.String(b.config.BucketName),
 	})
 	if err != nil {
@@ -167,7 +186,7 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 	rules := []types.LifecycleRule{
 		{
 			NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
-				NoncurrentDays:          &b.config.ObjectsToKeep,
+				NoncurrentDays: &b.config.ObjectsToKeep,
 			},
 			Status: types.ExpirationStatusEnabled,
 			ID:     lifecycleRuleID,
