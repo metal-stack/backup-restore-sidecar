@@ -5,7 +5,7 @@ This project provides automated backup and recovery for K8s databases.
 **Core Design Principle**
 This sidecar solution actively controls the database startup sequence. Instead of acting as a passive sidecar, it intercepts the main database container until the latest backup is completely downloaded and restored.
 As soon as the restore process is finished, the sidecar signals the database container to start.
-After a successful startup, the sidecar continuously runs in the background, performing regular backups according to your defined schedule. [See the sequence diagram in the How it works section](#how-it-works)
+After a successful startup, the sidecar continuously runs in the background, performing regular backups according to your defined schedule. [See the sequence diagram in the How it works section](#how-it-works).
 
 The idea is taken from the [etcd-backup-restore](https://github.com/gardener/etcd-backup-restore) project.
 
@@ -80,7 +80,7 @@ It is possible to let multiple backup-restore-sidecars (for different databases)
 Be aware that, if you change the object prefix under which the backups are stored, the old lifecycle policies matching this prefix are not automatically cleaned up and have to be removed manually.
 
 ## Deployment
-The [deploy](deploy/) directory contains manifests as a reference for deploying the `backup-restore-sidecar`. Because configuration (like environment variables, `ConfigMap` parameters, and `post-exec-cmds`) differs heavily between database engines and storage providers, these generated manifests serve as the best reference for your specific setup. 
+The [deploy](deploy/) directory contains manifests as a reference for deploying the `backup-restore-sidecar`. Because configuration (like environment variables, `ConfigMap` parameters, and `post-exec-cmds`) differs heavily between database engines and storage providers, these generated manifests serve as the best reference for your specific setup.
 
 ### Manual Deployment
 
@@ -115,12 +115,12 @@ If you prefer Kubernetes-native `CrashLoopBackOff` alerting over metric-based al
 > **Note:** If you enable this timeout, it **must closely align with your database `startupProbe` threshold**. If your sidecar timeout is much shorter than the startup probe, the sidecar will prematurely crash while the database is legitimately busy recovering. This causes a noisy `CrashLoopBackOff` and unnecessarily removes the Pod from service endpoints.
 
 ### Monitoring and Alerting
-The sidecar exposes Prometheus metrics on port `2112` at the `/metrics` endpoint. 
+The sidecar exposes Prometheus metrics on port `2112` at the `/metrics` endpoint.
 
 Operators should set up Prometheus alerts based on the provided metrics:
 
 * `backup_success` (Gauge): Is `0` when the last backup failed, and `1` when it was successful. This is the primary metric for alerting.
-* `backup_database_available` (Gauge): Is `0` when the sidecar cannot connect to the database (e.g. wrong credentials, wrong port, or database not yet accepting connections), and `1` when connected. Useful for alerting on silent failures while the database probe hangs.
+* `backup_database_available` (Gauge): Is `0` when the sidecar cannot connect to the database (e.g. wrong credentials, wrong port, or database not yet accepting connections), and `1` when connected. Useful for alerting on silent failures while the database probe hangs. Starts at `0` until the first successful probe.
 * `backup_errors` (CounterVec): Total number of errors during backups, labeled by operation.
 * `backup_total_backups` (Counter): Total number of successful backups.
 * `backup_size` (Gauge): Size of the last backup in bytes.

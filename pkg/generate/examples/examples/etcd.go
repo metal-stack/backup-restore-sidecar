@@ -59,7 +59,7 @@ func EtcdSts(namespace string) *appsv1.StatefulSet {
 								TimeoutSeconds:      1,
 								PeriodSeconds:       5,
 								SuccessThreshold:    1,
-								FailureThreshold:    360,
+								FailureThreshold:    360, // allow up to 30 minutes for restore and boot (360 * 5s)
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{

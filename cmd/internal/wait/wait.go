@@ -11,7 +11,7 @@ import (
 
 const (
 	waitInterval = 3 * time.Second
-	grcpTimeout  = 10 * time.Second
+	grpcTimeout  = 10 * time.Second
 )
 
 // Start starts a wait component that will return when the initializer server has done its job
@@ -36,7 +36,7 @@ func Start(ctx context.Context, log *slog.Logger, addr string) error {
 			log.Info("received stop signal, shutting down")
 			return nil
 		case <-waitTicker.C:
-			grpcCtx, cancel := context.WithTimeout(ctx, grcpTimeout)
+			grpcCtx, cancel := context.WithTimeout(ctx, grpcTimeout)
 			resp, err := client.InitializerServiceClient().Status(grpcCtx, &v1.StatusRequest{})
 			cancel()
 

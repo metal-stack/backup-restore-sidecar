@@ -9,9 +9,9 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 )
 
-var (
-	probeInterval = 3 * time.Second
-	probeTimeout  = 10 * time.Second
+const (
+	probeInterval    = 3 * time.Second
+	probeCallTimeout = 10 * time.Second
 )
 
 // Start starts the database prober
@@ -32,7 +32,7 @@ func Start(ctx context.Context, log *slog.Logger, db database.DatabaseProber) er
 			}
 			return errors.New("received stop signal, shutting down")
 		case <-probeTicker.C:
-			probeCtx, cancelProbe := context.WithTimeout(ctx, probeTimeout)
+			probeCtx, cancelProbe := context.WithTimeout(ctx, probeCallTimeout)
 			err := db.Probe(probeCtx)
 			cancelProbe()
 
@@ -42,7 +42,7 @@ func Start(ctx context.Context, log *slog.Logger, db database.DatabaseProber) er
 
 			errMsg := err.Error()
 			if errMsg != lastErrMsg || time.Since(lastLogTime) > 1*time.Minute {
-				log.Info("database has not yet started, waiting and retrying...", "error", err)
+				log.Warn("database has not yet started, waiting and retrying...", "error", err)
 				lastErrMsg = errMsg
 				lastLogTime = time.Now()
 			}

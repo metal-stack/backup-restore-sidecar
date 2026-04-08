@@ -76,7 +76,7 @@ func RethinkDbSts(namespace string) *appsv1.StatefulSet {
 								TimeoutSeconds:      5,
 								PeriodSeconds:       10,
 								SuccessThreshold:    1,
-								FailureThreshold:    360,
+								FailureThreshold:    360, // allow up to 1 hour for restore and boot (360 * 10s)
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{

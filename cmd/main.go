@@ -99,7 +99,7 @@ const (
 
 	downloadOutputFlg = "output"
 
-	probeTimeout = "probe-timeout"
+	probeTimeoutFlg = "probe-timeout"
 )
 
 var (
@@ -186,7 +186,7 @@ var startCmd = &cobra.Command{
 
 		probeCtx := stop
 		var probeCancel context.CancelFunc
-		if timeout := viper.GetDuration(probeTimeout); timeout > 0 {
+		if timeout := viper.GetDuration(probeTimeoutFlg); timeout > 0 {
 			probeCtx, probeCancel = context.WithTimeout(stop, timeout)
 		}
 
@@ -411,7 +411,7 @@ func init() {
 
 	startCmd.Flags().StringP(encryptionKeyFlg, "", "", "the encryption key for aes")
 
-	startCmd.Flags().Duration(probeTimeout, 0, "the duration to wait for the database to be available after a restore until giving up (e.g. 30s, 5m, 1h). Set to 0 to disable. It is highly recommended to align this with the Kubernetes StartupProbe threshold if you choose to enable it.")
+	startCmd.Flags().Duration(probeTimeoutFlg, 0, "the duration to wait for the database to be available after a restore until giving up (e.g. 30s, 5m, 1h). Set to 0 to disable. It is highly recommended to align this with the Kubernetes StartupProbe threshold if you choose to enable it.")
 
 	err = viper.BindPFlags(startCmd.Flags())
 	if err != nil {
