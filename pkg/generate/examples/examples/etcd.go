@@ -49,7 +49,7 @@ func EtcdSts(namespace string) *appsv1.StatefulSet {
 							Name:    "etcd",
 							Image:   etcdContainerImage,
 							Command: []string{"backup-restore-sidecar", "wait"},
-							LivenessProbe: &corev1.Probe{
+							StartupProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
 										Command: []string{"/usr/local/bin/etcdctl", "endpoint", "health", "--endpoints=127.0.0.1:32379"},
@@ -59,7 +59,7 @@ func EtcdSts(namespace string) *appsv1.StatefulSet {
 								TimeoutSeconds:      1,
 								PeriodSeconds:       5,
 								SuccessThreshold:    1,
-								FailureThreshold:    3,
+								FailureThreshold:    360,
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{

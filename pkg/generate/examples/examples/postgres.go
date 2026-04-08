@@ -54,17 +54,17 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 							Name:    "postgres",
 							Image:   postgresContainerImage,
 							Command: []string{"backup-restore-sidecar", "wait"},
-							LivenessProbe: &corev1.Probe{
+							StartupProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
 										Command: []string{"/bin/sh", "-c", "exec", "pg_isready", "-U", PostgresUser, "-h", "127.0.0.1", "-p", "5432"},
 									},
 								},
-								InitialDelaySeconds: 30,
+								InitialDelaySeconds: 5,
 								TimeoutSeconds:      5,
 								PeriodSeconds:       10,
 								SuccessThreshold:    1,
-								FailureThreshold:    6,
+								FailureThreshold:    360, // allow up to 1 hour for restore and boot (360 * 10s)
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
@@ -75,6 +75,8 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 								InitialDelaySeconds: 5,
 								TimeoutSeconds:      5,
 								PeriodSeconds:       10,
+								SuccessThreshold:    1,
+								FailureThreshold:    3,
 							},
 							Env: []corev1.EnvVar{
 								{

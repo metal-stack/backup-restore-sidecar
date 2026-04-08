@@ -65,6 +65,32 @@ func RethinkDbSts(namespace string) *appsv1.StatefulSet {
 									},
 								},
 							},
+							StartupProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path: "/",
+										Port: intstr.FromInt32(8080),
+									},
+								},
+								InitialDelaySeconds: 5,
+								TimeoutSeconds:      5,
+								PeriodSeconds:       10,
+								SuccessThreshold:    1,
+								FailureThreshold:    360,
+							},
+							ReadinessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path: "/",
+										Port: intstr.FromInt32(8080),
+									},
+								},
+								InitialDelaySeconds: 5,
+								TimeoutSeconds:      5,
+								PeriodSeconds:       10,
+								SuccessThreshold:    1,
+								FailureThreshold:    3,
+							},
 							Ports: []corev1.ContainerPort{
 								{
 									ContainerPort: 8080,

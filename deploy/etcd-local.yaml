@@ -25,18 +25,6 @@ spec:
         - backup-restore-sidecar
         - wait
         image: quay.io/coreos/etcd:v3.5.21
-        livenessProbe:
-          exec:
-            command:
-            - /usr/local/bin/etcdctl
-            - endpoint
-            - health
-            - --endpoints=127.0.0.1:32379
-          failureThreshold: 3
-          initialDelaySeconds: 15
-          periodSeconds: 5
-          successThreshold: 1
-          timeoutSeconds: 1
         name: etcd
         ports:
         - containerPort: 32379
@@ -56,6 +44,18 @@ spec:
           successThreshold: 1
           timeoutSeconds: 1
         resources: {}
+        startupProbe:
+          exec:
+            command:
+            - /usr/local/bin/etcdctl
+            - endpoint
+            - health
+            - --endpoints=127.0.0.1:32379
+          failureThreshold: 360
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
         volumeMounts:
         - mountPath: /data
           name: data

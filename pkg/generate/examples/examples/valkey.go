@@ -49,7 +49,7 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 							Image:           valkeyContainerImage,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Command:         []string{"backup-restore-sidecar", "wait"},
-							LivenessProbe: &corev1.Probe{
+							StartupProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
 										Command: []string{"valkey-cli", "ping"},
@@ -59,7 +59,7 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 								TimeoutSeconds:      1,
 								PeriodSeconds:       5,
 								SuccessThreshold:    1,
-								FailureThreshold:    3,
+								FailureThreshold:    360,
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
