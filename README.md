@@ -91,12 +91,20 @@ The [manifests](deploy) have a startup probe and a readiness probe configured fo
 * **Readiness probe:** Configured with a short timeout (e.g. 5s) to quickly detect when the database is ready to serve traffic (after the initial startup probe has succeeded).
 * **Liveness probe:** Not recommended for the database container. A liveness probe could incorrectly kill the database during heavy-load operations. It will not interfere with the restore process, as Kubernetes disables liveness probes until the startup probe successfully succeeds.
 
+**Sidecar Internal Probe Timeout (`--probe-timeout`)**
+The sidecar features an internal timeout (default: `0`, meaning disabled) for probing the database connection. This acts as an optional watchdog against **silent failures**. If the database boots perfectly but the sidecar has invalid credentials or a broken connection string, it will hang infinitely. Because the backup loop hasn't started, no error metrics are emitted, however, the `backup_database_available` metric will remain `0`.
+
+If you prefer Kubernetes-native `CrashLoopBackOff` alerting over metric-based alerting, you can set this timeout to force a container crash. Do not forget that this will cause the Pod to be removed from service endpoints until the database is available again, so use with caution.
+
+> **Note:** If you enable this timeout, it **must closely align with your database `startupProbe` threshold**. If your sidecar timeout is much shorter than the startup probe, the sidecar will prematurely crash while the database is legitimately busy recovering. This causes a noisy `CrashLoopBackOff` and unnecessarily removes the Pod from service endpoints.
+
 ### Monitoring and Alerting
 The sidecar exposes Prometheus metrics on port `2112` at the `/metrics` endpoint. 
 
 Operators should set up Prometheus alerts based on the provided metrics:
 
 * `backup_success` (Gauge): Is `0` when the last backup failed, and `1` when it was successful. This is the primary metric for alerting.
+* `backup_database_available` (Gauge): Is `0` when the sidecar cannot connect to the database (e.g. wrong credentials, wrong port, or database not yet accepting connections), and `1` when connected. Useful for alerting on silent failures while the database probe hangs.
 * `backup_errors` (CounterVec): Total number of errors during backups, labeled by operation.
 * `backup_total_backups` (Counter): Total number of successful backups.
 * `backup_size` (Gauge): Size of the last backup in bytes.

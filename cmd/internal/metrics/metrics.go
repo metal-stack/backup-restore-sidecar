@@ -12,10 +12,11 @@ import (
 
 // Metrics contains the collected metrics
 type Metrics struct {
-	totalBackups  prometheus.Counter
-	backupSuccess prometheus.Gauge
-	backupSize    prometheus.Gauge
-	totalErrors   *prometheus.CounterVec
+	totalBackups      prometheus.Counter
+	backupSuccess     prometheus.Gauge
+	databaseAvailable prometheus.Gauge
+	backupSize        prometheus.Gauge
+	totalErrors       *prometheus.CounterVec
 }
 
 // New generates new metrics
@@ -23,6 +24,12 @@ func New() *Metrics {
 	backupSuccess := prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "backup_success",
 		Help: "is 1 when the last backup was successful, otherwise 0",
+	},
+	)
+
+	databaseAvailable := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "backup_database_available",
+		Help: "is 1 when the database is available for backups, 0 otherwise",
 	},
 	)
 
@@ -46,10 +53,11 @@ func New() *Metrics {
 	)
 
 	return &Metrics{
-		totalBackups:  totalBackups,
-		backupSuccess: backupSuccess,
-		totalErrors:   totalErrors,
-		backupSize:    backupSize,
+		totalBackups:      totalBackups,
+		backupSuccess:     backupSuccess,
+		databaseAvailable: databaseAvailable,
+		totalErrors:       totalErrors,
+		backupSize:        backupSize,
 	}
 }
 
@@ -69,6 +77,7 @@ func (m *Metrics) Start(log *slog.Logger) {
 	})
 
 	prometheus.MustRegister(m.backupSuccess)
+	prometheus.MustRegister(m.databaseAvailable)
 	prometheus.MustRegister(m.totalBackups)
 	prometheus.MustRegister(m.totalErrors)
 	prometheus.MustRegister(m.backupSize)
@@ -97,4 +106,13 @@ func (m *Metrics) CountBackup(backupFile string) {
 func (m *Metrics) CountError(op string) {
 	m.totalErrors.With(prometheus.Labels{"operation": op}).Inc()
 	m.backupSuccess.Set(0)
+}
+
+// SetDatabaseAvailable updates the database available metric
+func (m *Metrics) SetDatabaseAvailable(available bool) {
+	if available {
+		m.databaseAvailable.Set(1)
+	} else {
+		m.databaseAvailable.Set(0)
+	}
 }
