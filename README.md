@@ -82,6 +82,22 @@ Be aware that, if you change the object prefix under which the backups are store
 ## Deployment
 The [deploy](deploy/) directory contains manifests as a reference for deploying the `backup-restore-sidecar`. Because configuration (like environment variables, `ConfigMap` parameters, and `post-exec-cmds`) differs heavily between database engines and storage providers, these generated manifests serve as the best reference for your specific setup. 
 
+### Manual Deployment
+
+Since the sidecar actively controls the database startup sequence, it effectively replaces a standard database deployment. To deploy your database paired with the sidecar, you typically need to apply two resources: the backup provider secret and the complete database manifest.
+
+1. **Apply the backup provider secret:**
+   Copy a secret template like `deploy/provider-secret-s3.yaml`, add your storage credentials, and apply it:
+   ```bash
+   kubectl apply -f your-provider-secret.yaml
+   ```
+
+2. **Apply the database manifest:**
+   Copy the matching template for your setup (e.g., `deploy/postgres-s3.yaml`). This contains the complete deployment (`StatefulSet`, `ConfigMap`, `Secret`, `Service`). Adapt parameters like PVC storage classes, image tags, namespaces, and credentials to your environment, then apply:
+   ```bash
+   kubectl apply -f your-database-manifest.yaml
+   ```
+
 To see the backup-restore-sidecar in the wild, you can take a look at our [metal-roles](https://github.com/metal-stack/metal-roles/blob/master/control-plane/roles/postgres-backup-restore/templates/postgres.yaml), which deploys the backup-restore-sidecar for a postgres database in production.
 
 ### Startup- and readiness probes
