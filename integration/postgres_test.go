@@ -27,6 +27,17 @@ func Test_Postgres_Restore(t *testing.T) {
 	})
 }
 
+func Test_Postgres_RestoreInterrupted(t *testing.T) {
+	restoreInterruptedFlow(t, &flowSpec{
+		databaseType:     examples.Postgres,
+		sts:              examples.PostgresSts,
+		backingResources: examples.PostgresBackingResources,
+		addTestData:      addPostgresTestData,
+		verifyTestData:   verifyPostgresTestData,
+		dataDir:          "/data/postgres",
+	})
+}
+
 func Test_Postgres_RestoreLatestFromMultipleBackups(t *testing.T) {
 	restoreLatestFromMultipleBackupsFlow(t, &flowSpec{
 		databaseType:            examples.Postgres,

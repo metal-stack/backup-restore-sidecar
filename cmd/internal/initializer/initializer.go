@@ -166,7 +166,7 @@ func (i *Initializer) initialize(ctx context.Context) error {
 			i.log.Info("database does not need to be restored")
 			return nil
 		}
-		i.log.Info("data directory is not empty but restore is dirty, this means a restore process was started but not completed successfully")
+		i.log.Warn("data directory is not empty but restore is dirty, this means a restore process was started but not completed successfully")
 	}
 
 	i.log.Info("database potentially needs to be restored, looking for backup")
