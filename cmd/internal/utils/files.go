@@ -28,6 +28,62 @@ func IsEmpty(name string) (bool, error) {
 	return false, err
 }
 
+// IsRestoreDirty checks whether the `.restore_in_progress` file exists in the provided directory,
+// which indicates that a restore process was started but not yet completed successfully.
+func IsRestoreDirty(dir string) (bool, error) {
+	restoreMarkerPath := filepath.Join(dir, ".restore_in_progress")
+	_, err := os.Stat(restoreMarkerPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// MarkRestoreInProgress creates a file named `.restore_in_progress` in the provided directory
+// to indicate that a restore process is currently in progress.
+// If the file already exists, it does nothing.
+// If there is an error while creating the file, it returns an error.
+func MarkRestoreInProgress(dir string) error {
+	restoreMarkerPath := filepath.Join(dir, ".restore_in_progress")
+	_, err := os.Stat(restoreMarkerPath)
+	if err == nil {
+		// file already exists
+		return nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("unable to check for restore marker file: %w", err)
+	}
+
+	f, err := os.Create(restoreMarkerPath)
+	if err != nil {
+		return fmt.Errorf("unable to create restore marker file: %w", err)
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+
+	return nil
+}
+
+// UnmarkRestoreInProgress removes the `.restore_in_progress` file from the provided directory
+// to indicate that a restore process has completed.
+// If the file does not exist, it does nothing.
+// If there is an error while removing the file, it returns an error.
+func UnmarkRestoreInProgress(dir string) error {
+	restoreMarkerPath := filepath.Join(dir, ".restore_in_progress")
+	if err := os.Remove(restoreMarkerPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("unable to remove restore marker file: %w", err)
+	}
+
+	return nil
+}
+
 // RemoveContents removes all files from a directory, but not the directory itself
 func RemoveContents(dir string) error {
 	d, err := os.Open(dir)

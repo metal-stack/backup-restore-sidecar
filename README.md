@@ -2,10 +2,11 @@
 
 This project provides automated backup and recovery for K8s databases.
 
-**Core Design Principle**
+## Core Design Principle
 This sidecar solution actively controls the database startup sequence. Instead of acting as a passive sidecar, it intercepts the main database container until the latest backup is completely downloaded and restored.
 As soon as the restore process is finished, the sidecar signals the database container to start.
 After a successful startup, the sidecar continuously runs in the background, performing regular backups according to your defined schedule. [See the sequence diagram in the How it works section](#how-it-works).
+If the sidecar is interrupted during a restore (e.g. pod eviction or crash), it detects the incomplete state on the next startup and automatically re-downloads and re-restores the backup. This prevents the database from starting with partially restored data.
 
 The idea is taken from the [etcd-backup-restore](https://github.com/gardener/etcd-backup-restore) project.
 

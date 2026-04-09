@@ -17,6 +17,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 
 	"google.golang.org/grpc"
@@ -149,14 +150,23 @@ func (i *Initializer) initialize(ctx context.Context) error {
 	i.currentStatus.Status = v1.StatusResponse_CHECKING
 	i.currentStatus.Message = "checking database"
 
-	needsBackup, err := i.db.Check(ctx)
+	var dirty bool
+	empty, err := utils.IsEmpty(i.dbDataDir)
 	if err != nil {
-		return fmt.Errorf("unable to check data of database: %w", err)
+		return fmt.Errorf("unable to check if data of database empty: %w", err)
 	}
-
-	if !needsBackup {
-		i.log.Info("database does not need to be restored")
-		return nil
+	if empty {
+		i.log.Info("database data directory is empty")
+	} else {
+		dirty, err = utils.IsRestoreDirty(constants.DownloadDir)
+		if err != nil {
+			return fmt.Errorf("unable to check if restore is dirty: %w", err)
+		}
+		if !dirty {
+			i.log.Info("database does not need to be restored")
+			return nil
+		}
+		i.log.Info("data directory is not empty but restore is dirty, this means a restore process was started but not completed successfully")
 	}
 
 	i.log.Info("database potentially needs to be restored, looking for backup")
@@ -243,10 +253,20 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 		return fmt.Errorf("unable to uncompress backup: %w", err)
 	}
 
+	err = utils.MarkRestoreInProgress(constants.DownloadDir)
+	if err != nil {
+		return fmt.Errorf("unable to mark restore in progress: %w", err)
+	}
+
 	i.currentStatus.Message = "restoring backup"
 	err = i.db.Recover(ctx)
 	if err != nil {
 		return fmt.Errorf("restoring database was not successful: %w", err)
+	}
+
+	err = utils.UnmarkRestoreInProgress(constants.DownloadDir)
+	if err != nil {
+		return fmt.Errorf("unable to unmark restore in progress: %w", err)
 	}
 
 	return nil
