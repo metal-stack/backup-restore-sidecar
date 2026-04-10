@@ -71,8 +71,18 @@ func RedisSts(namespace string) *appsv1.StatefulSet {
 								PeriodSeconds:       5,
 								SuccessThreshold:    1,
 								FailureThreshold:    3,
-							},
-							Ports: []corev1.ContainerPort{
+							}, LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									Exec: &corev1.ExecAction{
+										Command: []string{"redis-cli", "ping"},
+									},
+								},
+								InitialDelaySeconds: 15,
+								TimeoutSeconds:      1,
+								PeriodSeconds:       5,
+								SuccessThreshold:    1,
+								FailureThreshold:    3,
+							}, Ports: []corev1.ContainerPort{
 								// default ports are taken by kind redis because running in host network
 								{
 									ContainerPort: 6379,

@@ -72,8 +72,18 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 								PeriodSeconds:       5,
 								SuccessThreshold:    1,
 								FailureThreshold:    3,
-							},
-							Ports: []corev1.ContainerPort{
+							}, LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									Exec: &corev1.ExecAction{
+										Command: []string{"valkey-cli", "ping"},
+									},
+								},
+								InitialDelaySeconds: 15,
+								TimeoutSeconds:      1,
+								PeriodSeconds:       5,
+								SuccessThreshold:    1,
+								FailureThreshold:    3,
+							}, Ports: []corev1.ContainerPort{
 								{
 									ContainerPort: 6379,
 									Name:          "client",

@@ -25,6 +25,16 @@ spec:
         - backup-restore-sidecar
         - wait
         image: redis:latest
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          failureThreshold: 3
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
         name: redis
         ports:
         - containerPort: 6379

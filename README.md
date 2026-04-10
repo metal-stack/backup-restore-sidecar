@@ -101,12 +101,13 @@ Since the sidecar actively controls the database startup sequence, it effectivel
 
 To see the backup-restore-sidecar in the wild, you can take a look at our [metal-roles](https://github.com/metal-stack/metal-roles/blob/master/control-plane/roles/postgres-backup-restore/templates/postgres.yaml), which deploys the backup-restore-sidecar for a postgres database in production.
 
-### Startup- and readiness probes
-The [manifests](deploy) have a startup probe and a readiness probe configured for the database to avoid restarts of the database during the restore process and to only serve traffic when the database is ready.
+### Startup-, Readiness-, and Liveness Probes
+The [manifests](deploy) have probes configured for the database container, to avoid restarts of the database during the restore process and to only serve traffic when the database is ready.
+It is difficult to provide sensible default probe configurations for all databases, so the provided probes are just examples and should be adapted to your specific use-case.
 
-* **Startup probe:** Configured with a long timeout threshold (e.g. 1h) to give the initializer enough time to restore a backup before the probe fails and the pod is restarted. This can be necessary, especially for large databases, as the restore process can take a while.
+* **Startup probe:** If your database takes a long time to get ready on restored data directories (e.g. because it has to replay a large WAL or has a large data directory), you should adapt the startup probe to have a longer timeout threshold. This can avoid premature restarts of the database container while it is legitimately busy recovering.
 * **Readiness probe:** Configured with a short timeout (e.g. 5s) to quickly detect when the database is ready to serve traffic (after the initial startup probe has succeeded).
-* **Liveness probe:** Not recommended for the database container. A liveness probe could incorrectly kill the database during heavy-load operations. It will not interfere with the restore process, as Kubernetes disables liveness probes until the startup probe successfully succeeds.
+* **Liveness probe:** Depending on your database and workload, you may choose to configure a liveness probe. This should not be too aggressive to avoid false positives during heavy-load operations.
 
 **Sidecar Internal Probe Timeout (`--probe-timeout`)**
 The sidecar features an internal timeout (default: `0`, meaning disabled) for probing the database connection. This acts as an optional watchdog against **silent failures**. If the database boots perfectly but the sidecar has invalid credentials or a broken connection string, it will hang infinitely. Because the backup loop hasn't started, no error metrics are emitted, however, the `backup_database_available` metric will remain `0`.

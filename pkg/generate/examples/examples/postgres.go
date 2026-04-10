@@ -77,8 +77,18 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 								PeriodSeconds:       10,
 								SuccessThreshold:    1,
 								FailureThreshold:    3,
-							},
-							Env: []corev1.EnvVar{
+							}, LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									Exec: &corev1.ExecAction{
+										Command: []string{"/bin/sh", "-c", "exec", "pg_isready", "-U", PostgresUser, "-h", "127.0.0.1", "-p", "5432"},
+									},
+								},
+								InitialDelaySeconds: 30,
+								TimeoutSeconds:      5,
+								PeriodSeconds:       10,
+								SuccessThreshold:    1,
+								FailureThreshold:    6,
+							}, Env: []corev1.EnvVar{
 								{
 									Name: "POSTGRES_DB",
 									ValueFrom: &corev1.EnvVarSource{

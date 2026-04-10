@@ -46,6 +46,24 @@ spec:
               key: POSTGRES_DATA
               name: postgres
         image: postgres:16-alpine
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - exec
+            - pg_isready
+            - -U
+            - postgres
+            - -h
+            - 127.0.0.1
+            - -p
+            - "5432"
+          failureThreshold: 6
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 5
         name: postgres
         ports:
         - containerPort: 5432

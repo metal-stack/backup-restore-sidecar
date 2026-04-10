@@ -25,6 +25,16 @@ spec:
         - backup-restore-sidecar
         - wait
         image: eqalpha/keydb:alpine
+        livenessProbe:
+          exec:
+            command:
+            - keydb-cli
+            - ping
+          failureThreshold: 3
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
         name: keydb
         ports:
         - containerPort: 6379

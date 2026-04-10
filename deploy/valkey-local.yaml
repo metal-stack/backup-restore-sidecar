@@ -26,6 +26,16 @@ spec:
         - wait
         image: ghcr.io/valkey-io/valkey:8.1-alpine
         imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - valkey-cli
+            - ping
+          failureThreshold: 3
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
         name: valkey
         ports:
         - containerPort: 6379

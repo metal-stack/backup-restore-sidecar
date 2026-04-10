@@ -71,8 +71,18 @@ func KeyDBSts(namespace string) *appsv1.StatefulSet {
 								PeriodSeconds:       5,
 								SuccessThreshold:    1,
 								FailureThreshold:    3,
-							},
-							Ports: []corev1.ContainerPort{
+							}, LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									Exec: &corev1.ExecAction{
+										Command: []string{"keydb-cli", "ping"},
+									},
+								},
+								InitialDelaySeconds: 15,
+								TimeoutSeconds:      1,
+								PeriodSeconds:       5,
+								SuccessThreshold:    1,
+								FailureThreshold:    3,
+							}, Ports: []corev1.ContainerPort{
 								// default ports are taken by kind keydb because running in host network
 								{
 									ContainerPort: 6379,

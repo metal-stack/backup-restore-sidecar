@@ -74,8 +74,18 @@ func EtcdSts(namespace string) *appsv1.StatefulSet {
 								PeriodSeconds:       5,
 								SuccessThreshold:    1,
 								FailureThreshold:    3,
-							},
-							Ports: []corev1.ContainerPort{
+							}, LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									Exec: &corev1.ExecAction{
+										Command: []string{"/usr/local/bin/etcdctl", "endpoint", "health", "--endpoints=127.0.0.1:32379"},
+									},
+								},
+								InitialDelaySeconds: 15,
+								TimeoutSeconds:      1,
+								PeriodSeconds:       5,
+								SuccessThreshold:    1,
+								FailureThreshold:    3,
+							}, Ports: []corev1.ContainerPort{
 								// default ports are taken by kind etcd because running in host network
 								{
 									ContainerPort: 32379,
