@@ -39,7 +39,6 @@ type flowSpec struct {
 	addTestDataWithIndex    func(t *testing.T, ctx context.Context, index int)
 	verifyTestData          func(t *testing.T, ctx context.Context)
 	verifyTestDataWithIndex func(t *testing.T, ctx context.Context, index int)
-	dataDir                 string
 }
 
 type upgradeFlowSpec struct {
@@ -181,9 +180,8 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 }
 
 func restoreInterruptedFlow(t *testing.T, spec *flowSpec) {
-	t.Log("running interrupted/corrupt restore flow")
+	t.Log("running interrupted restore flow")
 
-	require.NotEmpty(t, spec.dataDir, "dataDir must be specified for restoreInterruptedFlow")
 	var (
 		ctx, cancel = context.WithTimeout(t.Context(), 20*time.Minute)
 		ns          = testNamespace(t)
@@ -269,11 +267,6 @@ func restoreInterruptedFlow(t *testing.T, spec *flowSpec) {
 	_, err = execCommand(ctx, podName, ns.Name, "backup-restore-sidecar", []string{"touch", constants.DownloadDir + "/.restore_in_progress"})
 	require.NoError(t, err)
 
-	t.Log("corrupting database data directory to verify re-restore actually recovers the data")
-	_, err = execCommand(ctx, podName, ns.Name, "backup-restore-sidecar",
-		[]string{"sh", "-c", "rm -rf " + spec.dataDir + "/* " + spec.dataDir + "/.[!.]* 2>/dev/null; echo dirty > " + spec.dataDir + "/corrupted"})
-	require.NoError(t, err)
-
 	t.Log("remembering pod UID to detect restart")
 	oldPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -294,7 +287,7 @@ func restoreInterruptedFlow(t *testing.T, spec *flowSpec) {
 	})
 	require.NoError(t, err)
 
-	t.Log("waiting for pod to be recreated by statefulset controller")
+	t.Log("waiting for pod to be recreated and sidecar to fail due to dirty restore")
 	err = retry.Do(func() error {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -309,20 +302,23 @@ func restoreInterruptedFlow(t *testing.T, spec *flowSpec) {
 		if pod.UID == oldUID {
 			return fmt.Errorf("pod has not been recreated yet")
 		}
-		return nil
+
+		for _, status := range pod.Status.ContainerStatuses {
+			if status.Name != "backup-restore-sidecar" {
+				continue
+			}
+			if status.State.Waiting != nil && (status.State.Waiting.Reason == "CrashLoopBackOff" || status.State.Waiting.Reason == "Error") {
+				return nil
+			}
+			if status.State.Terminated != nil && status.State.Terminated.ExitCode != 0 {
+				return nil
+			}
+		}
+
+		return fmt.Errorf("sidecar container has not failed yet")
 	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
 	require.NoError(t, err)
 
-	err = waitForPodRunning(ctx, podName, ns.Name)
-	require.NoError(t, err)
-
-	t.Log("verify that data got restored after the interrupted restore")
-
-	spec.verifyTestData(t, ctx)
-
-	t.Log("verify that .restore_in_progress file was removed after successful restore to avoid re-triggering restore on next startup")
-	_, err = execCommand(ctx, podName, ns.Name, "backup-restore-sidecar", []string{"ls", constants.DownloadDir + "/.restore_in_progress"})
-	require.Error(t, err)
 }
 
 func restoreLatestFromMultipleBackupsFlow(t *testing.T, spec *flowSpec) {

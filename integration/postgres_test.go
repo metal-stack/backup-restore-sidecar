@@ -34,7 +34,6 @@ func Test_Postgres_RestoreInterrupted(t *testing.T) {
 		backingResources: examples.PostgresBackingResources,
 		addTestData:      addPostgresTestData,
 		verifyTestData:   verifyPostgresTestData,
-		dataDir:          "/data/postgres",
 	})
 }
 
