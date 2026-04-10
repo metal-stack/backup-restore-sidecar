@@ -60,7 +60,6 @@ spec:
             - -p
             - "5432"
           failureThreshold: 6
-          initialDelaySeconds: 30
           periodSeconds: 10
           successThreshold: 1
           timeoutSeconds: 5
@@ -81,7 +80,6 @@ spec:
             - -p
             - "5432"
           failureThreshold: 3
-          initialDelaySeconds: 5
           periodSeconds: 10
           successThreshold: 1
           timeoutSeconds: 5
@@ -99,8 +97,7 @@ spec:
             - 127.0.0.1
             - -p
             - "5432"
-          failureThreshold: 360
-          initialDelaySeconds: 5
+          failureThreshold: 30
           periodSeconds: 10
           successThreshold: 1
           timeoutSeconds: 5

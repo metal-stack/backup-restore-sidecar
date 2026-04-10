@@ -54,11 +54,11 @@ func KeyDBSts(namespace string) *appsv1.StatefulSet {
 										Command: []string{"keydb-cli", "ping"},
 									},
 								},
-								InitialDelaySeconds: 15,
-								TimeoutSeconds:      1,
-								PeriodSeconds:       5,
-								SuccessThreshold:    1,
-								FailureThreshold:    360, // allow up to 30 minutes for restore and boot (360 * 5s)
+
+								TimeoutSeconds:   1,
+								PeriodSeconds:    5,
+								SuccessThreshold: 1,
+								FailureThreshold: 60, // allow up to 5 minutes for restore and boot (60 * 5s)
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
@@ -66,22 +66,20 @@ func KeyDBSts(namespace string) *appsv1.StatefulSet {
 										Command: []string{"keydb-cli", "ping"},
 									},
 								},
-								InitialDelaySeconds: 15,
-								TimeoutSeconds:      1,
-								PeriodSeconds:       5,
-								SuccessThreshold:    1,
-								FailureThreshold:    3,
+								TimeoutSeconds:   1,
+								PeriodSeconds:    5,
+								SuccessThreshold: 1,
+								FailureThreshold: 3,
 							}, LivenessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
 										Command: []string{"keydb-cli", "ping"},
 									},
 								},
-								InitialDelaySeconds: 15,
-								TimeoutSeconds:      1,
-								PeriodSeconds:       5,
-								SuccessThreshold:    1,
-								FailureThreshold:    3,
+								TimeoutSeconds:   1,
+								PeriodSeconds:    5,
+								SuccessThreshold: 1,
+								FailureThreshold: 3,
 							}, Ports: []corev1.ContainerPort{
 								// default ports are taken by kind keydb because running in host network
 								{

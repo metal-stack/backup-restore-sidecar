@@ -33,7 +33,6 @@ spec:
             - health
             - --endpoints=127.0.0.1:32379
           failureThreshold: 3
-          initialDelaySeconds: 15
           periodSeconds: 5
           successThreshold: 1
           timeoutSeconds: 1
@@ -51,7 +50,6 @@ spec:
             path: /health
             port: 32381
             scheme: HTTP
-          initialDelaySeconds: 15
           periodSeconds: 5
           successThreshold: 1
           timeoutSeconds: 1
@@ -63,8 +61,7 @@ spec:
             - endpoint
             - health
             - --endpoints=127.0.0.1:32379
-          failureThreshold: 360
-          initialDelaySeconds: 15
+          failureThreshold: 60
           periodSeconds: 5
           successThreshold: 1
           timeoutSeconds: 1

@@ -31,7 +31,6 @@ spec:
             - keydb-cli
             - ping
           failureThreshold: 3
-          initialDelaySeconds: 15
           periodSeconds: 5
           successThreshold: 1
           timeoutSeconds: 1
@@ -46,7 +45,6 @@ spec:
             - keydb-cli
             - ping
           failureThreshold: 3
-          initialDelaySeconds: 15
           periodSeconds: 5
           successThreshold: 1
           timeoutSeconds: 1
@@ -56,8 +54,7 @@ spec:
             command:
             - keydb-cli
             - ping
-          failureThreshold: 360
-          initialDelaySeconds: 15
+          failureThreshold: 60
           periodSeconds: 5
           successThreshold: 1
           timeoutSeconds: 1
