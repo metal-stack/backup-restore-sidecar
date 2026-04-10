@@ -166,6 +166,9 @@ func (i *Initializer) initialize(ctx context.Context) error {
 			i.log.Info("database does not need to be restored")
 			return nil
 		}
+
+		// The .restore_in_progress marker prevents the pod from starting instead of automatically retrying a restore.
+		// If this happens, manual intervention is required (e.g., deleting the marker file if the data is alright, or performing a manual restore).
 		return fmt.Errorf("preceding restore was not completed successfully: data directory is not empty but .restore_in_progress file exists")
 	}
 

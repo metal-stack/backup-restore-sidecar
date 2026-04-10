@@ -4,9 +4,9 @@ This project provides automated backup and recovery for K8s databases.
 
 ## Core Design Principle
 This sidecar solution actively controls the database startup sequence. Instead of acting as a passive sidecar, it intercepts the main database container until the latest backup is completely downloaded and restored.
-As soon as the restore process is finished, the sidecar signals the database container to start.
+The database container is configured to actively poll the sidecar's recovery status and only proceeds with the actual database startup once the restore process has successfully finished.
 After a successful startup, the sidecar continuously runs in the background, performing regular backups according to your defined schedule. [See the sequence diagram in the How it works section](#how-it-works).
-If the sidecar is interrupted during a restore (e.g. pod eviction or crash), it detects the incomplete state on the next startup and automatically re-downloads and re-restores the backup. This prevents the database from starting with partially restored data.
+If the sidecar is interrupted during a restore (e.g. pod eviction or crash), it detects the incomplete state on the next startup and prevents the database from starting with partially restored data by halting the pod startup. In this case, manual intervention is required (see [Maintenance](#maintenance)).
 
 The idea is taken from the [etcd-backup-restore](https://github.com/gardener/etcd-backup-restore) project.
 
@@ -146,6 +146,14 @@ By default, the backup-restore-sidecar will start with the `local` backup provid
 1. Configure the backup provider secret in `deploy/provider-secret-<backup-provider>.yaml`.
 2. Run `BACKUP_PROVIDER=<backup-provider> make start-postgres` instead.
 
-## Manual restoration
+## Maintenance
+
+### Handling Failed Restores
+
+If a restore process is interrupted, the database directory might not be empty and a `.restore_in_progress` marker file is left behind. This marker purposefully prevents the pod from starting instead of automatically retrying the restoration. If this happens, manual intervention is required:
+- If the data is actually intact, you can delete the `.restore_in_progress` marker file manually.
+- Alternatively, you can clear the data directory to let it retry or perform a [manual restore](docs/manual_restore.md).
+
+### Manual Restoration
 
 Follow the documentation [here](docs/manual_restore.md) in order to manually restore a specific version of your database.
