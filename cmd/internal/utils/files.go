@@ -46,24 +46,24 @@ func IsRestoreDirty(dir string) (bool, error) {
 // to indicate that a restore process is currently in progress.
 // If the file already exists, it does nothing.
 // If there is an error while creating the file, it returns an error.
-func MarkRestoreInProgress(dir string) error {
+func MarkRestoreInProgress(dir string, version string, date string) error {
 	restoreMarkerPath := filepath.Join(dir, ".restore_in_progress")
-	_, err := os.Stat(restoreMarkerPath)
-	if err == nil {
-		// file already exists
-		return nil
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("unable to check for restore marker file: %w", err)
-	}
 
-	f, err := os.Create(restoreMarkerPath)
+	f, err := os.OpenFile(restoreMarkerPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			// file already exists
+			return nil
+		}
 		return fmt.Errorf("unable to create restore marker file: %w", err)
 	}
-	defer func() {
-		_ = f.Close()
-	}()
+	defer f.Close()
+
+	// write version and date to the marker file for better debugging
+	_, err = f.WriteString(fmt.Sprintf("version: %s\ndate: %s\n", version, date))
+	if err != nil {
+		return fmt.Errorf("unable to write version info to restore marker file: %w", err)
+	}
 
 	return nil
 }

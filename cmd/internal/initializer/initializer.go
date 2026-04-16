@@ -251,24 +251,20 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 	}
 
 	i.currentStatus.Message = "uncompressing backup"
-	err = i.comp.Decompress(backupFilePath)
-	if err != nil {
+	if err := i.comp.Decompress(backupFilePath); err != nil {
 		return fmt.Errorf("unable to uncompress backup: %w", err)
 	}
 
-	err = utils.MarkRestoreInProgress(constants.DownloadDir)
-	if err != nil {
+	if err := utils.MarkRestoreInProgress(constants.DownloadDir, version.Version, version.Date.String()); err != nil {
 		return fmt.Errorf("unable to mark restore in progress: %w", err)
 	}
 
 	i.currentStatus.Message = "restoring backup"
-	err = i.db.Recover(ctx)
-	if err != nil {
+	if err := i.db.Recover(ctx); err != nil {
 		return fmt.Errorf("restoring database was not successful: %w", err)
 	}
 
-	err = utils.UnmarkRestoreInProgress(constants.DownloadDir)
-	if err != nil {
+	if err := utils.UnmarkRestoreInProgress(constants.DownloadDir); err != nil {
 		return fmt.Errorf("unable to unmark restore in progress: %w", err)
 	}
 
