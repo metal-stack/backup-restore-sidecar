@@ -57,10 +57,11 @@ func MarkRestoreInProgress(dir string, version string, date string) error {
 		}
 		return fmt.Errorf("unable to create restore marker file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
-	// write version and date to the marker file for better debugging
-	_, err = f.WriteString(fmt.Sprintf("version: %s\ndate: %s\n", version, date))
+	_, err = fmt.Fprintf(f, "version: %s\ndate: %s\n", version, date)
 	if err != nil {
 		return fmt.Errorf("unable to write version info to restore marker file: %w", err)
 	}
