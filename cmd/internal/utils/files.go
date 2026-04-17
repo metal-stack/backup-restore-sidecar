@@ -44,17 +44,13 @@ func IsRestoreDirty(dir string) (bool, error) {
 
 // MarkRestoreInProgress creates a file named `.restore_in_progress` in the provided directory
 // to indicate that a restore process is currently in progress.
-// If the file already exists, it does nothing.
+// If the file already exists, it returns an error.
 // If there is an error while creating the file, it returns an error.
 func MarkRestoreInProgress(dir string, version string, date string) error {
 	restoreMarkerPath := filepath.Join(dir, ".restore_in_progress")
 
 	f, err := os.OpenFile(restoreMarkerPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 	if err != nil {
-		if errors.Is(err, os.ErrExist) {
-			// file already exists
-			return nil
-		}
 		return fmt.Errorf("unable to create restore marker file: %w", err)
 	}
 	defer func() {
@@ -71,13 +67,13 @@ func MarkRestoreInProgress(dir string, version string, date string) error {
 
 // UnmarkRestoreInProgress removes the `.restore_in_progress` file from the provided directory
 // to indicate that a restore process has completed.
-// If the file does not exist, it does nothing.
+// If the file does not exist, it returns an error.
 // If there is an error while removing the file, it returns an error.
 func UnmarkRestoreInProgress(dir string) error {
 	restoreMarkerPath := filepath.Join(dir, ".restore_in_progress")
 	if err := os.Remove(restoreMarkerPath); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil
+			return fmt.Errorf("restore marker file does not exist: %w", err)
 		}
 		return fmt.Errorf("unable to remove restore marker file: %w", err)
 	}

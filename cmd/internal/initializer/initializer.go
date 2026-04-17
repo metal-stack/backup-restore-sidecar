@@ -265,7 +265,7 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 	}
 
 	if err := utils.UnmarkRestoreInProgress(constants.DownloadDir); err != nil {
-		return fmt.Errorf("unable to unmark restore in progress: %w", err)
+		return fmt.Errorf("unable to remove restore in progress marker: %w", err)
 	}
 
 	return nil
