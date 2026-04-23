@@ -12,11 +12,11 @@ import (
 
 // Metrics contains the collected metrics
 type Metrics struct {
-	totalBackups      prometheus.Counter
-	backupSuccess     prometheus.Gauge
-	databaseAvailable prometheus.Gauge
-	backupSize        prometheus.Gauge
-	totalErrors       *prometheus.CounterVec
+	totalBackups        prometheus.Counter
+	backupSuccess       prometheus.Gauge
+	databaseInitialized prometheus.Gauge
+	backupSize          prometheus.Gauge
+	totalErrors         *prometheus.CounterVec
 }
 
 // New generates new metrics
@@ -27,9 +27,9 @@ func New() *Metrics {
 	},
 	)
 
-	databaseAvailable := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "backup_database_available",
-		Help: "is 1 when the database is available for backups, 0 otherwise",
+	databaseInitialized := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "backup_database_initialized",
+		Help: "is 1 when the database is initialized for backups and a database probe has succeeded once, 0 otherwise",
 	},
 	)
 
@@ -53,11 +53,11 @@ func New() *Metrics {
 	)
 
 	return &Metrics{
-		totalBackups:      totalBackups,
-		backupSuccess:     backupSuccess,
-		databaseAvailable: databaseAvailable,
-		totalErrors:       totalErrors,
-		backupSize:        backupSize,
+		totalBackups:        totalBackups,
+		backupSuccess:       backupSuccess,
+		databaseInitialized: databaseInitialized,
+		totalErrors:         totalErrors,
+		backupSize:          backupSize,
 	}
 }
 
@@ -77,7 +77,7 @@ func (m *Metrics) Start(log *slog.Logger) {
 	})
 
 	prometheus.MustRegister(m.backupSuccess)
-	prometheus.MustRegister(m.databaseAvailable)
+	prometheus.MustRegister(m.databaseInitialized)
 	prometheus.MustRegister(m.totalBackups)
 	prometheus.MustRegister(m.totalErrors)
 	prometheus.MustRegister(m.backupSize)
@@ -108,11 +108,11 @@ func (m *Metrics) CountError(op string) {
 	m.backupSuccess.Set(0)
 }
 
-// SetDatabaseAvailable updates the database available metric
-func (m *Metrics) SetDatabaseAvailable(available bool) {
-	if available {
-		m.databaseAvailable.Set(1)
+// SetDatabaseInitialized updates the database initialized metric
+func (m *Metrics) SetDatabaseInitialized(initialized bool) {
+	if initialized {
+		m.databaseInitialized.Set(1)
 	} else {
-		m.databaseAvailable.Set(0)
+		m.databaseInitialized.Set(0)
 	}
 }

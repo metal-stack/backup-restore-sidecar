@@ -190,7 +190,7 @@ var startCmd = &cobra.Command{
 			probeCtx, probeCancel = context.WithTimeout(stop, timeout)
 		}
 
-		metrics.SetDatabaseAvailable(false)
+		metrics.SetDatabaseInitialized(false)
 		err := probe.Start(probeCtx, logger.WithGroup("probe"), db)
 		if probeCancel != nil {
 			probeCancel()
@@ -198,7 +198,7 @@ var startCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		metrics.SetDatabaseAvailable(true)
+		metrics.SetDatabaseInitialized(true)
 
 		return backuper.Start(stop)
 	},

@@ -110,7 +110,7 @@ It is difficult to provide sensible default probe configurations for all databas
 * **Liveness probe:** Depending on your database and workload, you may choose to configure a liveness probe. This should not be too aggressive to avoid false positives during heavy-load operations.
 
 **Sidecar Internal Probe Timeout (`--probe-timeout`)**
-The sidecar features an internal timeout (default: `0`, meaning disabled) for probing the database connection. This acts as an optional watchdog against **silent failures**. If the database boots perfectly but the sidecar has invalid credentials or a broken connection string, it will hang infinitely. Because the backup loop hasn't started, no error metrics are emitted, however, the `backup_database_available` metric will remain `0`.
+The sidecar features an internal timeout (default: `0`, meaning disabled) for probing the database connection. This acts as an optional watchdog against **silent failures**. If the database boots perfectly but the sidecar has invalid credentials or a broken connection string, it will hang infinitely. Because the backup loop hasn't started, no error metrics are emitted, however, the `backup_database_initialized` metric will remain `0`.
 
 If you prefer Kubernetes-native `CrashLoopBackOff` alerting over metric-based alerting, you can set this timeout to force a container crash. Do not forget that this will cause the Pod to be removed from service endpoints until the database is available again, so use with caution.
 
@@ -122,7 +122,7 @@ The sidecar exposes Prometheus metrics on port `2112` at the `/metrics` endpoint
 Operators should set up Prometheus alerts based on the provided metrics:
 
 * `backup_success` (Gauge): Is `0` when the last backup failed, and `1` when it was successful. This is the primary metric for alerting.
-* `backup_database_available` (Gauge): Is `0` when the sidecar cannot connect to the database (e.g. wrong credentials, wrong port, or database not yet accepting connections), and `1` when connected. Useful for alerting on silent failures while the database probe hangs. Starts at `0` until the first successful probe.
+* `backup_database_initialized` (Gauge): Is `0` when the database is not initialized (either from a fresh start or after a restore), and `1` when it is initialized. Useful for alerting on silent failures while the database probe hangs. Starts at `0` until the first successful probe.
 * `backup_errors` (CounterVec): Total number of errors during backups, labeled by operation.
 * `backup_total_backups` (Counter): Total number of successful backups.
 * `backup_size` (Gauge): Size of the last backup in bytes.
