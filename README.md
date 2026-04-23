@@ -123,9 +123,16 @@ Operators should set up Prometheus alerts based on the provided metrics:
 
 * `backup_success` (Gauge): Is `0` when the last backup failed, and `1` when it was successful. This is the primary metric for alerting.
 * `backup_database_initialized` (Gauge): Is `0` when the database is not initialized (either from a fresh start or after a restore), and `1` when it is initialized. Useful for alerting on silent failures while the database probe hangs. Starts at `0` until the first successful probe.
-* `backup_errors` (CounterVec): Total number of errors during backups, labeled by operation.
+* `backup_errors` (CounterVec): Total number of errors during backups, labeled by `operation`. The following operation values are emitted, corresponding to the phases of a single backup cycle:
+  * `create` — database dump creation failed (e.g. `pg_dump`, `rethinkdb dump`).
+  * `delete_prior` — cleanup of the local stale backup file before creating a new one failed.
+  * `compress` — packaging the dump into a tar/tar.gz/tar.lz4 archive failed.
+  * `encrypt` — AES encryption of the archive failed (only emitted when `--encryption-key` is set).
+  * `open` — opening the local archive file for upload failed.
+  * `upload` — uploading the archive to the configured storage provider (S3/GCS/local) failed. This is the most critical operation, as errors here mean the backup never reached remote storage.
+  * `cleanup` — pruning of old backups at the storage provider (according to the retention policy) failed.
 * `backup_total_backups` (Counter): Total number of successful backups.
-* `backup_size` (Gauge): Size of the last backup in bytes.
+* `backup_size` (Gauge): Size of the last successful backup in bytes. Not reset on failure, so after a failed backup the gauge still reports the previous successful backup's size.
 
 There is no health endpoint for the sidecar, as a failed backup should not affect the availability of the database.
 The backup-restore-sidecar is designed to be resilient to backup failures, and it will continue to operate and attempt future backups even if one fails.
