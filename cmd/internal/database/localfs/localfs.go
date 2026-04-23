@@ -22,20 +22,6 @@ func New(log *slog.Logger, datadir string) *LocalFS {
 	}
 }
 
-// Check if Datadir is empty
-func (l *LocalFS) Check(ctx context.Context) (bool, error) {
-	empty, err := utils.IsEmpty(l.datadir)
-	if err != nil {
-		return false, err
-	}
-	if empty {
-		l.log.Info("data directory is empty")
-		return true, err
-	}
-
-	return false, nil
-}
-
 // put Datadir into constants.BackupDir directory
 func (l *LocalFS) Backup(ctx context.Context) error {
 	if err := os.RemoveAll(constants.BackupDir); err != nil {

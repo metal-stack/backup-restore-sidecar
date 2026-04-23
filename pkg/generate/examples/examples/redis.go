@@ -48,17 +48,17 @@ func RedisSts(namespace string) *appsv1.StatefulSet {
 							Name:    "redis",
 							Image:   redisContainerImage,
 							Command: []string{"backup-restore-sidecar", "wait"},
-							LivenessProbe: &corev1.Probe{
+							StartupProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
 										Command: []string{"redis-cli", "ping"},
 									},
 								},
-								InitialDelaySeconds: 15,
-								TimeoutSeconds:      1,
-								PeriodSeconds:       5,
-								SuccessThreshold:    1,
-								FailureThreshold:    3,
+
+								TimeoutSeconds:   1,
+								PeriodSeconds:    5,
+								SuccessThreshold: 1,
+								FailureThreshold: 60, // allow up to 5 minutes for restore and boot (60 * 5s)
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
@@ -66,13 +66,21 @@ func RedisSts(namespace string) *appsv1.StatefulSet {
 										Command: []string{"redis-cli", "ping"},
 									},
 								},
-								InitialDelaySeconds: 15,
-								TimeoutSeconds:      1,
-								PeriodSeconds:       5,
-								SuccessThreshold:    1,
-								FailureThreshold:    3,
-							},
-							Ports: []corev1.ContainerPort{
+								TimeoutSeconds:   1,
+								PeriodSeconds:    5,
+								SuccessThreshold: 1,
+								FailureThreshold: 3,
+							}, LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									Exec: &corev1.ExecAction{
+										Command: []string{"redis-cli", "ping"},
+									},
+								},
+								TimeoutSeconds:   1,
+								PeriodSeconds:    5,
+								SuccessThreshold: 1,
+								FailureThreshold: 3,
+							}, Ports: []corev1.ContainerPort{
 								// default ports are taken by kind redis because running in host network
 								{
 									ContainerPort: 6379,

@@ -28,6 +28,59 @@ func IsEmpty(name string) (bool, error) {
 	return false, err
 }
 
+// IsRestoreDirty checks whether the `.restore_in_progress` file exists in the provided directory,
+// which indicates that a restore process was started but not yet completed successfully.
+func IsRestoreDirty(dir string) (bool, error) {
+	restoreMarkerPath := filepath.Join(dir, ".restore_in_progress")
+	_, err := os.Stat(restoreMarkerPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// MarkRestoreInProgress creates a file named `.restore_in_progress` in the provided directory
+// to indicate that a restore process is currently in progress.
+// If the file already exists, it returns an error.
+// If there is an error while creating the file, it returns an error.
+func MarkRestoreInProgress(dir string, version string, date string) error {
+	restoreMarkerPath := filepath.Join(dir, ".restore_in_progress")
+
+	f, err := os.OpenFile(restoreMarkerPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("unable to create restore marker file: %w", err)
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+
+	_, err = fmt.Fprintf(f, "version: %s\ndate: %s\n", version, date)
+	if err != nil {
+		return fmt.Errorf("unable to write version info to restore marker file: %w", err)
+	}
+
+	return nil
+}
+
+// UnmarkRestoreInProgress removes the `.restore_in_progress` file from the provided directory
+// to indicate that a restore process has completed.
+// If the file does not exist, it returns an error.
+// If there is an error while removing the file, it returns an error.
+func UnmarkRestoreInProgress(dir string) error {
+	restoreMarkerPath := filepath.Join(dir, ".restore_in_progress")
+	if err := os.Remove(restoreMarkerPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("restore marker file does not exist: %w", err)
+		}
+		return fmt.Errorf("unable to remove restore marker file: %w", err)
+	}
+
+	return nil
+}
+
 // RemoveContents removes all files from a directory, but not the directory itself
 func RemoveContents(dir string) error {
 	d, err := os.Open(dir)

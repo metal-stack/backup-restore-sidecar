@@ -1,6 +1,12 @@
 # K8s Backup Restore Sidecar for Databases
 
-This project adds automatic backup and recovery to databases managed by K8s via sidecar.
+This project provides automated backup and recovery for K8s databases.
+
+## Core Design Principle
+This sidecar solution actively controls the database startup sequence. Instead of acting as a passive sidecar, it intercepts the main database container until the latest backup is completely downloaded and restored.
+The database container is configured to actively poll the sidecar's recovery status and only proceeds with the actual database startup once the restore process has successfully finished.
+After a successful startup, the sidecar continuously runs in the background, performing regular backups according to your defined schedule. [See the sequence diagram in the How it works section](#how-it-works).
+If the sidecar is interrupted during a restore (e.g. pod eviction or crash), it detects the incomplete state on the next startup and prevents the database from starting with partially restored data by halting the pod startup. In this case, manual intervention is required (see [Maintenance](#maintenance)).
 
 The idea is taken from the [etcd-backup-restore](https://github.com/gardener/etcd-backup-restore) project.
 
@@ -74,7 +80,64 @@ It is possible to let multiple backup-restore-sidecars (for different databases)
 
 Be aware that, if you change the object prefix under which the backups are stored, the old lifecycle policies matching this prefix are not automatically cleaned up and have to be removed manually.
 
-## Try it out
+## Deployment
+The [deploy](deploy/) directory contains manifests as a reference for deploying the `backup-restore-sidecar`. Because configuration (like environment variables, `ConfigMap` parameters, and `post-exec-cmds`) differs heavily between database engines and storage providers, these generated manifests serve as the best reference for your specific setup.
+
+### Manual Deployment
+
+Since the sidecar actively controls the database startup sequence, it effectively replaces a standard database deployment. To deploy your database paired with the sidecar, you typically need to apply two resources: the backup provider secret and the complete database manifest.
+
+1. **Apply the backup provider secret:**
+   Copy a secret template like `deploy/provider-secret-s3.yaml`, add your storage credentials, and apply it:
+   ```bash
+   kubectl apply -f your-provider-secret.yaml
+   ```
+
+2. **Apply the database manifest:**
+   Copy the matching template for your setup (e.g., `deploy/postgres-s3.yaml`). This contains the complete deployment (`StatefulSet`, `ConfigMap`, `Secret`, `Service`). Adapt parameters like PVC storage classes, image tags, namespaces, and credentials to your environment, then apply:
+   ```bash
+   kubectl apply -f your-database-manifest.yaml
+   ```
+
+To see the backup-restore-sidecar in the wild, you can take a look at our [metal-roles](https://github.com/metal-stack/metal-roles/blob/master/control-plane/roles/postgres-backup-restore/templates/postgres.yaml), which deploys the backup-restore-sidecar for a postgres database in production.
+
+### Startup-, Readiness-, and Liveness Probes
+The [manifests](deploy) have probes configured for the database container, to avoid restarts of the database during the restore process and to only serve traffic when the database is ready.
+It is difficult to provide sensible default probe configurations for all databases, so the provided probes are just examples and should be adapted to your specific use-case.
+
+* **Startup probe:** If your database takes a long time to get ready on restored data directories (e.g. because it has to replay a large WAL or has a large data directory), you should adapt the startup probe to have a longer timeout threshold. This can avoid premature restarts of the database container while it is legitimately busy recovering.
+* **Readiness probe:** Configured with a short timeout (e.g. 5s) to quickly detect when the database is ready to serve traffic (after the initial startup probe has succeeded).
+* **Liveness probe:** Depending on your database and workload, you may choose to configure a liveness probe. This should not be too aggressive to avoid false positives during heavy-load operations.
+
+**Sidecar Internal Probe Timeout (`--probe-timeout`)**
+The sidecar features an internal timeout (default: `0`, meaning disabled) for probing the database connection. This acts as an optional watchdog against **silent failures**. If the database boots perfectly but the sidecar has invalid credentials or a broken connection string, it will hang infinitely. Because the backup loop hasn't started, no error metrics are emitted, however, the `backup_database_initialized` metric will remain `0`.
+
+If you prefer Kubernetes-native `CrashLoopBackOff` alerting over metric-based alerting, you can set this timeout to force a container crash. Do not forget that this will cause the Pod to be removed from service endpoints until the database is available again, so use with caution.
+
+> **Note:** If you enable this timeout, it **must closely align with your database `startupProbe` threshold**. If your sidecar timeout is much shorter than the startup probe, the sidecar will prematurely crash while the database is legitimately busy recovering. This causes a noisy `CrashLoopBackOff` and unnecessarily removes the Pod from service endpoints.
+
+### Monitoring and Alerting
+The sidecar exposes Prometheus metrics on port `2112` at the `/metrics` endpoint.
+
+Operators should set up Prometheus alerts based on the provided metrics:
+
+* `backup_success` (Gauge): Is `0` when the last backup failed, and `1` when it was successful. This is the primary metric for alerting.
+* `backup_database_initialized` (Gauge): Is `0` when the database is not initialized (either from a fresh start or after a restore), and `1` when it is initialized. Useful for alerting on silent failures while the database probe hangs. Starts at `0` until the first successful probe.
+* `backup_errors` (CounterVec): Total number of errors during backups, labeled by `operation`. The following operation values are emitted, corresponding to the phases of a single backup cycle:
+  * `create` — database dump creation failed (e.g. `pg_dump`, `rethinkdb dump`).
+  * `delete_prior` — cleanup of the local stale backup file before creating a new one failed.
+  * `compress` — packaging the dump into a tar/tar.gz/tar.lz4 archive failed.
+  * `encrypt` — AES encryption of the archive failed (only emitted when `--encryption-key` is set).
+  * `open` — opening the local archive file for upload failed.
+  * `upload` — uploading the archive to the configured storage provider (S3/GCS/local) failed. This is the most critical operation, as errors here mean the backup never reached remote storage.
+  * `cleanup` — pruning of old backups at the storage provider (according to the retention policy) failed.
+* `backup_total_backups` (Counter): Total number of successful backups.
+* `backup_size` (Gauge): Size of the last successful backup in bytes. Not reset on failure, so after a failed backup the gauge still reports the previous successful backup's size.
+
+There is no health endpoint for the sidecar, as a failed backup should not affect the availability of the database.
+The backup-restore-sidecar is designed to be resilient to backup failures, and it will continue to operate and attempt future backups even if one fails.
+
+## Local Development / Demo Setup
 
 Requires:
 
@@ -90,6 +153,14 @@ By default, the backup-restore-sidecar will start with the `local` backup provid
 1. Configure the backup provider secret in `deploy/provider-secret-<backup-provider>.yaml`.
 2. Run `BACKUP_PROVIDER=<backup-provider> make start-postgres` instead.
 
-## Manual restoration
+## Maintenance
+
+### Handling Failed Restores
+
+If a restore process is interrupted, the database directory might not be empty and a `.restore_in_progress` marker file is left behind. This marker purposefully prevents the pod from starting instead of automatically retrying the restoration. If this happens, manual intervention is required:
+- If the data is actually intact, you can delete the `.restore_in_progress` marker file manually.
+- Alternatively, you can clear the data directory to let it retry or perform a [manual restore](docs/manual_restore.md).
+
+### Manual Restoration
 
 Follow the documentation [here](docs/manual_restore.md) in order to manually restore a specific version of your database.

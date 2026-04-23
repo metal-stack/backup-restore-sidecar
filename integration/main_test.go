@@ -179,6 +179,148 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 	spec.verifyTestData(t, ctx)
 }
 
+func restoreInterruptedFlow(t *testing.T, spec *flowSpec) {
+	t.Log("running interrupted restore flow")
+
+	var (
+		ctx, cancel = context.WithTimeout(t.Context(), 20*time.Minute)
+		ns          = testNamespace(t)
+	)
+
+	defer cancel()
+
+	cleanup := func() {
+		t.Log("running cleanup")
+
+		err := c.Delete(ctx, ns)
+		require.NoError(t, client.IgnoreNotFound(err), "cleanup did not succeed")
+
+		err = waitUntilNotFound(ctx, &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: ns.Name,
+			},
+		})
+		require.NoError(t, err, "cleanup did not succeed")
+	}
+	cleanup()
+	defer cleanup()
+
+	err := c.Create(ctx, ns)
+	require.NoError(t, client.IgnoreAlreadyExists(err))
+
+	t.Log("applying resource manifests")
+
+	objects := func() []client.Object {
+		objects := []client.Object{spec.sts(ns.Name)}
+		objects = append(objects, spec.backingResources(ns.Name)...)
+		return objects
+	}
+
+	for _, o := range objects() {
+		o := o
+		err = c.Create(ctx, o)
+		require.NoError(t, err)
+	}
+
+	podName := spec.sts(ns.Name).Name + "-0"
+
+	err = waitForPodRunning(ctx, podName, ns.Name)
+	require.NoError(t, err)
+
+	t.Log("adding test data to database")
+
+	spec.addTestData(t, ctx)
+
+	t.Log("taking a backup")
+
+	brsc, err := brsclient.New(ctx, "http://localhost:8000")
+	require.NoError(t, err)
+
+	_, err = brsc.DatabaseServiceClient().CreateBackup(ctx, &v1.CreateBackupRequest{})
+	if err != nil && !errors.Is(err, constants.ErrBackupAlreadyInProgress) {
+		require.NoError(t, err)
+	}
+
+	var backup *v1.Backup
+	err = retry.Do(func() error {
+		backups, err := brsc.BackupServiceClient().ListBackups(ctx, &v1.ListBackupsRequest{})
+		if err != nil {
+			return err
+		}
+
+		if len(backups.GetBackups()) == 0 {
+			return fmt.Errorf("no backups were made yet")
+		}
+
+		backup = backups.GetBackups()[0]
+
+		return nil
+	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
+	require.NoError(t, err)
+	require.NotNil(t, backup)
+
+	require.True(t, strings.HasSuffix(backup.GetName(), ".aes"))
+
+	t.Log("creating .restore_in_progress file to simulate interrupted restore")
+	_, err = execCommand(ctx, podName, ns.Name, "backup-restore-sidecar", []string{"mkdir", "-p", constants.DownloadDir})
+	require.NoError(t, err)
+	_, err = execCommand(ctx, podName, ns.Name, "backup-restore-sidecar", []string{"touch", constants.DownloadDir + "/.restore_in_progress"})
+	require.NoError(t, err)
+
+	t.Log("remembering pod UID to detect restart")
+	oldPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: ns.Name,
+		},
+	}
+	err = c.Get(ctx, client.ObjectKeyFromObject(oldPod), oldPod)
+	require.NoError(t, err)
+	oldUID := oldPod.UID
+
+	t.Log("restarting pod to trigger dirty restore detection")
+	err = c.Delete(ctx, &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: ns.Name,
+		},
+	})
+	require.NoError(t, err)
+
+	t.Log("waiting for pod to be recreated and sidecar to fail due to dirty restore")
+	err = retry.Do(func() error {
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podName,
+				Namespace: ns.Name,
+			},
+		}
+		err := c.Get(ctx, client.ObjectKeyFromObject(pod), pod)
+		if err != nil {
+			return err
+		}
+		if pod.UID == oldUID {
+			return fmt.Errorf("pod has not been recreated yet")
+		}
+
+		for _, status := range pod.Status.ContainerStatuses {
+			if status.Name != "backup-restore-sidecar" {
+				continue
+			}
+			if status.State.Waiting != nil && (status.State.Waiting.Reason == "CrashLoopBackOff" || status.State.Waiting.Reason == "Error") {
+				return nil
+			}
+			if status.State.Terminated != nil && status.State.Terminated.ExitCode != 0 {
+				return nil
+			}
+		}
+
+		return fmt.Errorf("sidecar container has not failed yet")
+	}, retry.Context(ctx), retry.Attempts(0), retry.MaxDelay(2*time.Second))
+	require.NoError(t, err)
+
+}
+
 func restoreLatestFromMultipleBackupsFlow(t *testing.T, spec *flowSpec) {
 	t.Log("running restore with empty datadir flow")
 	var (

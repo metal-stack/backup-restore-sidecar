@@ -45,20 +45,6 @@ func New(log *slog.Logger, datadir string, host string, port int, user string, p
 	}
 }
 
-// Check indicates whether a restore of the database is required or not.
-func (db *Postgres) Check(_ context.Context) (bool, error) {
-	empty, err := utils.IsEmpty(db.datadir)
-	if err != nil {
-		return false, err
-	}
-	if empty {
-		db.log.Info("data directory is empty")
-		return true, err
-	}
-
-	return false, nil
-}
-
 // Backup takes a backup of the database
 func (db *Postgres) Backup(ctx context.Context) error {
 	// for new databases the postgres binaries required for Upgrade() cannot be copied before the database is running

@@ -54,17 +54,17 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 							Name:    "postgres",
 							Image:   postgresContainerImage,
 							Command: []string{"backup-restore-sidecar", "wait"},
-							LivenessProbe: &corev1.Probe{
+							StartupProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
 										Command: []string{"/bin/sh", "-c", "exec", "pg_isready", "-U", PostgresUser, "-h", "127.0.0.1", "-p", "5432"},
 									},
 								},
-								InitialDelaySeconds: 30,
-								TimeoutSeconds:      5,
-								PeriodSeconds:       10,
-								SuccessThreshold:    1,
-								FailureThreshold:    6,
+
+								TimeoutSeconds:   5,
+								PeriodSeconds:    10,
+								SuccessThreshold: 1,
+								FailureThreshold: 30, // allow up to 5 minutes for restore and boot (30 * 10s)
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
@@ -72,11 +72,21 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 										Command: []string{"/bin/sh", "-c", "exec", "pg_isready", "-U", PostgresUser, "-h", "127.0.0.1", "-p", "5432"},
 									},
 								},
-								InitialDelaySeconds: 5,
-								TimeoutSeconds:      5,
-								PeriodSeconds:       10,
-							},
-							Env: []corev1.EnvVar{
+								TimeoutSeconds:   5,
+								PeriodSeconds:    10,
+								SuccessThreshold: 1,
+								FailureThreshold: 3,
+							}, LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									Exec: &corev1.ExecAction{
+										Command: []string{"/bin/sh", "-c", "exec", "pg_isready", "-U", PostgresUser, "-h", "127.0.0.1", "-p", "5432"},
+									},
+								},
+								TimeoutSeconds:   5,
+								PeriodSeconds:    10,
+								SuccessThreshold: 1,
+								FailureThreshold: 6,
+							}, Env: []corev1.EnvVar{
 								{
 									Name: "POSTGRES_DB",
 									ValueFrom: &corev1.EnvVarSource{

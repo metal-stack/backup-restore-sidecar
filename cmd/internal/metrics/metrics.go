@@ -12,17 +12,24 @@ import (
 
 // Metrics contains the collected metrics
 type Metrics struct {
-	totalBackups  prometheus.Counter
-	backupSuccess prometheus.Gauge
-	backupSize    prometheus.Gauge
-	totalErrors   *prometheus.CounterVec
+	totalBackups        prometheus.Counter
+	backupSuccess       prometheus.Gauge
+	databaseInitialized prometheus.Gauge
+	backupSize          prometheus.Gauge
+	totalErrors         *prometheus.CounterVec
 }
 
 // New generates new metrics
 func New() *Metrics {
 	backupSuccess := prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "backup_success",
-		Help: "is 0 when the last backup was successful, otherwise 1",
+		Help: "is 1 when the last backup was successful, otherwise 0",
+	},
+	)
+
+	databaseInitialized := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "backup_database_initialized",
+		Help: "is 1 when the database is initialized for backups and a database probe has succeeded once, 0 otherwise",
 	},
 	)
 
@@ -46,10 +53,11 @@ func New() *Metrics {
 	)
 
 	return &Metrics{
-		totalBackups:  totalBackups,
-		backupSuccess: backupSuccess,
-		totalErrors:   totalErrors,
-		backupSize:    backupSize,
+		totalBackups:        totalBackups,
+		backupSuccess:       backupSuccess,
+		databaseInitialized: databaseInitialized,
+		totalErrors:         totalErrors,
+		backupSize:          backupSize,
 	}
 }
 
@@ -69,6 +77,7 @@ func (m *Metrics) Start(log *slog.Logger) {
 	})
 
 	prometheus.MustRegister(m.backupSuccess)
+	prometheus.MustRegister(m.databaseInitialized)
 	prometheus.MustRegister(m.totalBackups)
 	prometheus.MustRegister(m.totalErrors)
 	prometheus.MustRegister(m.backupSize)
@@ -97,4 +106,13 @@ func (m *Metrics) CountBackup(backupFile string) {
 func (m *Metrics) CountError(op string) {
 	m.totalErrors.With(prometheus.Labels{"operation": op}).Inc()
 	m.backupSuccess.Set(0)
+}
+
+// SetDatabaseInitialized updates the database initialized metric
+func (m *Metrics) SetDatabaseInitialized(initialized bool) {
+	if initialized {
+		m.databaseInitialized.Set(1)
+	} else {
+		m.databaseInitialized.Set(0)
+	}
 }

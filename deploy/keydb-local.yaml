@@ -31,7 +31,6 @@ spec:
             - keydb-cli
             - ping
           failureThreshold: 3
-          initialDelaySeconds: 15
           periodSeconds: 5
           successThreshold: 1
           timeoutSeconds: 1
@@ -46,11 +45,19 @@ spec:
             - keydb-cli
             - ping
           failureThreshold: 3
-          initialDelaySeconds: 15
           periodSeconds: 5
           successThreshold: 1
           timeoutSeconds: 1
         resources: {}
+        startupProbe:
+          exec:
+            command:
+            - keydb-cli
+            - ping
+          failureThreshold: 60
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
         volumeMounts:
         - mountPath: /data
           name: data

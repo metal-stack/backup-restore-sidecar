@@ -104,21 +104,6 @@ func (db *Redis) Backup(ctx context.Context) error {
 	return nil
 }
 
-// Check indicates whether a restore of the database is required or not.
-func (db *Redis) Check(_ context.Context) (bool, error) {
-	empty, err := utils.IsEmpty(db.datadir)
-	if err != nil {
-		return false, err
-	}
-
-	if empty {
-		db.log.Info("data directory is empty")
-		return true, err
-	}
-
-	return false, nil
-}
-
 // Probe figures out if the database is running and available for taking backups.
 func (db *Redis) Probe(ctx context.Context) error {
 	_, err := db.client.Ping(ctx).Result()

@@ -49,17 +49,17 @@ func EtcdSts(namespace string) *appsv1.StatefulSet {
 							Name:    "etcd",
 							Image:   etcdContainerImage,
 							Command: []string{"backup-restore-sidecar", "wait"},
-							LivenessProbe: &corev1.Probe{
+							StartupProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
 										Command: []string{"/usr/local/bin/etcdctl", "endpoint", "health", "--endpoints=127.0.0.1:32379"},
 									},
 								},
-								InitialDelaySeconds: 15,
-								TimeoutSeconds:      1,
-								PeriodSeconds:       5,
-								SuccessThreshold:    1,
-								FailureThreshold:    3,
+
+								TimeoutSeconds:   1,
+								PeriodSeconds:    5,
+								SuccessThreshold: 1,
+								FailureThreshold: 60, // allow up to 5 minutes for restore and boot (60 * 5s)
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
@@ -69,13 +69,21 @@ func EtcdSts(namespace string) *appsv1.StatefulSet {
 										Scheme: corev1.URISchemeHTTP,
 									},
 								},
-								InitialDelaySeconds: 15,
-								TimeoutSeconds:      1,
-								PeriodSeconds:       5,
-								SuccessThreshold:    1,
-								FailureThreshold:    3,
-							},
-							Ports: []corev1.ContainerPort{
+								TimeoutSeconds:   1,
+								PeriodSeconds:    5,
+								SuccessThreshold: 1,
+								FailureThreshold: 3,
+							}, LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									Exec: &corev1.ExecAction{
+										Command: []string{"/usr/local/bin/etcdctl", "endpoint", "health", "--endpoints=127.0.0.1:32379"},
+									},
+								},
+								TimeoutSeconds:   1,
+								PeriodSeconds:    5,
+								SuccessThreshold: 1,
+								FailureThreshold: 3,
+							}, Ports: []corev1.ContainerPort{
 								// default ports are taken by kind etcd because running in host network
 								{
 									ContainerPort: 32379,

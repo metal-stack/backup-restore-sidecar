@@ -17,6 +17,7 @@ import (
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/database"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/encryption"
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/metrics"
+	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 
 	"google.golang.org/grpc"
@@ -149,14 +150,26 @@ func (i *Initializer) initialize(ctx context.Context) error {
 	i.currentStatus.Status = v1.StatusResponse_CHECKING
 	i.currentStatus.Message = "checking database"
 
-	needsBackup, err := i.db.Check(ctx)
+	var dirty bool
+	empty, err := utils.IsEmpty(i.dbDataDir)
 	if err != nil {
-		return fmt.Errorf("unable to check data of database: %w", err)
+		return fmt.Errorf("unable to check if data of database empty: %w", err)
 	}
+	if empty {
+		i.log.Info("database data directory is empty")
+	} else {
+		dirty, err = utils.IsRestoreDirty(constants.DownloadDir)
+		if err != nil {
+			return fmt.Errorf("unable to check if restore is dirty: %w", err)
+		}
+		if !dirty {
+			i.log.Info("database does not need to be restored")
+			return nil
+		}
 
-	if !needsBackup {
-		i.log.Info("database does not need to be restored")
-		return nil
+		// The .restore_in_progress marker prevents the pod from starting instead of automatically retrying a restore.
+		// If this happens, manual intervention is required (e.g., deleting the marker file if the data is alright, or performing a manual restore).
+		return fmt.Errorf("preceding restore was not completed successfully: data directory is not empty but .restore_in_progress file exists")
 	}
 
 	i.log.Info("database potentially needs to be restored, looking for backup")
@@ -238,15 +251,21 @@ func (i *Initializer) Restore(ctx context.Context, version *providers.BackupVers
 	}
 
 	i.currentStatus.Message = "uncompressing backup"
-	err = i.comp.Decompress(backupFilePath)
-	if err != nil {
+	if err := i.comp.Decompress(backupFilePath); err != nil {
 		return fmt.Errorf("unable to uncompress backup: %w", err)
 	}
 
+	if err := utils.MarkRestoreInProgress(constants.DownloadDir, version.Version, version.Date.String()); err != nil {
+		return fmt.Errorf("unable to mark restore in progress: %w", err)
+	}
+
 	i.currentStatus.Message = "restoring backup"
-	err = i.db.Recover(ctx)
-	if err != nil {
+	if err := i.db.Recover(ctx); err != nil {
 		return fmt.Errorf("restoring database was not successful: %w", err)
+	}
+
+	if err := utils.UnmarkRestoreInProgress(constants.DownloadDir); err != nil {
+		return fmt.Errorf("unable to remove restore in progress marker: %w", err)
 	}
 
 	return nil

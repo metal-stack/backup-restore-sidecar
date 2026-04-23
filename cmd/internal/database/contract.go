@@ -3,9 +3,6 @@ package database
 import "context"
 
 type DatabaseInitializer interface {
-	// Check indicates whether a restore of the database is required or not.
-	Check(ctx context.Context) (bool, error)
-
 	// Recover performs a restore of the database.
 	Recover(ctx context.Context) error
 
