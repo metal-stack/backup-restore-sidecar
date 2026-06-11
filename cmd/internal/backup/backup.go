@@ -60,7 +60,7 @@ func (b *Backuper) Start(ctx context.Context) error {
 
 	id, err := c.AddFunc(b.backupSchedule, func() {
 		if !b.db.ShouldPerformBackup(ctx) {
-			b.log.Debug("skipping backup - not elected as leader")
+			b.log.Debug("skipping scheduled backup, this instance is not responsible for taking backups")
 			return
 		}
 

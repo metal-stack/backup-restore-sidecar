@@ -33,8 +33,6 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
-        - name: STATEFUL_NAME
-          value: valkey
         image: ghcr.io/valkey-io/valkey:8.1-alpine
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -84,8 +82,6 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
-        - name: STATEFUL_NAME
-          value: valkey
         image: ghcr.io/valkey-io/valkey:8.1-alpine
         imagePullPolicy: IfNotPresent
         name: backup-restore-sidecar
@@ -185,7 +181,6 @@ data:
     ---
     db: valkey
     valkey-master-replica-mode: false
-    valkey-statefulset-name: valkey
 
     bind-addr: 0.0.0.0
     db-data-directory: /data/

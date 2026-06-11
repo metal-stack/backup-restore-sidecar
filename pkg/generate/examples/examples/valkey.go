@@ -91,10 +91,6 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 										},
 									},
 								},
-								{
-									Name:  "STATEFUL_NAME",
-									Value: "valkey",
-								},
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
@@ -158,10 +154,6 @@ func ValkeySts(namespace string) *appsv1.StatefulSet {
 											FieldPath: "metadata.name",
 										},
 									},
-								},
-								{
-									Name:  "STATEFUL_NAME",
-									Value: "valkey",
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
@@ -317,7 +309,6 @@ func ValkeyBackingResources(namespace string) []client.Object {
 				"config.yaml": `---
 db: valkey
 valkey-master-replica-mode: false
-valkey-statefulset-name: valkey
 
 bind-addr: 0.0.0.0
 db-data-directory: /data/
@@ -387,11 +378,6 @@ func ValkeyMasterReplicaSts(namespace string) *appsv1.StatefulSet {
 				},
 			)
 		}
-		for j := range sts.Spec.Template.Spec.Containers[i].Env {
-			if sts.Spec.Template.Spec.Containers[i].Env[j].Name == "STATEFUL_NAME" {
-				sts.Spec.Template.Spec.Containers[i].Env[j].Value = "valkey-master-replica"
-			}
-		}
 	}
 
 	for i := range sts.Spec.Template.Spec.Volumes {
@@ -439,7 +425,6 @@ func ValkeyMasterReplicaBackingResources(namespace string) []client.Object {
 			cm.Data["config.yaml"] = `---
 db: valkey
 valkey-master-replica-mode: true
-valkey-statefulset-name: valkey-master-replica
 
 bind-addr: 0.0.0.0
 db-data-directory: /data/

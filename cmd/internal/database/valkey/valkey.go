@@ -2,6 +2,7 @@ package valkey
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -27,7 +28,6 @@ type Valkey struct {
 	client *redis.Client
 
 	masterReplicaMode bool
-	statefulSetName   string
 	password          string
 
 	podName string
@@ -44,7 +44,7 @@ func (db *Valkey) Check(context.Context) (bool, error) {
 	return empty, nil
 }
 
-func (db *Valkey) Recover(ctx context.Context) error {
+func (db *Valkey) Recover(context.Context) error {
 	dump := path.Join(constants.RestoreDir, valkeyDumpFile)
 	if _, err := os.Stat(dump); os.IsNotExist(err) {
 		return fmt.Errorf("restore file not present: %s", dump)
@@ -91,15 +91,22 @@ func (db *Valkey) Upgrade(context.Context) error {
 }
 
 func (db *Valkey) Backup(ctx context.Context) error {
-	if !db.masterReplicaMode {
-		isMaster, err := db.isMaster(ctx)
-		if err != nil {
-			return err
+	// Scheduled backups are already filtered through ShouldPerformBackup, but a
+	// backup can also be triggered manually through the gRPC API, so the role is
+	// verified here again to guarantee that a backup is never taken from a replica.
+	isMaster, err := db.isMaster(ctx)
+	if err != nil {
+		return err
+	}
+	if !isMaster {
+		if db.masterReplicaMode {
+			return errors.New("this instance is a replica, backups can only be taken on the master")
 		}
-		if !isMaster {
-			db.log.Info("this database is not master, not taking a backup")
-			return nil
-		}
+		// Without master-replica mode every instance of an externally managed
+		// replication setup runs the backup cron and the replicas simply skip,
+		// same as the redis implementation.
+		db.log.Info("this database is not master, not taking a backup")
+		return nil
 	}
 
 	if err := os.RemoveAll(constants.BackupDir); err != nil {
@@ -112,7 +119,7 @@ func (db *Valkey) Backup(ctx context.Context) error {
 
 	start := time.Now()
 
-	_, err := db.client.Save(ctx).Result()
+	_, err = db.client.Save(ctx).Result()
 	if err != nil {
 		return fmt.Errorf("could not create a dump: %w", err)
 	}
@@ -125,10 +132,10 @@ func (db *Valkey) Backup(ctx context.Context) error {
 		return fmt.Errorf("unable to copy dumpfile to backupdir: %w", err)
 	}
 
-	err = os.Remove(dumpFile)
-	if err != nil {
-		return fmt.Errorf("unable to clean up dump: %w", err)
-	}
+	// the dump deliberately stays in the data directory: together with valkey's
+	// automatic snapshotting it is the local recovery point for pod restarts with
+	// an intact volume, so a restore from backup is only needed when the volume
+	// is actually lost.
 
 	db.log.Debug("successfully took backup of valkey")
 	return nil
@@ -139,7 +146,6 @@ func New(
 	datadir string,
 	addr string,
 	password *string,
-	statefulSetName string,
 	masterReplicaMode bool) (*Valkey, error) {
 	var pw string
 	if password != nil {
@@ -151,7 +157,6 @@ func New(
 		datadir:           datadir,
 		password:          pw,
 		masterReplicaMode: masterReplicaMode,
-		statefulSetName:   statefulSetName,
 		podName:           os.Getenv("POD_NAME"),
 	}
 
@@ -196,16 +201,10 @@ func (db *Valkey) ShouldPerformBackup(ctx context.Context) bool {
 func (db *Valkey) isMaster(ctx context.Context) (bool, error) {
 	info, err := db.client.Info(ctx, "replication").Result()
 	if err != nil {
-		return false, fmt.Errorf("unable to get database info %w", err)
+		return false, fmt.Errorf("unable to get database info: %w", err)
 	}
 
-	if strings.Contains(info, "role:master") {
-		db.log.Info("this is database master")
-		return true, nil
-	}
-
-	db.log.Debug("this is a replica, not master")
-	return false, nil
+	return strings.Contains(info, "role:master"), nil
 }
 
 // Close gracefully shuts down the Valkey database connection.

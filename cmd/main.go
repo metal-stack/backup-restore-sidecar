@@ -534,12 +534,8 @@ func initDatabase() error {
 		}
 
 		masterReplicaMode := viper.GetBool("valkey-master-replica-mode")
-		statefulSetName := viper.GetString("valkey-statefulset-name")
-		if statefulSetName == "" {
-			statefulSetName = "valkey"
-		}
 		addr := viper.GetString(redisAddrFlg)
-		db, err = valkey.New(logger.WithGroup("valkey"), datadir, addr, password, statefulSetName, masterReplicaMode)
+		db, err = valkey.New(logger.WithGroup("valkey"), datadir, addr, password, masterReplicaMode)
 		if err != nil {
 			return err
 		}
