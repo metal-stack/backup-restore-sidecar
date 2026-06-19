@@ -5,9 +5,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -23,7 +25,9 @@ import (
 )
 
 const (
-	defaultBackupName = "db"
+	defaultBackupName     = "db"
+	checksumWhenSupported = "when_supported"
+	checksumWhenRequired  = "when_required"
 )
 
 // BackupProviderS3 implements the backup provider interface for S3
@@ -37,18 +41,20 @@ type BackupProviderS3 struct {
 
 // BackupProviderConfigS3 provides configuration for the BackupProviderS3
 type BackupProviderConfigS3 struct {
-	BucketName         string
-	Endpoint           string
-	Region             string
-	AccessKey          string
-	SecretKey          string
-	BackupName         string
-	InsecureSkipVerify *bool
-	TrustedCaCert      *string
-	ObjectPrefix       string
-	ObjectsToKeep      int32
-	FS                 afero.Fs
-	Suffix             string
+	BucketName                 string
+	Endpoint                   string
+	Region                     string
+	AccessKey                  string
+	SecretKey                  string
+	BackupName                 string
+	InsecureSkipVerify         *bool
+	TrustedCaCert              *string
+	ObjectPrefix               string
+	ObjectsToKeep              int32
+	ObjectDaysToKeep           int32
+	FS                         afero.Fs
+	Suffix                     string
+	RequestChecksumCalculation *string
 }
 
 func (c *BackupProviderConfigS3) validate() error {
@@ -67,6 +73,13 @@ func (c *BackupProviderConfigS3) validate() error {
 	if c.InsecureSkipVerify != nil && *c.InsecureSkipVerify && c.TrustedCaCert != nil {
 		return errors.New("s3 skip verify certificate and trusted CA certificate cannot be set at the same time")
 	}
+	if c.RequestChecksumCalculation != nil {
+		switch *c.RequestChecksumCalculation {
+		case checksumWhenRequired, checksumWhenSupported:
+		default:
+			return fmt.Errorf("s3 request checksum calculation must be %q or %q", checksumWhenRequired, checksumWhenSupported)
+		}
+	}
 	return nil
 }
 
@@ -78,6 +91,9 @@ func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, erro
 
 	if cfg.ObjectsToKeep == 0 {
 		cfg.ObjectsToKeep = constants.DefaultObjectsToKeep
+	}
+	if cfg.ObjectDaysToKeep == 0 {
+		cfg.ObjectDaysToKeep = constants.DefaultObjectDaysToKeep
 	}
 	if cfg.BackupName == "" {
 		cfg.BackupName = defaultBackupName
@@ -123,6 +139,14 @@ func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, erro
 	client := s3.NewFromConfig(s3Cfg, func(o *s3.Options) {
 		o.BaseEndpoint = aws.String(cfg.Endpoint)
 		o.UsePathStyle = true
+		if cfg.RequestChecksumCalculation != nil {
+			switch *cfg.RequestChecksumCalculation {
+			case checksumWhenRequired:
+				o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+			case checksumWhenSupported:
+				o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenSupported
+			}
+		}
 	})
 
 	return &BackupProviderS3{
@@ -136,17 +160,38 @@ func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, erro
 
 // EnsureBackupBucket ensures a backup bucket at the backup provider
 func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
-	// create bucket
-	_, err := b.c.CreateBucket(ctx, &s3.CreateBucketInput{
-		Bucket: aws.String(b.config.BucketName),
-	})
+	// some s3 storage implementations do not properly return the already exists or already owned by you
+	// error codes. therefore, we check if the bucket already exists in the backend by listing them first.
+	alreadyExists := false
+
+	buckets, err := b.c.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err != nil {
-		var (
-			bucketAlreadyExists     *types.BucketAlreadyExists
-			bucketAlreadyOwnerByYou *types.BucketAlreadyOwnedByYou
-		)
-		if !errors.As(err, &bucketAlreadyExists) && !errors.As(err, &bucketAlreadyOwnerByYou) {
-			return err
+		return fmt.Errorf("unable to list backup buckets: %w", err)
+	}
+
+	if slices.ContainsFunc(buckets.Buckets, func(bucket types.Bucket) bool {
+		if bucket.Name == nil {
+			return false
+		}
+
+		return *bucket.Name == b.config.BucketName
+	}) {
+		alreadyExists = true
+	}
+
+	if !alreadyExists {
+		// create bucket
+		_, err = b.c.CreateBucket(ctx, &s3.CreateBucketInput{
+			Bucket: aws.String(b.config.BucketName),
+		})
+		if err != nil {
+			var (
+				bucketAlreadyExists     *types.BucketAlreadyExists
+				bucketAlreadyOwnerByYou *types.BucketAlreadyOwnedByYou
+			)
+			if !errors.As(err, &bucketAlreadyExists) && !errors.As(err, &bucketAlreadyOwnerByYou) {
+				return err
+			}
 		}
 	}
 
@@ -167,6 +212,7 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 		{
 			NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
 				NewerNoncurrentVersions: &b.config.ObjectsToKeep,
+				NoncurrentDays:          &b.config.ObjectDaysToKeep,
 			},
 			Status: types.ExpirationStatusEnabled,
 			ID:     lifecycleRuleID,

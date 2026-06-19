@@ -75,8 +75,9 @@ const (
 	backupProviderFlg     = "backup-provider"
 	backupCronScheduleFlg = "backup-cron-schedule"
 
-	objectsToKeepFlg = "object-max-keep"
-	objectPrefixFlg  = "object-prefix"
+	objectsToKeepFlg    = "object-max-keep"
+	objectDaysToKeepFlg = "object-days-max-keep"
+	objectPrefixFlg     = "object-prefix"
 
 	localBackupPathFlg = "local-provider-backup-path"
 
@@ -90,8 +91,9 @@ const (
 	s3AccessKeyFlg  = "s3-access-key"
 	//nolint
 	s3SecretKeyFlg       = "s3-secret-key"
-	s3InsecureSkipVerify = "s3-insecure-skip-verify"
-	s3TrustedCaCert      = "s3-trusted-ca-cert"
+	s3InsecureSkipVerify         = "s3-insecure-skip-verify"
+	s3TrustedCaCert              = "s3-trusted-ca-cert"
+	s3RequestChecksumCalculation = "s3-request-checksum-calculation"
 
 	compressionMethod = "compression-method"
 
@@ -371,6 +373,7 @@ func init() {
 	startCmd.Flags().StringP(backupCronScheduleFlg, "", "*/3 * * * *", "cron schedule for taking backups periodically")
 
 	startCmd.Flags().IntP(objectsToKeepFlg, "", constants.DefaultObjectsToKeep, "the number of objects to keep at the cloud provider bucket")
+	startCmd.Flags().IntP(objectDaysToKeepFlg, "", constants.DefaultObjectDaysToKeep, "the number of days to keep an object at the cloud provider bucket")
 	startCmd.Flags().StringP(objectPrefixFlg, "", "", "the prefix to store the object in the cloud provider bucket")
 
 	startCmd.Flags().StringP(gcpBucketNameFlg, "", "", "the name of the gcp backup bucket")
@@ -382,6 +385,7 @@ func init() {
 	startCmd.Flags().StringP(s3EndpointFlg, "", "", "the url to the s3 endpoint")
 	startCmd.Flags().StringP(s3AccessKeyFlg, "", "", "the s3 access-key-id")
 	startCmd.Flags().StringP(s3SecretKeyFlg, "", "", "the s3 secret-key-id")
+	startCmd.Flags().StringP(s3RequestChecksumCalculation, "", "", "the s3 request checksum calculation (when_required|when_supported)")
 
 	startCmd.Flags().StringP(compressionMethod, "", "targz", "the compression method to use to compress the backups (tar|targz|tarlz4)")
 
@@ -587,14 +591,15 @@ func initBackupProvider() error {
 		)
 	case "s3":
 		bkpConfig := &s3.BackupProviderConfigS3{
-			ObjectPrefix:  viper.GetString(objectPrefixFlg),
-			ObjectsToKeep: viper.GetInt32(objectsToKeepFlg),
-			Region:        viper.GetString(s3RegionFlg),
-			BucketName:    viper.GetString(s3BucketNameFlg),
-			Endpoint:      viper.GetString(s3EndpointFlg),
-			AccessKey:     viper.GetString(s3AccessKeyFlg),
-			SecretKey:     viper.GetString(s3SecretKeyFlg),
-			Suffix:        suffix,
+			ObjectPrefix:     viper.GetString(objectPrefixFlg),
+			ObjectsToKeep:    viper.GetInt32(objectsToKeepFlg),
+			ObjectDaysToKeep: viper.GetInt32(objectDaysToKeepFlg),
+			Region:           viper.GetString(s3RegionFlg),
+			BucketName:       viper.GetString(s3BucketNameFlg),
+			Endpoint:         viper.GetString(s3EndpointFlg),
+			AccessKey:        viper.GetString(s3AccessKeyFlg),
+			SecretKey:        viper.GetString(s3SecretKeyFlg),
+			Suffix:           suffix,
 		}
 		if viper.IsSet(s3InsecureSkipVerify) {
 			bkpConfig.InsecureSkipVerify = new(viper.GetBool(s3InsecureSkipVerify))
@@ -602,14 +607,18 @@ func initBackupProvider() error {
 		if viper.IsSet(s3TrustedCaCert) {
 			bkpConfig.TrustedCaCert = new(viper.GetString(s3TrustedCaCert))
 		}
+		if viper.IsSet(s3RequestChecksumCalculation) {
+			bkpConfig.RequestChecksumCalculation = new(viper.GetString(s3RequestChecksumCalculation))
+		}
 		bp, err = s3.New(logger.WithGroup("backup"), bkpConfig)
 	case "local":
 		bp, err = local.New(
 			logger.WithGroup("backup"),
 			&local.BackupProviderConfigLocal{
-				LocalBackupPath: viper.GetString(localBackupPathFlg),
-				ObjectsToKeep:   viper.GetInt64(objectsToKeepFlg),
-				Suffix:          suffix,
+				LocalBackupPath:  viper.GetString(localBackupPathFlg),
+				ObjectsToKeep:    viper.GetInt64(objectsToKeepFlg),
+				ObjectDaysToKeep: viper.GetInt32(objectDaysToKeepFlg),
+				Suffix:           suffix,
 			},
 		)
 	default:

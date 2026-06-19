@@ -18,7 +18,6 @@ import (
 
 const (
 	defaultLocalBackupPath = constants.SidecarBaseDir + "/local-provider"
-	defaultBackupName      = "db"
 )
 
 // BackupProviderLocal implements the backup provider interface for no backup provider (useful to disable sidecar functionality in development environments)
@@ -33,10 +32,11 @@ type BackupProviderLocal struct {
 
 // BackupProviderConfigLocal provides configuration for the BackupProviderLocal
 type BackupProviderConfigLocal struct {
-	LocalBackupPath string
-	ObjectsToKeep   int64
-	FS              afero.Fs
-	Suffix          string
+	LocalBackupPath  string
+	ObjectsToKeep    int64
+	ObjectDaysToKeep int32
+	FS               afero.Fs
+	Suffix           string
 }
 
 func (c *BackupProviderConfigLocal) validate() error {
