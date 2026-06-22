@@ -1,5 +1,11 @@
 # K8s Backup Restore Sidecar for Databases
 
+![Go version](https://img.shields.io/github/go-mod/go-version/metal-stack/backup-restore-sidecar)
+[![Go Report Card](https://goreportcard.com/badge/github.com/metal-stack/backup-restore-sidecar)](https://goreportcard.com/report/github.com/metal-stack/backup-restore-sidecar)
+[![go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/metal-stack/backup-restore-sidecar)
+[![Build](https://github.com/metal-stack/backup-restore-sidecar/actions/workflows/docker.yaml/badge.svg?branch=master)](https://github.com/metal-stack/backup-restore-sidecar/actions)
+[![Slack](https://img.shields.io/badge/slack-metal--stack-brightgreen.svg?logo=slack)](https://metal-stack.slack.com/)
+
 This project adds automatic backup and recovery to databases managed by K8s via sidecar.
 
 The idea is taken from the [etcd-backup-restore](https://github.com/gardener/etcd-backup-restore) project.
@@ -9,14 +15,14 @@ Probably, it does not make sense to use this project with large databases. Howev
 ## Supported Databases
 
 | Database  | Image        | Status | Upgrade Support |
-|-----------|--------------|:------:|:---------------:|
-| postgres  | >= 12-alpine |  beta  |        ✅        |
-| rethinkdb | >= 2.4.0     |  beta  |        ❌        |
-| ETCD      | >= 3.5       | alpha  |        ❌        |
-| redis     | >= 6.0       | alpha  |        ❌        |
-| keydb     | >= 6.0       | alpha  |        ❌        |
-| valkey    | >= 8.1       | alpha  |        ❌        |
-| localfs   |              | alpha  |        ❌        |
+| --------- | ------------ | :----: | :-------------: |
+| postgres  | >= 12-alpine |  beta  |       ✅        |
+| rethinkdb | >= 2.4.0     |  beta  |       ❌        |
+| ETCD      | >= 3.5       | alpha  |       ❌        |
+| redis     | >= 6.0       | alpha  |       ❌        |
+| keydb     | >= 6.0       | alpha  |       ❌        |
+| valkey    | >= 8.1       | alpha  |       ❌        |
+| localfs   |              | alpha  |       ❌        |
 
 Postgres also supports updates when using the TimescaleDB extension. Please consider the integration test for supported upgrade paths.
 
@@ -41,7 +47,7 @@ To achieve this, `backup-restore-sidecar` saves the postgres binaries in the dat
 With `--compression-method` you can define how generated backups are compressed before stored at the storage provider. Available compression methods are:
 
 | compression-method | suffix   | comments                                                                                     |
-|--------------------|----------|----------------------------------------------------------------------------------------------|
+| ------------------ | -------- | -------------------------------------------------------------------------------------------- |
 | tar                | .tar     | no compression, best suited for already compressed content                                   |
 | targz              | .tar.gz  | tar and gzip, most commonly used, best compression ratio, average performance                |
 | tarlz4             | .tar.lz4 | tar and lz4, very fast compression/decompression speed compared to gz, slightly bigger files |
@@ -59,6 +65,8 @@ The key must be 32 bytes (AES-256) long.
 The backups are stored at the storage provider with the `.aes` suffix. If the file does not have this suffix, decryption is skipped.
 
 ## How it works
+
+In a recovery scenario, control plane state can be restored from regular backups taken by the `backup-restore-sidecar` component to S3-compatible object storage. On startup, the affected database automatically restores from the referenced backup without manual intervention. The process is illustrated in the following diagram:
 
 ![Sequence Diagram](docs/sequence.drawio.svg)
 
