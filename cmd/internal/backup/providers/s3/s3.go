@@ -51,7 +51,7 @@ type BackupProviderConfigS3 struct {
 	TrustedCaCert              *string
 	ObjectPrefix               string
 	ObjectsToKeep              int32
-	ObjectDaysToKeep           int32
+	ObjectDaysToKeep           *int32
 	FS                         afero.Fs
 	Suffix                     string
 	RequestChecksumCalculation *string
@@ -91,9 +91,6 @@ func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, erro
 
 	if cfg.ObjectsToKeep == 0 {
 		cfg.ObjectsToKeep = constants.DefaultObjectsToKeep
-	}
-	if cfg.ObjectDaysToKeep == 0 {
-		cfg.ObjectDaysToKeep = constants.DefaultObjectDaysToKeep
 	}
 	if cfg.BackupName == "" {
 		cfg.BackupName = defaultBackupName
@@ -208,14 +205,18 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 
 	lifecycleRuleID := aws.String(b.config.ObjectPrefix + "-backup-restore-lifecycle")
 
+	noncurrentExpiration := &types.NoncurrentVersionExpiration{}
+	if b.config.ObjectDaysToKeep != nil {
+		noncurrentExpiration.NoncurrentDays = b.config.ObjectDaysToKeep
+	} else {
+		noncurrentExpiration.NewerNoncurrentVersions = &b.config.ObjectsToKeep
+	}
+
 	rules := []types.LifecycleRule{
 		{
-			NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
-				NewerNoncurrentVersions: &b.config.ObjectsToKeep,
-				NoncurrentDays:          &b.config.ObjectDaysToKeep,
-			},
-			Status: types.ExpirationStatusEnabled,
-			ID:     lifecycleRuleID,
+			NoncurrentVersionExpiration: noncurrentExpiration,
+			Status:                      types.ExpirationStatusEnabled,
+			ID:                          lifecycleRuleID,
 			Filter: &types.LifecycleRuleFilter{
 				Prefix: aws.String(b.config.ObjectPrefix + "/"),
 			},

@@ -32,11 +32,10 @@ type BackupProviderLocal struct {
 
 // BackupProviderConfigLocal provides configuration for the BackupProviderLocal
 type BackupProviderConfigLocal struct {
-	LocalBackupPath  string
-	ObjectsToKeep    int64
-	ObjectDaysToKeep int32
-	FS               afero.Fs
-	Suffix           string
+	LocalBackupPath string
+	ObjectsToKeep   int64
+	FS              afero.Fs
+	Suffix          string
 }
 
 func (c *BackupProviderConfigLocal) validate() error {
@@ -49,9 +48,6 @@ func New(log *slog.Logger, config *BackupProviderConfigLocal) (*BackupProviderLo
 		return nil, errors.New("local backup provider requires a provider config")
 	}
 
-	if config.ObjectsToKeep == 0 {
-		config.ObjectsToKeep = constants.DefaultObjectsToKeep
-	}
 	if config.LocalBackupPath == "" {
 		config.LocalBackupPath = defaultLocalBackupPath
 	}

@@ -4,9 +4,6 @@ const (
 	// DefaultObjectsToKeep is the default number of objects to keep at the cloud provider bucket
 	DefaultObjectsToKeep = 20
 
-	// DefaultObjectDaysToKeep is the default number of days to keep an object at the cloud provider bucket
-	DefaultObjectDaysToKeep = 14
-
 	// SidecarBaseDir is the directory in which the sidecar puts backups or downloads backups to
 	// this should be backed by a volume mount!
 	SidecarBaseDir = "/backup"
