@@ -202,23 +202,7 @@ func (db *Postgres) Upgrade(ctx context.Context) error {
 	cmd = exec.CommandContext(ctx, postgresUpgradeCmd, pgUpgradeArgs...) //nolint:gosec
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-
-	libDir := path.Join(oldPostgresBinDir, "lib")
-	if info, err := os.Stat(libDir); err == nil && info.IsDir() {
-		db.log.Info("bundled ICU libraries found, setting LD_LIBRARY_PATH for pg_upgrade", "directory", libDir)
-		env := os.Environ()
-		var filtered []string
-		for _, e := range env {
-			if !strings.HasPrefix(e, "LD_LIBRARY_PATH=") {
-				filtered = append(filtered, e)
-			}
-		}
-		filtered = append(filtered, "LD_LIBRARY_PATH="+libDir)
-		cmd.Env = filtered
-	} else {
-		cmd.Env = os.Environ()
-	}
-
+	cmd.Env = os.Environ()
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Credential: &syscall.Credential{Uid: uint32(uid)}, // nolint:gosec
 	}
@@ -370,11 +354,6 @@ func (db *Postgres) copyPostgresBinaries(ctx context.Context, override bool) err
 		return fmt.Errorf("unable to copy pg bin dir: %w", err)
 	}
 
-	err = db.copyPostgresICULibraries(binDir, pgBinDir)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -400,67 +379,4 @@ func (db *Postgres) restoreOldPostgresBinaries(src, dst string) error {
 
 		return nil
 	})
-}
-
-func (db *Postgres) copyPostgresICULibraries(binDir, pgBinDir string) error {
-	postgresBinary := path.Join(binDir, "postgres")
-	if _, err := os.Stat(postgresBinary); err != nil {
-		return err
-	}
-
-	cmd := exec.Command("ldd", postgresBinary)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		db.log.Warn("unable to detect ICU libraries for postgres binary, upgrade may fail later if ICU versions differ", "error", err)
-		return nil
-	}
-
-	libDir := path.Join(pgBinDir, "lib")
-	err = os.MkdirAll(libDir, 0755)
-	if err != nil {
-		return fmt.Errorf("unable to create lib directory: %w", err)
-	}
-
-	copied := 0
-	for _, line := range strings.Split(string(out), "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.Contains(line, "libicu") {
-			continue
-		}
-
-		libPath := extractLibraryPath(line)
-		if libPath == "" {
-			continue
-		}
-
-		db.log.Info("copying ICU library for later upgrade compatibility", "library", libPath)
-
-		copy := exec.Command("cp", "-avL", libPath, libDir)
-		copy.Stdout = os.Stdout
-		copy.Stderr = os.Stderr
-		err := copy.Run()
-		if err != nil {
-			db.log.Warn("unable to copy ICU library", "library", libPath, "error", err)
-			continue
-		}
-		copied++
-	}
-
-	if copied == 0 {
-		db.log.Warn("no ICU libraries were copied, upgrade may fail if ICU versions differ between postgres images")
-	}
-
-	return nil
-}
-
-func extractLibraryPath(line string) string {
-	if _, after, found := strings.Cut(line, "=>"); found {
-		line = after
-	}
-
-	if before, _, found := strings.Cut(line, " (0x"); found {
-		line = before
-	}
-
-	return strings.TrimSpace(line)
 }
