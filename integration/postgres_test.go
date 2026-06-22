@@ -54,9 +54,9 @@ func Test_Postgres_Upgrade(t *testing.T) {
 			"postgres:14.10-alpine",
 			"postgres:14.18-alpine",
 			// Upgrade from 14.18-alpine to 15-alpine is not possible because of version differences in ICU.
-			// As a solution explicit versions are used for performing the upgrades that share the same ICU version.
 			"postgres:15.13-alpine",
-			"postgres:17.6-alpine",
+			"postgres:15.18-alpine",
+			"postgres:17.10-alpine",
 		},
 	})
 }
