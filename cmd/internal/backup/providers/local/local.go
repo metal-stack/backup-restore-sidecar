@@ -48,6 +48,10 @@ func New(log *slog.Logger, config *BackupProviderConfigLocal) (*BackupProviderLo
 		return nil, errors.New("local backup provider requires a provider config")
 	}
 
+	if config.ObjectsToKeep == 0 {
+		config.ObjectsToKeep = constants.DefaultObjectsToKeep
+	}
+
 	if config.LocalBackupPath == "" {
 		config.LocalBackupPath = defaultLocalBackupPath
 	}
