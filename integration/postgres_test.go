@@ -51,11 +51,12 @@ func Test_Postgres_Upgrade(t *testing.T) {
 			// Upgrade from 12-alpine to 13-alpine is not possible because of library differences in icu-lib.
 			// The solution is to upgrade to a older 14.10-alpine which has the same icu-lib version as 12-alpine
 			// and then update to 14.18-alpine or newer which does not require to run pg_upgrade.
-			// "postgres:13-alpine",
 			"postgres:14.10-alpine",
 			"postgres:14.18-alpine",
-			"postgres:15-alpine",
-			"postgres:17-alpine",
+			// Upgrade from 14.18-alpine to 15-alpine is not possible because of version differences in ICU.
+			// As a solution explicit versions are used for performing the upgrades that share the same ICU version.
+			"postgres:15.13-alpine",
+			"postgres:17.6-alpine",
 		},
 	})
 }
