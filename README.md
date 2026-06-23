@@ -1,5 +1,11 @@
 # K8s Backup Restore Sidecar for Databases
 
+![Go version](https://img.shields.io/github/go-mod/go-version/metal-stack/backup-restore-sidecar)
+[![Go Report Card](https://goreportcard.com/badge/github.com/metal-stack/backup-restore-sidecar)](https://goreportcard.com/report/github.com/metal-stack/backup-restore-sidecar)
+[![go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/metal-stack/backup-restore-sidecar)
+[![Build](https://github.com/metal-stack/backup-restore-sidecar/actions/workflows/docker.yaml/badge.svg?branch=master)](https://github.com/metal-stack/backup-restore-sidecar/actions)
+[![Slack](https://img.shields.io/badge/slack-metal--stack-brightgreen.svg?logo=slack)](https://metal-stack.slack.com/)
+
 This project adds automatic backup and recovery to databases managed by K8s via sidecar.
 
 The idea is taken from the [etcd-backup-restore](https://github.com/gardener/etcd-backup-restore) project.
@@ -62,6 +68,8 @@ The backups are stored at the storage provider with the `.aes` suffix. If the fi
 
 ## How it works
 
+In a recovery scenario, control plane state can be restored from regular backups taken by the `backup-restore-sidecar` component to S3-compatible object storage. On startup, the affected database automatically restores from the referenced backup without manual intervention. The process is illustrated in the following diagram:
+
 ![Sequence Diagram](docs/sequence.drawio.svg)
 
 ## Limitations
@@ -94,4 +102,42 @@ By default, the backup-restore-sidecar will start with the `local` backup provid
 
 ## Manual restoration
 
-Follow the documentation [here](docs/manual_restore.md) in order to manually restore a specific version of your database.
+The advantage of the `backup-restore-sidecar` is that it automatically restores the latest backup automatically in case your data is lost. There can be situations though where you need to restore a specific backup from the past manually. In order to manually restore a specific backup version with the `backup-restore-sidecar`, use the following steps:
+
+Take a copy of your existing stateful set by running:
+
+```bash
+kubectl get sts -o yaml <your-database-sts>
+```
+
+Now, get into a clean state, i.e. delete the existing stateful set and the pvc of your database
+Deploy the exact stateful set you had but only with the backup-restore-sidecar container and tail some file such that container does not die. This is your "helper" stateful set, which you can use for manual administration.
+
+- For postgres check the example [here](https://github.com/metal-stack/backup-restore-sidecar/blob/master/deploy/postgres_manual_restore.yaml)
+- For rethinkdb check the example [here](https://github.com/metal-stack/backup-restore-sidecar/blob/master/deploy/rethinkdb_manual_restore.yaml)
+
+Enter the container in your "helper" pod by running:
+
+```bash
+kubectl exec -it <your-database-helper-pod>-0 -c backup-restore-sidecar -- bash
+```
+
+Inside the container, you can view the existing backup versions using
+
+```bash
+backup-restore-sidecar restore ls
+```
+
+Choose the version to restore by running
+
+```bash
+backup-restore-sidecar restore <version>
+```
+
+The backup was now restored, you can exit the container and remove the "helper" stateful set but keep the pvc!
+
+```bash
+kubectl delete sts <helper-sts-name>
+```
+
+Now, deploy the regular backup-restore-sidecar stateful set again. It will find out that all the data is in place and the database will start normally
