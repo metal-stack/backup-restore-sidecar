@@ -9,14 +9,14 @@ Probably, it does not make sense to use this project with large databases. Howev
 ## Supported Databases
 
 | Database  | Image        | Status | Upgrade Support |
-|-----------|--------------|:------:|:---------------:|
-| postgres  | >= 12-alpine |  beta  |        ✅        |
-| rethinkdb | >= 2.4.0     |  beta  |        ❌        |
-| ETCD      | >= 3.5       | alpha  |        ❌        |
-| redis     | >= 6.0       | alpha  |        ❌        |
-| keydb     | >= 6.0       | alpha  |        ❌        |
-| valkey    | >= 8.1       | alpha  |        ❌        |
-| localfs   |              | alpha  |        ❌        |
+| --------- | ------------ | :----: | :-------------: |
+| postgres  | >= 12-alpine |  beta  |       ✅        |
+| rethinkdb | >= 2.4.0     |  beta  |       ❌        |
+| ETCD      | >= 3.5       | alpha  |       ❌        |
+| redis     | >= 6.0       | alpha  |       ❌        |
+| keydb     | >= 6.0       | alpha  |       ❌        |
+| valkey    | >= 8.1       | alpha  |       ❌        |
+| localfs   |              | alpha  |       ❌        |
 
 Postgres also supports updates when using the TimescaleDB extension. Please consider the integration test for supported upgrade paths.
 
@@ -25,6 +25,8 @@ Postgres also supports updates when using the TimescaleDB extension. Please cons
 > The solution is to upgrade to a older 14.10-alpine which has the same icu-lib version as 12-alpine
 > and then update to 14.18-alpine or newer which does not require to run pg_upgrade.
 > It is also recommended to pin the original database to postgres:12.22-alpine to ensure the latest minor.
+> Upgrade from 14.18-alpine to 15-alpine is not possible because of version differences in ICU.
+> The solution is to upgrade to 15.13-alpine, followed by 15.18-alpine before upgrading to 17.10-alpine.
 
 ## Database Upgrades
 
@@ -41,7 +43,7 @@ To achieve this, `backup-restore-sidecar` saves the postgres binaries in the dat
 With `--compression-method` you can define how generated backups are compressed before stored at the storage provider. Available compression methods are:
 
 | compression-method | suffix   | comments                                                                                     |
-|--------------------|----------|----------------------------------------------------------------------------------------------|
+| ------------------ | -------- | -------------------------------------------------------------------------------------------- |
 | tar                | .tar     | no compression, best suited for already compressed content                                   |
 | targz              | .tar.gz  | tar and gzip, most commonly used, best compression ratio, average performance                |
 | tarlz4             | .tar.lz4 | tar and lz4, very fast compression/decompression speed compared to gz, slightly bigger files |
