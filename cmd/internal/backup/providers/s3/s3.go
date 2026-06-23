@@ -205,11 +205,11 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 
 	lifecycleRuleID := aws.String(b.config.ObjectPrefix + "-backup-restore-lifecycle")
 
-	noncurrentExpiration := &types.NoncurrentVersionExpiration{}
+	noncurrentExpiration := &types.NoncurrentVersionExpiration{
+		NewerNoncurrentVersions: &b.config.ObjectsToKeep,
+	}
 	if b.config.ObjectDaysToKeep != nil {
 		noncurrentExpiration.NoncurrentDays = b.config.ObjectDaysToKeep
-	} else {
-		noncurrentExpiration.NewerNoncurrentVersions = &b.config.ObjectsToKeep
 	}
 
 	rules := []types.LifecycleRule{
