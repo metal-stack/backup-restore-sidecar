@@ -31,6 +31,8 @@ Postgres also supports updates when using the TimescaleDB extension. Please cons
 > The solution is to upgrade to a older 14.10-alpine which has the same icu-lib version as 12-alpine
 > and then update to 14.18-alpine or newer which does not require to run pg_upgrade.
 > It is also recommended to pin the original database to postgres:12.22-alpine to ensure the latest minor.
+> Upgrade from 14.18-alpine to 15-alpine is not possible because of version differences in ICU.
+> The solution is to upgrade to 15.13-alpine, followed by 15.18-alpine before upgrading to 17.10-alpine.
 
 ## Database Upgrades
 
