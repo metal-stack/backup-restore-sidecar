@@ -5,9 +5,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -15,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go/middleware"
 	"github.com/spf13/afero"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
@@ -136,17 +139,38 @@ func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, erro
 
 // EnsureBackupBucket ensures a backup bucket at the backup provider
 func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
-	// create bucket
-	_, err := b.c.CreateBucket(ctx, &s3.CreateBucketInput{
-		Bucket: aws.String(b.config.BucketName),
-	})
+	// some s3 storage implementations do not properly return the already exists or already owned by you
+	// error codes. therefore, we check if the bucket already exists in the backend by listing them first.
+	alreadyExists := false
+
+	buckets, err := b.c.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err != nil {
-		var (
-			bucketAlreadyExists     *types.BucketAlreadyExists
-			bucketAlreadyOwnerByYou *types.BucketAlreadyOwnedByYou
-		)
-		if !errors.As(err, &bucketAlreadyExists) && !errors.As(err, &bucketAlreadyOwnerByYou) {
-			return err
+		return fmt.Errorf("unable to list backup buckets: %w", err)
+	}
+
+	if slices.ContainsFunc(buckets.Buckets, func(bucket types.Bucket) bool {
+		if bucket.Name == nil {
+			return false
+		}
+
+		return *bucket.Name == b.config.BucketName
+	}) {
+		alreadyExists = true
+	}
+
+	if !alreadyExists {
+		// create bucket
+		_, err = b.c.CreateBucket(ctx, &s3.CreateBucketInput{
+			Bucket: aws.String(b.config.BucketName),
+		})
+		if err != nil {
+			var (
+				bucketAlreadyExists     *types.BucketAlreadyExists
+				bucketAlreadyOwnerByYou *types.BucketAlreadyOwnedByYou
+			)
+			if !errors.As(err, &bucketAlreadyExists) && !errors.As(err, &bucketAlreadyOwnerByYou) {
+				return err
+			}
 		}
 	}
 
@@ -166,7 +190,7 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 	rules := []types.LifecycleRule{
 		{
 			NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
-				NewerNoncurrentVersions: &b.config.ObjectsToKeep,
+				NoncurrentDays: &b.config.ObjectsToKeep,
 			},
 			Status: types.ExpirationStatusEnabled,
 			ID:     lifecycleRuleID,
@@ -239,6 +263,23 @@ func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *provider
 	return nil
 }
 
+// See https://github.com/aws/aws-sdk-go-v2/discussions/2960
+func withoutTrailingChecksum(u *manager.Uploader) {
+	clientOptions := make([]func(*s3.Options), 0, len(u.ClientOptions)+1)
+	clientOptions = append(clientOptions, func(o *s3.Options) {
+		o.APIOptions = append(o.APIOptions, func(stack *middleware.Stack) error {
+			_, _ = stack.Initialize.Remove("AWSChecksum:SetupInputContext")
+			_, _ = stack.Build.Remove("AWSChecksum:RequestMetricsTracking")
+			_, _ = stack.Finalize.Remove("AWSChecksum:ComputeInputPayloadChecksum")
+			_, _ = stack.Finalize.Get("AWSChecksum:ComputeInputPayloadChecksum")
+			_, _ = stack.Finalize.Remove("addInputChecksumTrailer")
+			return nil
+		})
+	})
+	clientOptions = append(clientOptions, u.ClientOptions...)
+	u.ClientOptions = clientOptions
+}
+
 // UploadBackup uploads a backup to the backup provider
 func (b *BackupProviderS3) UploadBackup(ctx context.Context, reader io.Reader) error {
 	bucket := aws.String(b.config.BucketName)
@@ -251,11 +292,12 @@ func (b *BackupProviderS3) UploadBackup(ctx context.Context, reader io.Reader) e
 
 	b.log.Debug("uploading object", "dest", destination)
 
-	uploader := manager.NewUploader(b.c)
+	uploader := manager.NewUploader(b.c, withoutTrailingChecksum)
 	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
-		Bucket: bucket,
-		Key:    aws.String(destination),
-		Body:   reader,
+		Bucket:            bucket,
+		Key:               aws.String(destination),
+		Body:              reader,
+		ChecksumAlgorithm: types.ChecksumAlgorithmSha256,
 	})
 	if err != nil {
 		return err
