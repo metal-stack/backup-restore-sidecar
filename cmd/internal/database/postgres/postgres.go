@@ -255,3 +255,7 @@ func (db *Postgres) updateTimescaleDB(ctx context.Context, dbc *sql.DB) error {
 
 	return nil
 }
+
+func (db *Postgres) ShouldPerformBackup(ctx context.Context) bool {
+	return true
+}

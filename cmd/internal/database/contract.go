@@ -24,6 +24,11 @@ type DatabaseProber interface {
 
 	// Backup creates a backup of the database.
 	Backup(ctx context.Context) error
+
+	// ShouldPerformBackup returns true if this instance should perform backups.
+	// For standalone databases, this always returns true.
+	// For master-replica databases, only the master should return true.
+	ShouldPerformBackup(ctx context.Context) bool
 }
 
 type Database interface {

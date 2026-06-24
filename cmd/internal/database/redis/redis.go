@@ -169,3 +169,7 @@ func (db *Redis) isMaster(ctx context.Context) (bool, error) {
 	}
 	return false, nil
 }
+
+func (db *Redis) ShouldPerformBackup(ctx context.Context) bool {
+	return true
+}
