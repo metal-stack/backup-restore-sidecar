@@ -18,7 +18,6 @@ import (
 
 const (
 	defaultLocalBackupPath = constants.SidecarBaseDir + "/local-provider"
-	defaultBackupName      = "db"
 )
 
 // BackupProviderLocal implements the backup provider interface for no backup provider (useful to disable sidecar functionality in development environments)
@@ -52,6 +51,7 @@ func New(log *slog.Logger, config *BackupProviderConfigLocal) (*BackupProviderLo
 	if config.ObjectsToKeep == 0 {
 		config.ObjectsToKeep = constants.DefaultObjectsToKeep
 	}
+
 	if config.LocalBackupPath == "" {
 		config.LocalBackupPath = defaultLocalBackupPath
 	}

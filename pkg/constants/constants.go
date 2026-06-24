@@ -1,7 +1,7 @@
 package constants
 
 const (
-	// DefaultObjectsToKeep are the default number of objects to keep at the cloud provider bucket
+	// DefaultObjectsToKeep is the default number of objects to keep at the cloud provider bucket
 	DefaultObjectsToKeep = 20
 
 	// SidecarBaseDir is the directory in which the sidecar puts backups or downloads backups to
