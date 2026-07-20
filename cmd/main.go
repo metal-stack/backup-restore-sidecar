@@ -94,6 +94,7 @@ const (
 	s3InsecureSkipVerify         = "s3-insecure-skip-verify"
 	s3TrustedCaCert              = "s3-trusted-ca-cert"
 	s3RequestChecksumCalculation = "s3-request-checksum-calculation"
+	s3ResponseChecksumValidation = "s3-response-checksum-validation"
 
 	compressionMethod = "compression-method"
 
@@ -385,6 +386,7 @@ func init() {
 	startCmd.Flags().StringP(s3AccessKeyFlg, "", "", "the s3 access-key-id")
 	startCmd.Flags().StringP(s3SecretKeyFlg, "", "", "the s3 secret-key-id")
 	startCmd.Flags().StringP(s3RequestChecksumCalculation, "", "", "the s3 request checksum calculation (when_required|when_supported)")
+	startCmd.Flags().StringP(s3ResponseChecksumValidation, "", "", "the s3 response checksum validation (when_required|when_supported)")
 
 	startCmd.Flags().StringP(compressionMethod, "", "targz", "the compression method to use to compress the backups (tar|targz|tarlz4)")
 
@@ -610,6 +612,9 @@ func initBackupProvider() error {
 		}
 		if viper.IsSet(s3RequestChecksumCalculation) {
 			bkpConfig.RequestChecksumCalculation = new(viper.GetString(s3RequestChecksumCalculation))
+		}
+		if viper.IsSet(s3ResponseChecksumValidation) {
+			bkpConfig.ResponseChecksumValidation = new(viper.GetString(s3ResponseChecksumValidation))
 		}
 		bp, err = s3.New(logger.WithGroup("backup"), bkpConfig)
 	case "local":
