@@ -85,19 +85,9 @@ func (db *Redis) Backup(ctx context.Context) error {
 
 	db.log.Info("dump created successfully", "file", dumpFile, "duration", time.Since(start).String())
 
-	// we need to do a copy here and cannot simply rename as the file system is
-	// mounted by two containers. the dump is created in the database container,
-	// the copy is done in the backup-restore-sidecar container. os.Rename would
-	// lead to an error.
-
 	err = utils.Copy(afero.NewOsFs(), dumpFile, path.Join(constants.BackupDir, redisDumpFile))
 	if err != nil {
 		return fmt.Errorf("unable to copy dumpfile to backupdir: %w", err)
-	}
-
-	err = os.Remove(dumpFile)
-	if err != nil {
-		return fmt.Errorf("unable to clean up dump: %w", err)
 	}
 
 	db.log.Debug("successfully took backup of redis")
