@@ -55,6 +55,7 @@ type BackupProviderConfigS3 struct {
 	FS                         afero.Fs
 	Suffix                     string
 	RequestChecksumCalculation *string
+	ResponseChecksumValidation *string
 }
 
 func (c *BackupProviderConfigS3) validate() error {
@@ -78,6 +79,13 @@ func (c *BackupProviderConfigS3) validate() error {
 		case checksumWhenRequired, checksumWhenSupported:
 		default:
 			return fmt.Errorf("s3 request checksum calculation must be %q or %q", checksumWhenRequired, checksumWhenSupported)
+		}
+	}
+	if c.ResponseChecksumValidation != nil {
+		switch *c.ResponseChecksumValidation {
+		case checksumWhenRequired, checksumWhenSupported:
+		default:
+			return fmt.Errorf("s3 response checksum validation must be %q or %q", checksumWhenRequired, checksumWhenSupported)
 		}
 	}
 	return nil
@@ -142,6 +150,14 @@ func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, erro
 				o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 			case checksumWhenSupported:
 				o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenSupported
+			}
+		}
+		if cfg.ResponseChecksumValidation != nil {
+			switch *cfg.ResponseChecksumValidation {
+			case checksumWhenRequired:
+				o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
+			case checksumWhenSupported:
+				o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenSupported
 			}
 		}
 	})
@@ -298,7 +314,11 @@ func (b *BackupProviderS3) UploadBackup(ctx context.Context, reader io.Reader) e
 
 	b.log.Debug("uploading object", "dest", destination)
 
-	uploader := manager.NewUploader(b.c)
+	uploader := manager.NewUploader(b.c, manager.WithUploaderRequestOptions(func(o *s3.Options) {
+		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
+	}))
+
 	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: bucket,
 		Key:    aws.String(destination),
