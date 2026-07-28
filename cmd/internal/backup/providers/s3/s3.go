@@ -14,13 +14,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/spf13/afero"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
-	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/utils"
 	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 )
 
@@ -264,22 +263,20 @@ func (b *BackupProviderS3) CleanupBackups(_ context.Context) error {
 func (b *BackupProviderS3) DownloadBackup(ctx context.Context, version *providers.BackupVersion, writer io.Writer) error {
 	bucket := aws.String(b.config.BucketName)
 
-	downloader := manager.NewDownloader(b.c)
-	// we need to download the backup sequentially since we fake the download with a io.Writer instead of io.WriterAt
-	downloader.Concurrency = 1
+	client := transfermanager.New(b.c)
 
 	b.log.Info("downloading", "object", version.Name, "get", version.Version)
 
-	streamWriter := utils.NewSequentialWriterAt(writer)
-	_, err := downloader.Download(
-		ctx,
-		streamWriter,
-		&s3.GetObjectInput{
-			Bucket:    bucket,
-			Key:       &version.Name,
-			VersionId: &version.Version,
-		})
+	out, err := client.GetObject(ctx, &transfermanager.GetObjectInput{
+		Bucket:    bucket,
+		Key:       &version.Name,
+		VersionID: &version.Version,
+	})
 	if err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(writer, out.Body); err != nil {
 		return err
 	}
 
@@ -291,15 +288,17 @@ func (b *BackupProviderS3) UploadBackup(ctx context.Context, reader io.Reader) e
 	bucket := aws.String(b.config.BucketName)
 
 	destination := defaultBackupName + b.suffix
-
 	if b.config.ObjectPrefix != "" {
 		destination = b.config.ObjectPrefix + "/" + destination
 	}
 
 	b.log.Debug("uploading object", "dest", destination)
 
-	uploader := manager.NewUploader(b.c)
-	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
+	client := transfermanager.New(b.c, func(o *transfermanager.Options) {
+		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+	})
+
+	_, err := client.UploadObject(ctx, &transfermanager.UploadObjectInput{
 		Bucket: bucket,
 		Key:    aws.String(destination),
 		Body:   reader,
