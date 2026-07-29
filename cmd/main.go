@@ -372,7 +372,8 @@ func init() {
 	startCmd.Flags().StringP(backupProviderFlg, "", "", "the name of the backup provider [gcp|s3|local]")
 	startCmd.Flags().StringP(backupCronScheduleFlg, "", "*/3 * * * *", "cron schedule for taking backups periodically")
 
-	startCmd.Flags().IntP(objectsToKeepFlg, "", 0, "the number of objects to keep at the cloud provider bucket")
+	startCmd.Flags().IntP(objectsToKeepFlg, "", constants.DefaultObjectsToKeep, "the number of objects to keep at the cloud provider bucket. Used in the bucket lifecycle configuration as NumNewerVersions for gcp or NewerNoncurrentVersions for s3")
+	startCmd.Flags().IntP(objectDaysToKeepFlg, "", 0, "the number of days to keep objects at the cloud provider bucket for the s3 backend. Used as NoncurrentDays in the bucket lifecycle configuration for s3")
 	startCmd.Flags().StringP(objectPrefixFlg, "", "", "the prefix to store the object in the cloud provider bucket")
 
 	startCmd.Flags().StringP(gcpBucketNameFlg, "", "", "the name of the gcp backup bucket")
