@@ -20,7 +20,6 @@ import (
 	"github.com/spf13/afero"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
-	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 )
 
 const (
@@ -88,9 +87,6 @@ func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, erro
 		return nil, errors.New("s3 backup provider requires a provider config")
 	}
 
-	if cfg.ObjectsToKeep == 0 {
-		cfg.ObjectsToKeep = constants.DefaultObjectsToKeep
-	}
 	if cfg.BackupName == "" {
 		cfg.BackupName = defaultBackupName
 	}
