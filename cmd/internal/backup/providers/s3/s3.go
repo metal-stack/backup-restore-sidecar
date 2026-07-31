@@ -48,7 +48,7 @@ type BackupProviderConfigS3 struct {
 	InsecureSkipVerify         *bool
 	TrustedCaCert              *string
 	ObjectPrefix               string
-	ObjectsToKeep              int32
+	ObjectsToKeep              *int32
 	ObjectDaysToKeep           *int32
 	FS                         afero.Fs
 	Suffix                     string
@@ -202,9 +202,8 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 
 	noncurrentExpiration := &types.NoncurrentVersionExpiration{}
 
-	if b.config.ObjectsToKeep != 0 {
-		noncurrentExpiration.NewerNoncurrentVersions = &b.config.ObjectsToKeep
-
+	if b.config.ObjectsToKeep != nil {
+		noncurrentExpiration.NewerNoncurrentVersions = b.config.ObjectsToKeep
 	}
 
 	if b.config.ObjectDaysToKeep != nil {
