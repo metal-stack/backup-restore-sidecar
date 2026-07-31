@@ -372,7 +372,8 @@ func init() {
 	startCmd.Flags().StringP(backupProviderFlg, "", "", "the name of the backup provider [gcp|s3|local]")
 	startCmd.Flags().StringP(backupCronScheduleFlg, "", "*/3 * * * *", "cron schedule for taking backups periodically")
 
-	startCmd.Flags().IntP(objectsToKeepFlg, "", constants.DefaultObjectsToKeep, "the number of objects to keep at the cloud provider bucket")
+	startCmd.Flags().IntP(objectsToKeepFlg, "", 0, "the number of objects to keep at the cloud provider bucket. Used in the bucket lifecycle configuration as NumNewerVersions for gcp or NewerNoncurrentVersions for s3 (optional)")
+	startCmd.Flags().IntP(objectDaysToKeepFlg, "", 0, "the number of days to keep objects at the cloud provider bucket for the s3 backend. Used as NoncurrentDays in the bucket lifecycle configuration for s3 (optional)")
 	startCmd.Flags().StringP(objectPrefixFlg, "", "", "the prefix to store the object in the cloud provider bucket")
 
 	startCmd.Flags().StringP(gcpBucketNameFlg, "", "", "the name of the gcp backup bucket")
@@ -590,14 +591,13 @@ func initBackupProvider() error {
 		)
 	case "s3":
 		bkpConfig := &s3.BackupProviderConfigS3{
-			ObjectPrefix:  viper.GetString(objectPrefixFlg),
-			ObjectsToKeep: viper.GetInt32(objectsToKeepFlg),
-			Region:        viper.GetString(s3RegionFlg),
-			BucketName:    viper.GetString(s3BucketNameFlg),
-			Endpoint:      viper.GetString(s3EndpointFlg),
-			AccessKey:     viper.GetString(s3AccessKeyFlg),
-			SecretKey:     viper.GetString(s3SecretKeyFlg),
-			Suffix:        suffix,
+			ObjectPrefix: viper.GetString(objectPrefixFlg),
+			Region:       viper.GetString(s3RegionFlg),
+			BucketName:   viper.GetString(s3BucketNameFlg),
+			Endpoint:     viper.GetString(s3EndpointFlg),
+			AccessKey:    viper.GetString(s3AccessKeyFlg),
+			SecretKey:    viper.GetString(s3SecretKeyFlg),
+			Suffix:       suffix,
 		}
 		if viper.IsSet(s3InsecureSkipVerify) {
 			bkpConfig.InsecureSkipVerify = new(viper.GetBool(s3InsecureSkipVerify))
@@ -605,7 +605,10 @@ func initBackupProvider() error {
 		if viper.IsSet(s3TrustedCaCert) {
 			bkpConfig.TrustedCaCert = new(viper.GetString(s3TrustedCaCert))
 		}
-		if viper.IsSet(objectDaysToKeepFlg) {
+		if viper.IsSet(objectsToKeepFlg) && viper.GetInt(objectsToKeepFlg) != 0 {
+			bkpConfig.ObjectsToKeep = new(viper.GetInt32(objectsToKeepFlg))
+		}
+		if viper.IsSet(objectDaysToKeepFlg) && viper.GetInt(objectDaysToKeepFlg) != 0 {
 			bkpConfig.ObjectDaysToKeep = new(viper.GetInt32(objectDaysToKeepFlg))
 		}
 		if viper.IsSet(s3RequestChecksumCalculation) {

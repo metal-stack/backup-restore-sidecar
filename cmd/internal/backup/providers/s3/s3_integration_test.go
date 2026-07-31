@@ -73,6 +73,7 @@ func Test_BackupProviderS3(t *testing.T) {
 		ObjectPrefix:  prefix,
 		FS:            fs,
 		Suffix:        compressor.Extension(),
+		ObjectsToKeep: new(int32(constants.DefaultObjectsToKeep)),
 	})
 	require.NoError(t, err)
 	require.NotNil(t, p)

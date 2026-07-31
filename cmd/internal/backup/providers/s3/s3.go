@@ -20,7 +20,6 @@ import (
 	"github.com/spf13/afero"
 
 	"github.com/metal-stack/backup-restore-sidecar/cmd/internal/backup/providers"
-	"github.com/metal-stack/backup-restore-sidecar/pkg/constants"
 )
 
 const (
@@ -49,7 +48,7 @@ type BackupProviderConfigS3 struct {
 	InsecureSkipVerify         *bool
 	TrustedCaCert              *string
 	ObjectPrefix               string
-	ObjectsToKeep              int32
+	ObjectsToKeep              *int32
 	ObjectDaysToKeep           *int32
 	FS                         afero.Fs
 	Suffix                     string
@@ -88,9 +87,6 @@ func New(log *slog.Logger, cfg *BackupProviderConfigS3) (*BackupProviderS3, erro
 		return nil, errors.New("s3 backup provider requires a provider config")
 	}
 
-	if cfg.ObjectsToKeep == 0 {
-		cfg.ObjectsToKeep = constants.DefaultObjectsToKeep
-	}
 	if cfg.BackupName == "" {
 		cfg.BackupName = defaultBackupName
 	}
@@ -204,9 +200,12 @@ func (b *BackupProviderS3) EnsureBackupBucket(ctx context.Context) error {
 
 	lifecycleRuleID := aws.String(b.config.ObjectPrefix + "-backup-restore-lifecycle")
 
-	noncurrentExpiration := &types.NoncurrentVersionExpiration{
-		NewerNoncurrentVersions: &b.config.ObjectsToKeep,
+	noncurrentExpiration := &types.NoncurrentVersionExpiration{}
+
+	if b.config.ObjectsToKeep != nil {
+		noncurrentExpiration.NewerNoncurrentVersions = b.config.ObjectsToKeep
 	}
+
 	if b.config.ObjectDaysToKeep != nil {
 		noncurrentExpiration.NoncurrentDays = b.config.ObjectDaysToKeep
 	}
