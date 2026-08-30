@@ -51,12 +51,12 @@ func newRethinkdbSession(t *testing.T, ctx context.Context) *r.Session {
 	err := retry.Do(func() error {
 		var err error
 		session, err = r.Connect(r.ConnectOpts{
-			Addresses: []string{"localhost:28015"},
-			Database:  rethinkDbDatabaseName,
-			Username:  "admin",
-			Password:  examples.RethinkDbPassword,
-			MaxIdle:   10,
-			MaxOpen:   20,
+			Addresses:  []string{"localhost:28015"},
+			Database:   rethinkDbDatabaseName,
+			Username:   "admin",
+			Password:   examples.RethinkDbPassword,
+			InitialCap: 10,
+			MaxOpen:    20,
 		})
 		if err != nil {
 			return fmt.Errorf("cannot connect to DB: %w", err)
