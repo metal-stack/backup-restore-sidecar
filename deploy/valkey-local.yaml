@@ -4,7 +4,6 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  creationTimestamp: null
   labels:
     app: valkey
   name: valkey
@@ -16,7 +15,6 @@ spec:
   serviceName: valkey
   template:
     metadata:
-      creationTimestamp: null
       labels:
         app: valkey
     spec:
@@ -108,7 +106,6 @@ spec:
   updateStrategy: {}
   volumeClaimTemplates:
   - metadata:
-      creationTimestamp: null
       name: data
     spec:
       accessModes:
@@ -118,7 +115,6 @@ spec:
           storage: 1Gi
     status: {}
   - metadata:
-      creationTimestamp: null
       name: backup
     spec:
       accessModes:
@@ -147,5 +143,4 @@ data:
     - valkey-server
 kind: ConfigMap
 metadata:
-  creationTimestamp: null
   name: backup-restore-sidecar-config-valkey

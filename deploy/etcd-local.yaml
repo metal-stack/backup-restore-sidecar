@@ -4,7 +4,6 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  creationTimestamp: null
   labels:
     app: etcd
   name: etcd
@@ -16,7 +15,6 @@ spec:
   serviceName: etcd
   template:
     metadata:
-      creationTimestamp: null
       labels:
         app: etcd
     spec:
@@ -111,7 +109,6 @@ spec:
   updateStrategy: {}
   volumeClaimTemplates:
   - metadata:
-      creationTimestamp: null
       name: data
     spec:
       accessModes:
@@ -121,7 +118,6 @@ spec:
           storage: 1Gi
     status: {}
   - metadata:
-      creationTimestamp: null
       name: backup
     spec:
       accessModes:
@@ -150,5 +146,4 @@ data:
     - etcd --data-dir=/data/etcd --listen-client-urls http://0.0.0.0:32379 --advertise-client-urls http://0.0.0.0:32379 --listen-peer-urls http://0.0.0.0:32380 --initial-advertise-peer-urls http://0.0.0.0:32380 --initial-cluster default=http://0.0.0.0:32380 --listen-metrics-urls http://0.0.0.0:32381
 kind: ConfigMap
 metadata:
-  creationTimestamp: null
   name: backup-restore-sidecar-config-postgres
