@@ -16,16 +16,12 @@ var (
 
 func LocalfsSts(namespace string) *appsv1.StatefulSet {
 	return &appsv1.StatefulSet{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "StatefulSet",
-			APIVersion: appsv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "localfs",
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app": "localfs",
-			},
+		Kind:       "StatefulSet",
+		APIVersion: appsv1.SchemeGroupVersion.String(),
+		Name:       "localfs",
+		Namespace:  namespace,
+		Labels: map[string]string{
+			"app": "localfs",
 		},
 		Spec: appsv1.StatefulSetSpec{
 			ServiceName: "localfs",
@@ -117,44 +113,32 @@ func LocalfsSts(namespace string) *appsv1.StatefulSet {
 					Volumes: []corev1.Volume{
 						{
 							Name: "data",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: "data",
-								},
+							PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+								ClaimName: "data",
 							},
 						},
 						{
 							Name: "backup",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: "backup",
-								},
+							PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+								ClaimName: "backup",
 							},
 						},
 						{
 							Name: "backup-restore-sidecar-config",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: "backup-restore-sidecar-config-localfs",
-									},
-								},
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								Name: "backup-restore-sidecar-config-localfs",
 							},
 						},
 						{
-							Name: "bin-provision",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
+							Name:     "bin-provision",
+							EmptyDir: &corev1.EmptyDirVolumeSource{},
 						},
 					},
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "data",
-					},
+					Name: "data",
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
@@ -167,9 +151,7 @@ func LocalfsSts(namespace string) *appsv1.StatefulSet {
 					},
 				},
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "backup",
-					},
+					Name: "backup",
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
@@ -189,14 +171,10 @@ func LocalfsSts(namespace string) *appsv1.StatefulSet {
 func LocalfsBackingResources(namespace string) []client.Object {
 	return []client.Object{
 		&corev1.ConfigMap{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "ConfigMap",
-				APIVersion: corev1.SchemeGroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "backup-restore-sidecar-config-localfs",
-				Namespace: namespace,
-			},
+			Kind:       "ConfigMap",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Name:       "backup-restore-sidecar-config-localfs",
+			Namespace:  namespace,
 			Data: map[string]string{
 				"config.yaml": `---
 bind-addr: 0.0.0.0

@@ -22,16 +22,12 @@ const (
 
 func PostgresSts(namespace string) *appsv1.StatefulSet {
 	return &appsv1.StatefulSet{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "StatefulSet",
-			APIVersion: appsv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "postgres",
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app": "postgres",
-			},
+		Kind:       "StatefulSet",
+		APIVersion: appsv1.SchemeGroupVersion.String(),
+		Name:       "postgres",
+		Namespace:  namespace,
+		Labels: map[string]string{
+			"app": "postgres",
 		},
 		Spec: appsv1.StatefulSetSpec{
 			ServiceName: "postgres",
@@ -55,10 +51,8 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 							Image:   postgresContainerImage,
 							Command: []string{"backup-restore-sidecar", "wait"},
 							LivenessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									Exec: &corev1.ExecAction{
-										Command: []string{"/bin/sh", "-c", "exec", "pg_isready", "-U", PostgresUser, "-h", "127.0.0.1", "-p", "5432"},
-									},
+								Exec: &corev1.ExecAction{
+									Command: []string{"/bin/sh", "-c", "exec", "pg_isready", "-U", PostgresUser, "-h", "127.0.0.1", "-p", "5432"},
 								},
 								InitialDelaySeconds: 30,
 								TimeoutSeconds:      5,
@@ -67,10 +61,8 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 								FailureThreshold:    6,
 							},
 							ReadinessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									Exec: &corev1.ExecAction{
-										Command: []string{"/bin/sh", "-c", "exec", "pg_isready", "-U", PostgresUser, "-h", "127.0.0.1", "-p", "5432"},
-									},
+								Exec: &corev1.ExecAction{
+									Command: []string{"/bin/sh", "-c", "exec", "pg_isready", "-U", PostgresUser, "-h", "127.0.0.1", "-p", "5432"},
 								},
 								InitialDelaySeconds: 5,
 								TimeoutSeconds:      5,
@@ -81,10 +73,8 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 									Name: "POSTGRES_DB",
 									ValueFrom: &corev1.EnvVarSource{
 										SecretKeyRef: &corev1.SecretKeySelector{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: "postgres",
-											},
-											Key: "POSTGRES_DB",
+											Name: "postgres",
+											Key:  "POSTGRES_DB",
 										},
 									},
 								},
@@ -92,10 +82,8 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 									Name: "POSTGRES_USER",
 									ValueFrom: &corev1.EnvVarSource{
 										SecretKeyRef: &corev1.SecretKeySelector{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: "postgres",
-											},
-											Key: "POSTGRES_USER",
+											Name: "postgres",
+											Key:  "POSTGRES_USER",
 										},
 									},
 								},
@@ -103,10 +91,8 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 									Name: "POSTGRES_PASSWORD",
 									ValueFrom: &corev1.EnvVarSource{
 										SecretKeyRef: &corev1.SecretKeySelector{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: "postgres",
-											},
-											Key: "POSTGRES_PASSWORD",
+											Name: "postgres",
+											Key:  "POSTGRES_PASSWORD",
 										},
 									},
 								},
@@ -114,10 +100,8 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 									Name: "PGDATA",
 									ValueFrom: &corev1.EnvVarSource{
 										SecretKeyRef: &corev1.SecretKeySelector{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: "postgres",
-											},
-											Key: "POSTGRES_DATA",
+											Name: "postgres",
+											Key:  "POSTGRES_DATA",
 										},
 									},
 								},
@@ -152,10 +136,8 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 									Name: "BACKUP_RESTORE_SIDECAR_POSTGRES_PASSWORD",
 									ValueFrom: &corev1.EnvVarSource{
 										SecretKeyRef: &corev1.SecretKeySelector{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: "postgres",
-											},
-											Key: "POSTGRES_PASSWORD",
+											Name: "postgres",
+											Key:  "POSTGRES_PASSWORD",
 										},
 									},
 								},
@@ -163,10 +145,8 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 									Name: "BACKUP_RESTORE_SIDECAR_POSTGRES_USER",
 									ValueFrom: &corev1.EnvVarSource{
 										SecretKeyRef: &corev1.SecretKeySelector{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: "postgres",
-											},
-											Key: "POSTGRES_USER",
+											Name: "postgres",
+											Key:  "POSTGRES_USER",
 										},
 									},
 								},
@@ -219,44 +199,32 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 					Volumes: []corev1.Volume{
 						{
 							Name: "data",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: "data",
-								},
+							PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+								ClaimName: "data",
 							},
 						},
 						{
 							Name: "backup",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: "backup",
-								},
+							PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+								ClaimName: "backup",
 							},
 						},
 						{
 							Name: "backup-restore-sidecar-config",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: "backup-restore-sidecar-config-postgres",
-									},
-								},
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								Name: "backup-restore-sidecar-config-postgres",
 							},
 						},
 						{
-							Name: "bin-provision",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
+							Name:     "bin-provision",
+							EmptyDir: &corev1.EmptyDirVolumeSource{},
 						},
 					},
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "data",
-					},
+					Name: "data",
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
@@ -269,9 +237,7 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 					},
 				},
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "backup",
-					},
+					Name: "backup",
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
@@ -291,14 +257,10 @@ func PostgresSts(namespace string) *appsv1.StatefulSet {
 func PostgresBackingResources(namespace string) []client.Object {
 	return []client.Object{
 		&corev1.ConfigMap{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "ConfigMap",
-				APIVersion: corev1.SchemeGroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "backup-restore-sidecar-config-postgres",
-				Namespace: namespace,
-			},
+			Kind:       "ConfigMap",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Name:       "backup-restore-sidecar-config-postgres",
+			Namespace:  namespace,
 			Data: map[string]string{
 				"config.yaml": `---
 bind-addr: 0.0.0.0
@@ -315,14 +277,10 @@ post-exec-cmds:
 			},
 		},
 		&corev1.Secret{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Secret",
-				APIVersion: corev1.SchemeGroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "postgres",
-				Namespace: namespace,
-			},
+			Kind:       "Secret",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Name:       "postgres",
+			Namespace:  namespace,
 			StringData: map[string]string{
 				"POSTGRES_DB":       PostgresDB,
 				"POSTGRES_USER":     PostgresUser,
@@ -331,16 +289,12 @@ post-exec-cmds:
 			},
 		},
 		&corev1.Service{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Service",
-				APIVersion: corev1.SchemeGroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "postgres",
-				Namespace: namespace,
-				Labels: map[string]string{
-					"app": "postgres",
-				},
+			Kind:       "Service",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Name:       "postgres",
+			Namespace:  namespace,
+			Labels: map[string]string{
+				"app": "postgres",
 			},
 			Spec: corev1.ServiceSpec{
 				Selector: map[string]string{

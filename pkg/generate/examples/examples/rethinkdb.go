@@ -20,16 +20,12 @@ const (
 
 func RethinkDbSts(namespace string) *appsv1.StatefulSet {
 	return &appsv1.StatefulSet{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "StatefulSet",
-			APIVersion: appsv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rethinkdb",
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app": "rethinkdb",
-			},
+		Kind:       "StatefulSet",
+		APIVersion: appsv1.SchemeGroupVersion.String(),
+		Name:       "rethinkdb",
+		Namespace:  namespace,
+		Labels: map[string]string{
+			"app": "rethinkdb",
 		},
 		Spec: appsv1.StatefulSetSpec{
 			ServiceName: "rethinkdb",
@@ -57,10 +53,8 @@ func RethinkDbSts(namespace string) *appsv1.StatefulSet {
 									Name: "RETHINKDB_PASSWORD",
 									ValueFrom: &corev1.EnvVarSource{
 										SecretKeyRef: &corev1.SecretKeySelector{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: "rethinkdb",
-											},
-											Key: "rethinkdb-password",
+											Name: "rethinkdb",
+											Key:  "rethinkdb-password",
 										},
 									},
 								},
@@ -157,58 +151,44 @@ func RethinkDbSts(namespace string) *appsv1.StatefulSet {
 					Volumes: []corev1.Volume{
 						{
 							Name: "data",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: "data",
-								},
+							PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+								ClaimName: "data",
 							},
 						},
 						{
 							Name: "backup",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: "backup",
-								},
+							PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+								ClaimName: "backup",
 							},
 						},
 						{
 							Name: "rethinkdb-credentials",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: "rethinkdb",
-									Items: []corev1.KeyToPath{
-										{
-											Key:  "rethinkdb-password",
-											Path: "rethinkdb-password.txt",
-										},
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: "rethinkdb",
+								Items: []corev1.KeyToPath{
+									{
+										Key:  "rethinkdb-password",
+										Path: "rethinkdb-password.txt",
 									},
 								},
 							},
 						},
 						{
 							Name: "backup-restore-sidecar-config",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: "backup-restore-sidecar-config-rethinkdb",
-									},
-								},
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								Name: "backup-restore-sidecar-config-rethinkdb",
 							},
 						},
 						{
-							Name: "bin-provision",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
+							Name:     "bin-provision",
+							EmptyDir: &corev1.EmptyDirVolumeSource{},
 						},
 					},
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "data",
-					},
+					Name: "data",
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
@@ -221,9 +201,7 @@ func RethinkDbSts(namespace string) *appsv1.StatefulSet {
 					},
 				},
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "backup",
-					},
+					Name: "backup",
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
@@ -243,14 +221,10 @@ func RethinkDbSts(namespace string) *appsv1.StatefulSet {
 func RethinkDbBackingResources(namespace string) []client.Object {
 	return []client.Object{
 		&corev1.ConfigMap{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "ConfigMap",
-				APIVersion: corev1.SchemeGroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "backup-restore-sidecar-config-rethinkdb",
-				Namespace: namespace,
-			},
+			Kind:       "ConfigMap",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Name:       "backup-restore-sidecar-config-rethinkdb",
+			Namespace:  namespace,
 			Data: map[string]string{
 				"config.yaml": `---
 bind-addr: 0.0.0.0
@@ -268,29 +242,21 @@ post-exec-cmds:
 			},
 		},
 		&corev1.Secret{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Secret",
-				APIVersion: corev1.SchemeGroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "rethinkdb",
-				Namespace: namespace,
-			},
+			Kind:       "Secret",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Name:       "rethinkdb",
+			Namespace:  namespace,
 			StringData: map[string]string{
 				"rethinkdb-password": RethinkDbPassword,
 			},
 		},
 		&corev1.Service{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Service",
-				APIVersion: corev1.SchemeGroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "rethinkdb",
-				Namespace: namespace,
-				Labels: map[string]string{
-					"app": "rethinkdb",
-				},
+			Kind:       "Service",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Name:       "rethinkdb",
+			Namespace:  namespace,
+			Labels: map[string]string{
+				"app": "rethinkdb",
 			},
 			Spec: corev1.ServiceSpec{
 				Selector: map[string]string{

@@ -122,8 +122,7 @@ func (b *BackupProviderGCP) EnsureBackupBucket(ctx context.Context) error {
 			Rules: []storage.LifecycleRule{rule},
 		},
 	}); err != nil {
-		var googleErr *googleapi.Error
-		if errors.As(err, &googleErr) {
+		if googleErr, ok := errors.AsType[*googleapi.Error](err); ok {
 			if googleErr.Code != http.StatusConflict {
 				return err
 			}
