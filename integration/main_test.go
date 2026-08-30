@@ -23,7 +23,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -80,9 +79,7 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 		require.NoError(t, client.IgnoreNotFound(err), "cleanup did not succeed")
 
 		err = waitUntilNotFound(ctx, &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: ns.Name,
-			},
+			Name: ns.Name,
 		})
 		require.NoError(t, err, "cleanup did not succeed")
 	}
@@ -151,18 +148,14 @@ func restoreFlow(t *testing.T, spec *flowSpec) {
 	require.NoError(t, err)
 
 	err = c.Delete(ctx, &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "data-" + podName,
-			Namespace: ns.Name,
-		},
+		Name:      "data-" + podName,
+		Namespace: ns.Name,
 	})
 	require.NoError(t, err)
 
 	err = waitUntilNotFound(ctx, &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      podName,
-			Namespace: ns.Name,
-		},
+		Name:      podName,
+		Namespace: ns.Name,
 	})
 	require.NoError(t, err)
 
@@ -195,9 +188,7 @@ func restoreLatestFromMultipleBackupsFlow(t *testing.T, spec *flowSpec) {
 		require.NoError(t, client.IgnoreNotFound(err), "cleanup did not succeed")
 
 		err = waitUntilNotFound(ctx, &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: ns.Name,
-			},
+			Name: ns.Name,
 		})
 		require.NoError(t, err, "cleanup did not succeed")
 	}
@@ -268,18 +259,14 @@ func restoreLatestFromMultipleBackupsFlow(t *testing.T, spec *flowSpec) {
 	require.NoError(t, err)
 
 	err = c.Delete(ctx, &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "data-" + podName,
-			Namespace: ns.Name,
-		},
+		Name:      "data-" + podName,
+		Namespace: ns.Name,
 	})
 	require.NoError(t, err)
 
 	err = waitUntilNotFound(ctx, &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      podName,
-			Namespace: ns.Name,
-		},
+		Name:      podName,
+		Namespace: ns.Name,
 	})
 	require.NoError(t, err)
 
@@ -317,9 +304,7 @@ func upgradeFlow(t *testing.T, spec *upgradeFlowSpec) {
 		require.NoError(t, client.IgnoreNotFound(err), "cleanup did not succeed")
 
 		err = waitUntilNotFound(ctx, &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: ns.Name,
-			},
+			Name: ns.Name,
 		})
 		require.NoError(t, err, "cleanup did not succeed")
 	}
@@ -343,7 +328,6 @@ func upgradeFlow(t *testing.T, spec *upgradeFlowSpec) {
 	}
 
 	for _, o := range objects() {
-		o := o
 		err = c.Create(ctx, o)
 		require.NoError(t, err)
 	}
@@ -415,9 +399,7 @@ func upgradeFlow(t *testing.T, spec *upgradeFlowSpec) {
 
 func testNamespace(t *testing.T) *corev1.Namespace {
 	return &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: namespaceName(t),
-		},
+		Name: namespaceName(t),
 	}
 }
 
@@ -444,7 +426,6 @@ func newKubernetesClient() (client.Client, error) {
 	}
 
 	for _, n := range nodes.Items {
-		n := n
 		if !strings.HasPrefix(n.Spec.ProviderID, "kind://") && os.Getenv("SKIP_KIND_VALIDATIONS") != "1" {
 			return nil, fmt.Errorf("for security reasons only running against kind clusters")
 		}
@@ -456,10 +437,8 @@ func newKubernetesClient() (client.Client, error) {
 func waitForPodRunning(ctx context.Context, name, namespace string) error {
 	return retry.Do(func() error {
 		pod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: namespace,
-			},
+			Name:      name,
+			Namespace: namespace,
 		}
 
 		err := c.Get(ctx, client.ObjectKeyFromObject(pod), pod)
@@ -488,10 +467,8 @@ func waitForPodRunning(ctx context.Context, name, namespace string) error {
 func waitForStsRunning(ctx context.Context, name, namespace string) error {
 	return retry.Do(func() error {
 		sts := &appsv1.StatefulSet{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: namespace,
-			},
+			Name:      name,
+			Namespace: namespace,
 		}
 
 		err := c.Get(ctx, client.ObjectKeyFromObject(sts), sts)

@@ -49,15 +49,13 @@ post-exec-cmds:
 	require.True(t, modified)
 
 	upgradeFlow(t, &upgradeFlowSpec{
-		flowSpec: flowSpec{
-			databaseType: examples.Postgres,
-			sts:          examples.PostgresSts,
-			backingResources: func(namespace string) []client.Object {
-				return backingResources
-			},
-			addTestData:    addTimescaleDbTestData,
-			verifyTestData: verifyPostgresTestData,
+		databaseType: examples.Postgres,
+		sts:          examples.PostgresSts,
+		backingResources: func(namespace string) []client.Object {
+			return backingResources
 		},
+		addTestData:    addTimescaleDbTestData,
+		verifyTestData: verifyPostgresTestData,
 		databaseImages: []string{
 			"timescale/timescaledb:2.11.2-pg12",
 			"timescale/timescaledb:2.11.2-pg15",
