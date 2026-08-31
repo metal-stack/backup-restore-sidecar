@@ -4,7 +4,6 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  creationTimestamp: null
   labels:
     app: localfs
   name: localfs
@@ -16,7 +15,6 @@ spec:
   serviceName: localfs
   template:
     metadata:
-      creationTimestamp: null
       labels:
         app: localfs
     spec:
@@ -82,7 +80,6 @@ spec:
   updateStrategy: {}
   volumeClaimTemplates:
   - metadata:
-      creationTimestamp: null
       name: data
     spec:
       accessModes:
@@ -92,7 +89,6 @@ spec:
           storage: 1Gi
     status: {}
   - metadata:
-      creationTimestamp: null
       name: backup
     spec:
       accessModes:
@@ -121,5 +117,4 @@ data:
     - tail -f /etc/hosts
 kind: ConfigMap
 metadata:
-  creationTimestamp: null
   name: backup-restore-sidecar-config-localfs

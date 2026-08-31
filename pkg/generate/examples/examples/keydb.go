@@ -16,16 +16,12 @@ var (
 
 func KeyDBSts(namespace string) *appsv1.StatefulSet {
 	return &appsv1.StatefulSet{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "StatefulSet",
-			APIVersion: appsv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "keydb",
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app": "keydb",
-			},
+		Kind:       "StatefulSet",
+		APIVersion: appsv1.SchemeGroupVersion.String(),
+		Name:       "keydb",
+		Namespace:  namespace,
+		Labels: map[string]string{
+			"app": "keydb",
 		},
 		Spec: appsv1.StatefulSetSpec{
 			ServiceName: "keydb",
@@ -49,10 +45,8 @@ func KeyDBSts(namespace string) *appsv1.StatefulSet {
 							Image:   keyDBContainerImage,
 							Command: []string{"backup-restore-sidecar", "wait"},
 							LivenessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									Exec: &corev1.ExecAction{
-										Command: []string{"keydb-cli", "ping"},
-									},
+								Exec: &corev1.ExecAction{
+									Command: []string{"keydb-cli", "ping"},
 								},
 								InitialDelaySeconds: 15,
 								TimeoutSeconds:      1,
@@ -61,10 +55,8 @@ func KeyDBSts(namespace string) *appsv1.StatefulSet {
 								FailureThreshold:    3,
 							},
 							ReadinessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									Exec: &corev1.ExecAction{
-										Command: []string{"keydb-cli", "ping"},
-									},
+								Exec: &corev1.ExecAction{
+									Command: []string{"keydb-cli", "ping"},
 								},
 								InitialDelaySeconds: 15,
 								TimeoutSeconds:      1,
@@ -148,44 +140,32 @@ func KeyDBSts(namespace string) *appsv1.StatefulSet {
 					Volumes: []corev1.Volume{
 						{
 							Name: "data",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: "data",
-								},
+							PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+								ClaimName: "data",
 							},
 						},
 						{
 							Name: "backup",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: "backup",
-								},
+							PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+								ClaimName: "backup",
 							},
 						},
 						{
 							Name: "backup-restore-sidecar-config",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: "backup-restore-sidecar-config-keydb",
-									},
-								},
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								Name: "backup-restore-sidecar-config-keydb",
 							},
 						},
 						{
-							Name: "bin-provision",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
+							Name:     "bin-provision",
+							EmptyDir: &corev1.EmptyDirVolumeSource{},
 						},
 					},
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "data",
-					},
+					Name: "data",
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
@@ -198,9 +178,7 @@ func KeyDBSts(namespace string) *appsv1.StatefulSet {
 					},
 				},
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "backup",
-					},
+					Name: "backup",
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
@@ -220,14 +198,10 @@ func KeyDBSts(namespace string) *appsv1.StatefulSet {
 func KeyDBBackingResources(namespace string) []client.Object {
 	return []client.Object{
 		&corev1.ConfigMap{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "ConfigMap",
-				APIVersion: corev1.SchemeGroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "backup-restore-sidecar-config-keydb",
-				Namespace: namespace,
-			},
+			Kind:       "ConfigMap",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Name:       "backup-restore-sidecar-config-keydb",
+			Namespace:  namespace,
 			Data: map[string]string{
 				"config.yaml": `---
 bind-addr: 0.0.0.0

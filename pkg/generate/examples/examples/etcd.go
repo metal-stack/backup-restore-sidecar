@@ -17,16 +17,12 @@ var (
 
 func EtcdSts(namespace string) *appsv1.StatefulSet {
 	return &appsv1.StatefulSet{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "StatefulSet",
-			APIVersion: appsv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "etcd",
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app": "etcd",
-			},
+		Kind:       "StatefulSet",
+		APIVersion: appsv1.SchemeGroupVersion.String(),
+		Name:       "etcd",
+		Namespace:  namespace,
+		Labels: map[string]string{
+			"app": "etcd",
 		},
 		Spec: appsv1.StatefulSetSpec{
 			ServiceName: "etcd",
@@ -50,10 +46,8 @@ func EtcdSts(namespace string) *appsv1.StatefulSet {
 							Image:   etcdContainerImage,
 							Command: []string{"backup-restore-sidecar", "wait"},
 							LivenessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									Exec: &corev1.ExecAction{
-										Command: []string{"/usr/local/bin/etcdctl", "endpoint", "health", "--endpoints=127.0.0.1:32379"},
-									},
+								Exec: &corev1.ExecAction{
+									Command: []string{"/usr/local/bin/etcdctl", "endpoint", "health", "--endpoints=127.0.0.1:32379"},
 								},
 								InitialDelaySeconds: 15,
 								TimeoutSeconds:      1,
@@ -62,12 +56,10 @@ func EtcdSts(namespace string) *appsv1.StatefulSet {
 								FailureThreshold:    3,
 							},
 							ReadinessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									HTTPGet: &corev1.HTTPGetAction{
-										Path:   "/health",
-										Port:   intstr.FromInt(32381),
-										Scheme: corev1.URISchemeHTTP,
-									},
+								HTTPGet: &corev1.HTTPGetAction{
+									Path:   "/health",
+									Port:   intstr.FromInt(32381),
+									Scheme: corev1.URISchemeHTTP,
 								},
 								InitialDelaySeconds: 15,
 								TimeoutSeconds:      1,
@@ -156,44 +148,32 @@ func EtcdSts(namespace string) *appsv1.StatefulSet {
 					Volumes: []corev1.Volume{
 						{
 							Name: "data",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: "data",
-								},
+							PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+								ClaimName: "data",
 							},
 						},
 						{
 							Name: "backup",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: "backup",
-								},
+							PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+								ClaimName: "backup",
 							},
 						},
 						{
 							Name: "backup-restore-sidecar-config",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: "backup-restore-sidecar-config-postgres",
-									},
-								},
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								Name: "backup-restore-sidecar-config-postgres",
 							},
 						},
 						{
-							Name: "bin-provision",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
+							Name:     "bin-provision",
+							EmptyDir: &corev1.EmptyDirVolumeSource{},
 						},
 					},
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "data",
-					},
+					Name: "data",
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
@@ -206,9 +186,7 @@ func EtcdSts(namespace string) *appsv1.StatefulSet {
 					},
 				},
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "backup",
-					},
+					Name: "backup",
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
@@ -228,14 +206,10 @@ func EtcdSts(namespace string) *appsv1.StatefulSet {
 func EtcdBackingResources(namespace string) []client.Object {
 	return []client.Object{
 		&corev1.ConfigMap{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "ConfigMap",
-				APIVersion: corev1.SchemeGroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "backup-restore-sidecar-config-postgres",
-				Namespace: namespace,
-			},
+			Kind:       "ConfigMap",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Name:       "backup-restore-sidecar-config-postgres",
+			Namespace:  namespace,
 			Data: map[string]string{
 				"config.yaml": `---
 bind-addr: 0.0.0.0

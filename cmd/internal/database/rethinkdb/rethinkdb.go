@@ -223,11 +223,11 @@ func (db *RethinkDB) Probe(ctx context.Context) error {
 	}
 
 	session, err := r.Connect(r.ConnectOpts{
-		Addresses: []string{db.url},
-		Username:  "admin",
-		Password:  strings.TrimSpace(string(passwordRaw)),
-		MaxIdle:   10,
-		MaxOpen:   20,
+		Addresses:  []string{db.url},
+		Username:   "admin",
+		Password:   strings.TrimSpace(string(passwordRaw)),
+		InitialCap: 10,
+		MaxOpen:    20,
 	})
 	if err != nil {
 		return fmt.Errorf("cannot create rethinkdb client: %w", err)

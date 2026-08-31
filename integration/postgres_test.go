@@ -39,13 +39,11 @@ func Test_Postgres_RestoreLatestFromMultipleBackups(t *testing.T) {
 
 func Test_Postgres_Upgrade(t *testing.T) {
 	upgradeFlow(t, &upgradeFlowSpec{
-		flowSpec: flowSpec{
 			databaseType:     examples.Postgres,
 			sts:              examples.PostgresSts,
 			backingResources: examples.PostgresBackingResources,
 			addTestData:      addPostgresTestData,
 			verifyTestData:   verifyPostgresTestData,
-		},
 		databaseImages: []string{
 			"postgres:12-alpine",
 			// Upgrade from 12-alpine to 13-alpine is not possible because of library differences in icu-lib.

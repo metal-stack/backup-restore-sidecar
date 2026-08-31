@@ -46,7 +46,7 @@ func (l *LocalFS) Backup(ctx context.Context) error {
 		return fmt.Errorf("could not create backup directory: %w", err)
 	}
 
-	if err := utils.CopyFS(constants.BackupDir, os.DirFS(l.datadir)); err != nil {
+	if err := os.CopyFS(constants.BackupDir, os.DirFS(l.datadir)); err != nil {
 		return fmt.Errorf("could not copy contents: %w", err)
 	}
 
@@ -60,7 +60,7 @@ func (l *LocalFS) Recover(ctx context.Context) error {
 		return fmt.Errorf("could not cleanup datadir: %w", err)
 	}
 
-	if err := utils.CopyFS(l.datadir, os.DirFS(constants.RestoreDir)); err != nil {
+	if err := os.CopyFS(l.datadir, os.DirFS(constants.RestoreDir)); err != nil {
 		return fmt.Errorf("could not copy contents: %w", err)
 	}
 

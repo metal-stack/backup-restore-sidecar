@@ -4,7 +4,6 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  creationTimestamp: null
   labels:
     app: rethinkdb
   name: rethinkdb
@@ -16,7 +15,6 @@ spec:
   serviceName: rethinkdb
   template:
     metadata:
-      creationTimestamp: null
       labels:
         app: rethinkdb
     spec:
@@ -107,7 +105,6 @@ spec:
   updateStrategy: {}
   volumeClaimTemplates:
   - metadata:
-      creationTimestamp: null
       name: data
     spec:
       accessModes:
@@ -117,7 +114,6 @@ spec:
           storage: 1Gi
     status: {}
   - metadata:
-      creationTimestamp: null
       name: backup
     spec:
       accessModes:
@@ -147,13 +143,11 @@ data:
     - rethinkdb --bind all --directory /data/rethinkdb --initial-password ${RETHINKDB_PASSWORD}
 kind: ConfigMap
 metadata:
-  creationTimestamp: null
   name: backup-restore-sidecar-config-rethinkdb
 ---
 apiVersion: v1
 kind: Secret
 metadata:
-  creationTimestamp: null
   name: rethinkdb
 stringData:
   rethinkdb-password: test123!
@@ -161,7 +155,6 @@ stringData:
 apiVersion: v1
 kind: Service
 metadata:
-  creationTimestamp: null
   labels:
     app: rethinkdb
   name: rethinkdb
