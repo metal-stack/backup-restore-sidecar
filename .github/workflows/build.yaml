@@ -23,9 +23,29 @@ jobs:
       build-command: make build
       test-command: make test
 
-  integration:
-    name: Integration Test
+  integration_matrix:
+    name: Integration Test (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: providers
+            pattern: Test_BackupProvider
+          - name: etcd
+            pattern: Test_ETCD
+          - name: keydb
+            pattern: Test_KeyDB
+          - name: localfs
+            pattern: Test_Localfs
+          - name: postgres
+            pattern: Test_Postgres
+          - name: redis
+            pattern: Test_Redis
+          - name: rethinkdb
+            pattern: Test_RethinkDB
+          - name: valkey
+            pattern: Test_Valkey
 
     steps:
     - name: Checkout
@@ -43,5 +63,20 @@ jobs:
         install_only: true
 
     - name: Test
+      env:
+        GO_RUN: ${{ matrix.pattern }}
       run: |
         make test-integration
+
+  integration:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    needs: [integration_matrix]
+    if: always()
+    steps:
+      - name: Matrix jobs passed
+        if: ${{ needs.integration_matrix.result == 'success' }}
+        run: exit 0
+      - name: Fail if matrix jobs did not succeed
+        if: ${{ needs.integration_matrix.result != 'success' }}
+        run: exit 1
