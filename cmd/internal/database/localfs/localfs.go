@@ -77,3 +77,7 @@ func (*LocalFS) Upgrade(ctx context.Context) error {
 	// Nothing to do here
 	return nil
 }
+
+func (*LocalFS) ShouldPerformBackup(ctx context.Context) bool {
+	return true
+}

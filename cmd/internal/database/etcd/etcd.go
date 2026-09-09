@@ -194,3 +194,7 @@ func (db *Etcd) connectionArgs() []string {
 	etcdctlArgs = append(etcdctlArgs, "--dial-timeout=10s", "--command-timeout=30s")
 	return etcdctlArgs
 }
+
+func (db *Etcd) ShouldPerformBackup(ctx context.Context) bool {
+	return true
+}

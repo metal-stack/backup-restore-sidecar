@@ -59,6 +59,11 @@ func (b *Backuper) Start(ctx context.Context) error {
 	c := cron.New()
 
 	id, err := c.AddFunc(b.backupSchedule, func() {
+		if !b.db.ShouldPerformBackup(ctx) {
+			b.log.Debug("skipping scheduled backup, this instance is not responsible for taking backups")
+			return
+		}
+
 		err := b.CreateBackup(ctx)
 		if err != nil {
 			b.log.Error("error creating backup", "error", err)

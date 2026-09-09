@@ -43,8 +43,12 @@ test-integration: kind-cluster-create
 .PHONY: test-integration-valkey
 test-integration-valkey: kind-cluster-create
 	kind --name backup-restore-sidecar load docker-image ghcr.io/metal-stack/backup-restore-sidecar:latest
-	kind --name backup-restore-sidecar load docker-image ghcr.io/valkey-io/valkey:8.1-alpine
 	KUBECONFIG=$(KUBECONFIG) go test $(GO_RUN_ARG) -tags=integration -count 1 -v -p 1 -timeout 10m -run "Test_Valkey" ./...
+
+.PHONY: test-integration-valkey-master-replica
+test-integration-valkey-master-replica: kind-cluster-create
+	kind --name backup-restore-sidecar load docker-image ghcr.io/metal-stack/backup-restore-sidecar:latest
+	KUBECONFIG=$(KUBECONFIG) go test $(GO_RUN_ARG) -tags=integration -count 1 -v -p 1 -timeout 10m -run "Test_Valkey_MasterReplica" ./...
 
 .PHONY: proto
 proto:
@@ -77,6 +81,10 @@ start-redis:
 .PHONY: start-valkey
 start-valkey:
 	$(MAKE)	start	DB=valkey
+
+.PHONY: start-valkey-master-replica
+start-valkey-master-replica:
+	$(MAKE)	start	DB=valkey-master-replica
 
 .PHONY: start-localfs
 start-localfs:
