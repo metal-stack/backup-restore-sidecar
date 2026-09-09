@@ -1,0 +1,47 @@
+---
+name: metal-stack component release
+
+on:
+  pull_request:
+    branches:
+      - master
+  release:
+    types:
+      - published
+  push:
+    branches:
+      - master
+
+jobs:
+  draft:
+    uses: metal-stack/actions-common/.github/workflows/release-drafter.yaml@v1
+
+  go-build:
+    uses: metal-stack/actions-common/.github/workflows/go-build.yaml@v1
+    secrets: inherit
+    with:
+      build-command: make build
+      test-command: make test
+
+  integration:
+    name: Integration Test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+
+    - name: Setup Go
+      uses: actions/setup-go@v7
+      with:
+        go-version-file: 'go.mod'
+        cache: false
+
+    - name: Create k8s Kind Cluster
+      uses: helm/kind-action@v1.14.0
+      with:
+        install_only: true
+
+    - name: Test
+      run: |
+        make test-integration
